@@ -1037,7 +1037,9 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
             # Run item validation during assembly before final freeze
             try:
                 from .inventory_validation import InventoryItemValidationService
-                inv_val = InventoryItemValidationService.validate_items(record.tenant_id, items)
+                v_id = ui_pay.get("vendor_id") or record.vendor_id
+                v_gst = ui_pay.get("vendor_gstin") or ui_pay.get("gstin") or record.gstin
+                inv_val = InventoryItemValidationService.validate_items(record.tenant_id, items, v_id, v_gst)
                 ui_pay["items"] = inv_val["items"]
                 ui_pay["item_status"] = inv_val["item_status"]
                 ui_pay["missing_items"] = inv_val["missing_items"]
@@ -2040,13 +2042,17 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             return {"status": record.validation_status or "SUCCESS"}
 
         # Block any mutation or re-validation on frozen DTOs unless we are executing the final save
-        if data.get("is_canonical_frozen") and not auto_save:
+        # DO NOT bypass if the record has not been processed yet or validation status is PENDING
+        is_processed = getattr(record, 'processed', False) is True
+        has_validation = record.validation_status and record.validation_status != 'PENDING'
+
+        if data.get("is_canonical_frozen") and not auto_save and is_processed and has_validation:
             logger.info(f"[CANONICAL_FREEZE_BYPASS] Bypassing validate_and_process for frozen DTO of record {record.id}")
             return {"status": record.validation_status or "SUCCESS"}
 
         current_hash = get_dto_hash(data)
         val_rev = data.get("validation_revision")
-        if val_rev and isinstance(val_rev, dict) and val_rev.get("hash") == current_hash and not auto_save:
+        if val_rev and isinstance(val_rev, dict) and val_rev.get("hash") == current_hash and not auto_save and is_processed and has_validation:
             logger.info(f"[VALIDATION_SKIPPED_ALREADY_VALIDATED] Skip validate_and_process for record {record.id} hash {current_hash}")
             return {"status": record.validation_status or "SUCCESS"}
 
@@ -2308,7 +2314,9 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         )
 
         from .inventory_validation import InventoryItemValidationService
-        inv_val = InventoryItemValidationService.validate_items(tenant_id, items)
+        v_id = record.vendor_id
+        v_gst = gstin or record.gstin
+        inv_val = InventoryItemValidationService.validate_items(tenant_id, items, v_id, v_gst, record=record)
 
         # PHASE 2: PRINT REAL STRUCTURES - after validation
         logger.critical(
@@ -2387,6 +2395,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 if vendor:
                     record.vendor_id = vendor.id
                     record.vendor_status = 'EXISTS'  # [CANONICAL FIX] Persist vendor_status to DB
+                    record.save(update_fields=['vendor_id', 'vendor_status'])
                     logger.info(
                         f"[VENDOR_VALIDATION_RESULT] "
                         f"gstin={gstin_key} "
@@ -2447,9 +2456,8 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=NEED_VENDOR")
                 record.save()
                 
-                if not auto_save:
-                    return {"status": "NEED_VENDOR"}
-                # If auto_save is True, we allow it to proceed to Pending Purchase evaluation.
+                # Proceed to Pending Purchase evaluation regardless of auto_save.
+                pass
 
         # Sync vendor name from master if found
         if vendor:
@@ -2459,34 +2467,38 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         pass
 
         # ── [EXPLICIT PENDING EVALUATION STAGE] ──
-        if auto_save:
-            from ocr_pipeline.statuses import ValidationEnums
-            from pending_purchases.services import evaluate_pending_purchase
-            
-            vendor_status_enum = ValidationEnums.VENDOR_STATUS_EXISTING if vendor else ValidationEnums.VENDOR_STATUS_CREATE
-            voucher_status_enum = ValidationEnums.VOUCHER_STATUS_EXISTING if is_duplicate else ValidationEnums.VOUCHER_STATUS_NEW
-            item_status_enum = ValidationEnums.ITEM_STATUS_EXISTING if inv_val["item_status"] == "ALREADY EXIST" else ValidationEnums.ITEM_STATUS_CREATE
-            ui_row = {
-                'invoice_no': invoice_no,
-                'invoice_date': (canonical.get('invoice_date') or supplier.get('invoice_date') or supply.get('invoice_date') or ''),
-                'vendor_name': vendor_name,
-                'vendor_gstin': gstin,
-                'total_amount': (canonical.get('total_amount') or canonical.get('grand_total') or due.get('total_amount') or None),
-            }
-            is_pending = evaluate_pending_purchase(
-                record,
-                vendor_status_enum,
-                voucher_status_enum,
-                item_status_enum,
-                tenant_id,
-                ui_row=ui_row
-            )
-            
-            if is_pending:
-                record.validation_status = "PENDING_PURCHASE"
-                record.save(update_fields=['validation_status'])
-                logger.info(f"[FINAL_STATUS] PENDING_PURCHASE record={record.id}")
-                return {"status": "PENDING_PURCHASE"}
+        # TIMING FIX: evaluate_pending_purchase runs UNCONDITIONALLY after all three
+        # validations are complete (vendor, item, duplicate-voucher check).
+        # This means Pending Purchase queue entries are created immediately after the
+        # initial validation pass — NOT only when Finalize & Save is clicked.
+        # auto_save=True (Finalize) proceeds through this block but will short-circuit
+        # below if the record is already queued, preventing duplicate queue entries.
+        from ocr_pipeline.statuses import ValidationEnums
+        from pending_purchases.services import evaluate_pending_purchase
+
+        vendor_status_enum = ValidationEnums.VENDOR_STATUS_EXISTING if vendor else ValidationEnums.VENDOR_STATUS_CREATE
+        voucher_status_enum = ValidationEnums.VOUCHER_STATUS_EXISTING if is_duplicate else ValidationEnums.VOUCHER_STATUS_NEW
+        item_status_enum = ValidationEnums.ITEM_STATUS_EXISTING if inv_val["item_status"] == "ALREADY EXIST" else ValidationEnums.ITEM_STATUS_CREATE
+        ui_row = {
+            'invoice_no': invoice_no,
+            'invoice_date': (canonical.get('invoice_date') or supplier.get('invoice_date') or supply.get('invoice_date') or ''),
+            'vendor_name': vendor_name,
+            'vendor_gstin': gstin,
+            'total_amount': (canonical.get('total_amount') or canonical.get('grand_total') or due.get('total_amount') or None),
+        }
+        is_pending = evaluate_pending_purchase(
+            record,
+            vendor_status_enum,
+            voucher_status_enum,
+            item_status_enum,
+            tenant_id,
+            ui_row=ui_row,
+            auto_save=auto_save
+        )
+
+        if is_pending:
+            logger.info(f"[FINAL_STATUS] PENDING_PURCHASE record={record.id} auto_save={auto_save}")
+            return {"status": "PENDING_PURCHASE"}
 
         # If it's a duplicate and NOT sent to pending purchase, NOW we return DUPLICATE
         if is_duplicate:
@@ -2495,6 +2507,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             return {"status": "DUPLICATE"}
 
         # 🔹 CREATE PURCHASE VOUCHER (ONLY IF auto_save IS TRUE)
+        # Finalize & Save must only create vouchers — Pending Purchase creation happens above.
         if not auto_save:
             record.status = "EXTRACTED"
             record.validation_status = "NEED_TO_SAVE"

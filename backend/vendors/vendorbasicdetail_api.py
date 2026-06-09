@@ -145,6 +145,7 @@ class VendorBasicDetailViewSet(viewsets.ModelViewSet):
             )
             
             logger.info(f"✅ Vendor basic detail created successfully! ID: {vendor.id}, Code: {vendor.vendor_code}")
+            logger.critical(f"[VENDOR_CREATED] id={vendor.id} vendor_code={vendor.vendor_code} name={vendor.vendor_name}")
             
             response_serializer = VendorBasicDetailSerializer(vendor)
             return Response(

@@ -75,12 +75,16 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
     def revalidate(self, request, pk=None):
         """
         Re-run the same validate_and_process pipeline used by Purchase Upload.
-        Updates vendor_status, item_status, voucher_status on the PendingPurchase row.
-        Called after user creates a vendor or item.
+        Updates the PendingPurchase queue row via evaluate_pending_purchase (update_or_create).
+        Called after user creates a vendor or item to refresh statuses.
         """
         try:
             pp = self.get_object()
-            logger.info(f"[PENDING_REVALIDATE] id={pp.id} invoice={pp.invoice_number} source_row={pp.source_scan_row_id}")
+            logger.critical(f"[AUTO_REVALIDATE_TRIGGERED] id={pp.id} source_scan_row_id={pp.source_scan_row_id}")
+            logger.info(
+                f"[PENDING_REVALIDATE] id={pp.id} invoice={pp.invoice_number} "
+                f"source_row={pp.source_scan_row_id}"
+            )
 
             from ocr_pipeline.models import InvoiceTempOCR
             staging = InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).first()
@@ -90,38 +94,31 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            # Temporarily unmark processed so the pipeline can re-evaluate
-            staging.processed = False
-            staging.validation_status = 'PENDING'
-            staging.save(update_fields=['processed', 'validation_status'])
+            # Temporarily unmark processed so the pipeline can re-evaluate.
+            InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).update(
+                processed=False,
+                validation_status='PENDING',
+                status='FINALIZED'
+            )
+            staging = InvoiceTempOCR.objects.get(id=pp.source_scan_row_id)
 
             from ocr_pipeline.pipeline import validate_and_process
             result = validate_and_process(staging, auto_save=False)
 
-            new_val_status = staging.validation_status
-            logger.info(f"[PENDING_REVALIDATE_RESULT] id={pp.id} result={result} new_val_status={new_val_status}")
+            logger.info(
+                f"[PENDING_REVALIDATE_RESULT] id={pp.id} result={result} "
+                f"staging_validation={staging.validation_status}"
+            )
 
-            # Sync validation statuses back to the queue record
-            from ocr_pipeline.statuses import ValidationEnums
-            from vendors.models import VendorMasterBasicDetail
-            from ocr_pipeline.inventory_validation import InventoryItemValidationService
-
-            data = staging.extracted_data or {}
-            canonical_items = data.get('items', [])
-            inv_val = InventoryItemValidationService.validate_items(staging.tenant_id, canonical_items)
-
-            vendor_obj = VendorMasterBasicDetail.objects.filter(id=staging.vendor_id, tenant_id=staging.tenant_id).first() if staging.vendor_id else None
-
-            pp.vendor_status = ValidationEnums.VENDOR_STATUS_EXISTING if vendor_obj else ValidationEnums.VENDOR_STATUS_CREATE
-            pp.item_status = ValidationEnums.ITEM_STATUS_EXISTING if inv_val.get('item_status') == 'ALREADY EXIST' else ValidationEnums.ITEM_STATUS_CREATE
-            pp.voucher_status = ValidationEnums.VOUCHER_STATUS_NEW  # Ready to save
-            pp.save(update_fields=['vendor_status', 'item_status', 'voucher_status'])
+            pp.refresh_from_db()
+            logger.critical(f"[QUEUE_SYNCHRONIZED] id={pp.id} vendor_status={pp.vendor_status} item_status={pp.item_status} voucher_status={pp.voucher_status}")
 
             return Response({
                 'status': result.get('status') if isinstance(result, dict) else str(result),
                 'vendor_status': pp.vendor_status,
                 'item_status': pp.item_status,
                 'voucher_status': pp.voucher_status,
+                'pending_purchase_status': pp.pending_purchase_status,
             })
         except Exception as e:
             logger.exception(f"[PENDING_REVALIDATE_ERROR] pk={pk} error={e}")
@@ -130,18 +127,8 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def resolve(self, request, pk=None):
         """
-        Finalize the pending purchase by running the exact same save engine as Purchase Upload.
-
-        Flow:
-          1. Load InvoiceTempOCR via source_scan_row_id
-          2. Unmark processed so the pipeline save path runs
-          3. Call validate_and_process(staging_record, auto_save=True)
-             → VoucherPurchaseSupplierDetailsSerializer.create()
-             → _post_journal_entries()
-             → sync_purchase_to_grn()
-             → _mirror_to_vendor_portal()
-          4. Sync result back to PendingPurchase queue row
-          5. Return voucher_id on success
+        Finalize a single pending purchase using the exact same engine as Purchase Upload.
+        Flow: reset staging → validate_and_process(auto_save=True) → mark RESOLVED.
         """
         try:
             with transaction.atomic():
@@ -154,7 +141,6 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
                 if pp.pending_purchase_status == 'RESOLVED':
                     return Response({'status': 'already_resolved', 'message': 'This pending purchase has already been resolved.'})
 
-                # 1. Load the staging record
                 from ocr_pipeline.models import InvoiceTempOCR
                 staging = InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).first()
                 if not staging:
@@ -163,17 +149,15 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_404_NOT_FOUND
                     )
 
-                # 2. Temporarily allow the pipeline to run the save path
-                #    (the immutability guard blocks PENDING_PURCHASE → VOUCHER_CREATED transition
-                #     so we reset to a valid pre-save state)
-                staging.processed = False
-                staging.validation_status = 'NEED_TO_SAVE'
-                staging.status = 'EXTRACTED'
-                staging.save(update_fields=['processed', 'validation_status', 'status'])
+                InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).update(
+                    processed=False,
+                    validation_status='NEED_TO_SAVE',
+                    status='FINALIZED'
+                )
+                staging = InvoiceTempOCR.objects.get(id=pp.source_scan_row_id)
 
                 logger.info(f"[PENDING_STAGING_UNBLOCKED] staging_id={staging.id} reset for finalization")
 
-                # 3. Execute the canonical save engine (same as Purchase Upload finalize)
                 from ocr_pipeline.pipeline import validate_and_process
                 result = validate_and_process(staging, auto_save=True)
 
@@ -182,11 +166,11 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
                 save_status = result.get('status') if isinstance(result, dict) else None
 
                 if save_status not in ('VOUCHER_CREATED', 'SUCCESS'):
-                    # Restore pending state so user can retry
-                    staging.processed = True
-                    staging.validation_status = 'PENDING_PURCHASE'
-                    staging.status = 'COMPLETED'
-                    staging.save(update_fields=['processed', 'validation_status', 'status'])
+                    InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).update(
+                        processed=True,
+                        validation_status='PENDING_PURCHASE',
+                        status='FINALIZED'
+                    )
                     return Response(
                         {
                             'error': f'Save failed: {result.get("validation_message", save_status)}',
@@ -195,9 +179,13 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-                # 4. Sync status to the queue row
-                # Reload staging to get latest voucher_id set by serializer
                 staging.refresh_from_db()
+
+                InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).update(
+                    status='FINALIZED',
+                    processed=True
+                )
+
                 pp.pending_purchase_status = 'RESOLVED'
                 if staging.voucher_id:
                     pp.review_payload = pp.review_payload or {}
@@ -220,3 +208,120 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.exception(f"[PENDING_QUEUE_RESOLVE_ERROR] pk={pk} error={e}")
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    # ── Eligibility helpers shared by preview and finalize_all ────────────────
+    _ELIGIBLE_VENDOR   = ['VENDOR_STATUS_EXISTING', 'ALREADY_EXIST', 'EXISTS']
+    _ELIGIBLE_ITEM     = ['ITEM_STATUS_EXISTING', 'ALREADY_EXIST', 'ALREADY EXIST']
+    _ELIGIBLE_VOUCHER  = ['VOUCHER_STATUS_NEW', 'NEED_TO_SAVE', 'NEW']
+
+    def _eligible_qs(self, tenant_id):
+        return PendingPurchase.objects.filter(
+            company_id=tenant_id,
+            pending_purchase_status='PENDING',
+            vendor_status__in=self._ELIGIBLE_VENDOR,
+            item_status__in=self._ELIGIBLE_ITEM,
+            voucher_status__in=self._ELIGIBLE_VOUCHER,
+        )
+
+    @action(detail=False, methods=['get'], url_path='finalize-all/preview')
+    def finalize_all_preview(self, request):
+        """
+        Returns eligible vs ineligible counts for the bulk-finalize confirmation dialog.
+        GET /api/pending-purchases/finalize-all/preview/
+        """
+        tenant_id = getattr(request.user, 'branch_id', None) or getattr(request.user, 'tenant_id', None)
+        total_pending = PendingPurchase.objects.filter(company_id=tenant_id, pending_purchase_status='PENDING').count()
+        eligible = self._eligible_qs(tenant_id).count()
+        skipped = total_pending - eligible
+
+        return Response({
+            'eligible': eligible,
+            'skipped': skipped,
+            'total': total_pending,
+        })
+
+    @action(detail=False, methods=['post'], url_path='finalize-all')
+    def finalize_all(self, request):
+        """
+        Bulk finalize all eligible pending purchases.
+
+        Reuses the IDENTICAL resolve() pipeline — validate_and_process(auto_save=True).
+        No new finalization logic. Two entry points, one engine.
+
+        POST /api/pending-purchases/finalize-all/
+        Response: { processed, skipped, failed, errors }
+        """
+        tenant_id = getattr(request.user, 'branch_id', None) or getattr(request.user, 'tenant_id', None)
+
+        eligible_records = list(self._eligible_qs(tenant_id))
+        total_pending = PendingPurchase.objects.filter(company_id=tenant_id, pending_purchase_status='PENDING').count()
+        skipped_count = total_pending - len(eligible_records)
+
+        logger.info(f"[BULK_FINALIZE_START] tenant={tenant_id} eligible={len(eligible_records)} skipped={skipped_count}")
+
+        processed_count = 0
+        failed_count = 0
+        errors = []
+
+        from ocr_pipeline.models import InvoiceTempOCR
+        from ocr_pipeline.pipeline import validate_and_process
+        from django.utils import timezone
+
+        for pp in eligible_records:
+            try:
+                with transaction.atomic():
+                    staging = InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).first()
+                    if not staging:
+                        raise ValueError(f'Staging record {pp.source_scan_row_id} not found')
+
+                    # Identical reset to single-row resolve()
+                    InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).update(
+                        processed=False,
+                        validation_status='NEED_TO_SAVE',
+                        status='FINALIZED'
+                    )
+                    staging = InvoiceTempOCR.objects.get(id=pp.source_scan_row_id)
+
+                    # Canonical engine — same as Purchase Upload finalize
+                    result = validate_and_process(staging, auto_save=True)
+                    save_status = result.get('status') if isinstance(result, dict) else None
+
+                    if save_status not in ('VOUCHER_CREATED', 'SUCCESS'):
+                        InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).update(
+                            processed=True,
+                            validation_status='PENDING_PURCHASE',
+                            status='FINALIZED'
+                        )
+                        raise ValueError(result.get('validation_message', save_status))
+
+                    staging.refresh_from_db()
+                    InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).update(
+                        status='FINALIZED',
+                        processed=True
+                    )
+
+                    pp.pending_purchase_status = 'RESOLVED'
+                    pp.resolved_at = timezone.now()
+                    if staging.voucher_id:
+                        pp.review_payload = pp.review_payload or {}
+                        pp.review_payload['resolved_voucher_id'] = staging.voucher_id
+                    pp.save()
+
+                    processed_count += 1
+                    logger.info(f"[BULK_FINALIZE_ROW_OK] pp_id={pp.id} invoice={pp.invoice_number} voucher_id={staging.voucher_id}")
+
+            except Exception as ex:
+                failed_count += 1
+                errors.append({'pending_id': pp.id, 'invoice': pp.invoice_number, 'error': str(ex)})
+                logger.exception(f"[BULK_FINALIZE_ROW_ERROR] pp_id={pp.id} error={ex}")
+
+        logger.info(f"[BULK_FINALIZE_DONE] processed={processed_count} skipped={skipped_count} failed={failed_count}")
+        logger.critical(f"[CLEANUP_FINALIZED_VOUCHERS] tenant={tenant_id} processed={processed_count} skipped={skipped_count} failed={failed_count}")
+
+        return Response({
+            'success': True,
+            'processed': processed_count,
+            'skipped': skipped_count,
+            'failed': failed_count,
+            'errors': errors[:20],
+        })

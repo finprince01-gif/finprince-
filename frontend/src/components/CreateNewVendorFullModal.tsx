@@ -541,7 +541,10 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                         }
                     }
                 }
-            } catch (e) { console.error('GST save error (non-fatal):', e); }
+            } catch (e) {
+                console.error('GST save error:', e);
+                throw e;
+            }
 
             // 3. Products / Services
             try {
