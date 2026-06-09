@@ -267,6 +267,16 @@ def extract_invoice(client, file_bytes=None, voucher_type='Purchase', upload_typ
     Processes each page independently with ONLY its own OCR text and image.
     Ensures prompt size remains < 150K and prevents "full document" leakage.
     """
+    parent_hash = ""
+    if record_id:
+        try:
+            from ocr_pipeline.models import InvoiceTempOCR
+            parent_rec = InvoiceTempOCR.objects.filter(id=record_id).first()
+            if parent_rec:
+                parent_hash = parent_rec.file_hash or ""
+        except Exception as _db_err:
+            logger.warning(f"[PARENT_HASH_RESOLVE_ERR] record={record_id} err={_db_err}")
+
     # ── STEP 1: IDENTIFY PAGES ──
     try:
         # [PHASE 4] Opening doc to get page count is generally safe, 
@@ -339,7 +349,8 @@ Return a JSON object with a "pages" key containing a list of {count} results in 
             'upload_session_id': upload_session_id,
             'tenant_id': tenant_id,
             'upload_type': upload_type,  # [UPLOAD_TYPE ISOLATION FIX]
-            'batch_indices': [p['idx'] for p in batch_data]
+            'batch_indices': [p['idx'] for p in batch_data],
+            'file_hash': parent_hash
         }
 
         if not wait_for_result:
@@ -514,6 +525,16 @@ Failure to extract ANY field that is visible on the document is unacceptable.
         cached_res = _get_cached_ai_result(page_ocr_text)
         if cached_res:
             logger.info(f"[AI_CACHE_HIT] record={record_id} page={page_idx+1}")
+            # ── [CACHE_OCR_TEXT_RESTORE] ──
+            # The cache stores only the AI extraction result, not the raw OCR text.
+            # Re-inject _pdf_ocr_text so downstream grouping / continuation detection
+            # (classify_page, detect_continuation_markers) can function correctly.
+            # Without this, cache hits produce empty _raw_text, causing PAGE_ROLE_PRIMARY
+            # mis-classification and multi-page invoice split failures.
+            if page_ocr_text and not cached_res.get("_pdf_ocr_text"):
+                cached_res = dict(cached_res)  # shallow copy — never mutate the cached object
+                cached_res["_pdf_ocr_text"] = page_ocr_text
+                cached_res["_raw_text"] = page_ocr_text
             try:
                 log_forensic_page_dto(cached_res, upload_session_id, record_id, page_idx + 1, page_ocr_text)
             except Exception as le:
@@ -541,6 +562,7 @@ Failure to extract ANY field that is visible on the document is unacceptable.
             'page_number': page_idx + 1,
             'wait_for_result': wait_for_result,
             '_pdf_ocr_text': page_ocr_text,
+            'file_hash': parent_hash,
             
             # Forensic Fields
             'item_id': item_id,
@@ -713,6 +735,19 @@ Failure to extract ANY field that is visible on the document is unacceptable.
             result = json.loads(repaired_text)
             if not isinstance(result, dict):
                 return {"_error": "INVALID_JSON_STRUCTURE", "_raw": raw_text}
+
+            # Forensic logging of GSTIN raw and extracted states
+            raw_gstin_ocr = str(result.get('header', {}).get('vendor_gstin') or result.get('header', {}).get('gstin') or result.get('gstin') or "").strip()
+            logger.info(
+                f"[GSTIN_RAW_OCR] upload_session_id={upload_session_id} page_number={page_idx+1} "
+                f"invoice_no={result.get('header', {}).get('invoice_no')} vendor_name={result.get('header', {}).get('vendor_name')} "
+                f"gstin={raw_gstin_ocr} length={len(raw_gstin_ocr)}"
+            )
+            logger.info(
+                f"[GSTIN_EXTRACTED] upload_session_id={upload_session_id} page_number={page_idx+1} "
+                f"invoice_no={result.get('header', {}).get('invoice_no')} vendor_name={result.get('header', {}).get('vendor_name')} "
+                f"gstin={raw_gstin_ocr} length={len(raw_gstin_ocr)}"
+            )
 
             # [RAW_AI_RESPONSE_FULL] (Requirement Phase 1)
             logger.info(f"[RAW_AI_RESPONSE_FULL] page={page_idx+1} payload={raw_text}")

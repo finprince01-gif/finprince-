@@ -172,7 +172,18 @@ class AIWorker(BaseWorker):
                 from ocr_pipeline.models import InvoicePageResult
                 from vouchers.coordinator import terminalize_page_state
                 existing = InvoicePageResult.objects.filter(record_id=record_id, page_number=page_idx).first()
-                payload_val = existing.canonical_payload if existing else {}
+                payload_val = dict(existing.canonical_payload) if existing and existing.canonical_payload else {}
+                # Preserve all underscore keys from task payload (e.g. _pdf_ocr_text)
+                for k, v in payload.items():
+                    if k.startswith("_") and k not in payload_val:
+                        payload_val[k] = v
+
+                # Ensure both _pdf_ocr_text and _raw_text are populated with the OCR text
+                ocr_text_val = payload_val.get('_pdf_ocr_text') or payload_val.get('_raw_text')
+                if ocr_text_val:
+                    payload_val['_pdf_ocr_text'] = ocr_text_val
+                    payload_val['_raw_text'] = ocr_text_val
+
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(
                     self.executor,
@@ -190,6 +201,15 @@ class AIWorker(BaseWorker):
                         item_id=payload.get('item_id') or task.get('item_id')
                     )
                 )
+                # Trigger next fanout so we don't stall the sliding window!
+                try:
+                    from ocr_pipeline.pipeline import trigger_next_fanout
+                    await loop.run_in_executor(
+                        self.executor,
+                        lambda: trigger_next_fanout(record_id)
+                    )
+                except Exception as fan_err:
+                    logger.error(f"[FANOUT_TRIGGER_IDEMPOTENCY_FAIL] record={record_id} err={fan_err}")
                 return
         except Exception as e:
             logger.error(f"[IDEMPOTENCY_CHECK_FAIL] {e}")
@@ -204,9 +224,87 @@ class AIWorker(BaseWorker):
 
             logger.info(f"[OCR_RETRY_CHAIN_START] record={record_id} page={page_idx} max_passes={MAX_IMAGE_PASSES}")
 
+            # ── [PHASE 4: OCR RESPONSE CACHE] ──
+            # Check if we have a cached extraction for this exact (file_hash, page_number).
+            # If so, skip Gemini entirely and reuse the prior result.
+            file_hash = payload.get('file_hash') or ''
+            if file_hash:
+                try:
+                    from ocr_pipeline.ocr_cache import OCRResponseCache
+                    cached_payload = await loop.run_in_executor(
+                        self.executor,
+                        lambda: OCRResponseCache.get(file_hash, page_idx)
+                    )
+                    if cached_payload:
+                        logger.info(
+                            f"[OCR_CACHE_HIT_FASTPATH] record={record_id} page={page_idx} "
+                            f"file_hash={file_hash} invoice_no={cached_payload.get('invoice_no')} "
+                            f"item_count={len(cached_payload.get('items') or [])} "
+                            "Skipping Gemini call."
+                        )
+                        # Inject live session context over the cached payload
+                        cached_payload = dict(cached_payload)
+                        cached_payload['record_id'] = str(record_id)
+                        cached_payload['upload_session_id'] = str(session_id)
+                        cached_payload['tenant_id'] = str(tenant_id)
+                        if job_id != 'unknown':
+                            cached_payload['job_id'] = str(job_id)
+
+                        # Preserve all underscore keys from task payload (e.g. _pdf_ocr_text)
+                        for k, v in payload.items():
+                            if k.startswith("_") and k not in cached_payload:
+                                cached_payload[k] = v
+
+                        # Ensure both _pdf_ocr_text and _raw_text are populated with the OCR text
+                        ocr_text_val = cached_payload.get('_pdf_ocr_text') or cached_payload.get('_raw_text')
+                        if ocr_text_val:
+                            cached_payload['_pdf_ocr_text'] = ocr_text_val
+                            cached_payload['_raw_text'] = ocr_text_val
+
+                        from core.redis_orchestrator import orchestrator
+                        orchestrator.release_ai_slot(
+                            str(record_id), page_idx,
+                            session_id=str(session_id),
+                            release_reason="CACHE_HIT",
+                            tenant_id=str(tenant_id)
+                        )
+                        from vouchers.coordinator import terminalize_page_state
+                        loop = asyncio.get_running_loop()
+                        await loop.run_in_executor(
+                            self.executor,
+                            lambda: terminalize_page_state(
+                                record_id=str(record_id),
+                                page_number=page_idx,
+                                session_id=session_id,
+                                is_failed=False,
+                                canonical_payload=cached_payload,
+                                worker_id="AIWorkerCacheHit",
+                                queue_source="ai_queue",
+                                tenant_id=tenant_id,
+                                correlation_id=correlation_id,
+                                job_id=job_id,
+                                item_id=payload.get('item_id') or task.get('item_id')
+                            )
+                        )
+                        # Trigger next fanout so we don't stall the sliding window!
+                        try:
+                            from ocr_pipeline.pipeline import trigger_next_fanout
+                            await loop.run_in_executor(
+                                self.executor,
+                                lambda: trigger_next_fanout(record_id)
+                            )
+                        except Exception as fan_err:
+                            logger.error(f"[FANOUT_TRIGGER_CACHE_FAIL] record={record_id} err={fan_err}")
+                        return
+                except Exception as _cache_err:
+                    logger.warning(f"[OCR_CACHE_FASTPATH_ERR] record={record_id} page={page_idx} err={_cache_err}")
+
+
             final_result = None
             success = False
             current_payload = payload  # will be updated per pass
+
+
 
             for pass_idx in range(MAX_IMAGE_PASSES):
                 logger.info(f"[OCR_RECOVERY_PASS] pass={pass_idx+1}/{MAX_IMAGE_PASSES} ({PASS_NAMES[pass_idx]}) record={record_id} page={page_idx}")
@@ -276,6 +374,47 @@ class AIWorker(BaseWorker):
                                     metrics.increment_counter("ocr:retry_success")
                                 final_result = result
                                 success = True
+
+                                # ── [PHASE 4: STORE TO CACHE] ──
+                                # Store this successful extraction so future uploads of the
+                                # same page skip Gemini entirely.
+                                file_hash_val = payload.get('file_hash') or ''
+                                if file_hash_val:
+                                    try:
+                                        from ocr_pipeline.ocr_cache import (
+                                            OCRResponseCache,
+                                            ItemExtractionConsensusEngine,
+                                        )
+                                        await loop.run_in_executor(
+                                            self.executor,
+                                            lambda: OCRResponseCache.store(
+                                                file_hash_val, page_idx, canonical_payload
+                                            )
+                                        )
+                                        # Run consensus if we have 2+ historic extractions
+                                        history = await loop.run_in_executor(
+                                            self.executor,
+                                            lambda: ItemExtractionConsensusEngine.get_historic_payloads(
+                                                file_hash_val, page_idx
+                                            )
+                                        )
+                                        if len(history) >= 2:
+                                            inv_no = canonical_payload.get('invoice_no', '')
+                                            elected, conf, reason = ItemExtractionConsensusEngine.elect(
+                                                history,
+                                                invoice_no=inv_no,
+                                                file_hash=file_hash_val,
+                                                page_number=page_idx,
+                                            )
+                                            if conf >= 0.5:  # majority consensus
+                                                canonical_payload = elected
+                                                logger.info(
+                                                    f"[ITEM_CONSENSUS_APPLIED] record={record_id} "
+                                                    f"page={page_idx} reason={reason}"
+                                                )
+                                    except Exception as _ce:
+                                        logger.warning(f"[PHASE4_CACHE_ERR] record={record_id} page={page_idx} err={_ce}")
+
                                 break
                             else:
                                 logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=low_density_or_missing_anchors density={density:.2f} char_count={char_count}")
@@ -388,6 +527,19 @@ class AIWorker(BaseWorker):
                     parsed = json.loads(repaired_text)
                     if not parsed:
                         raise ValueError("StructuredParseError: parsed output is empty")
+                    
+                    # Forensic logging of GSTIN raw and extracted states
+                    raw_gstin_ocr = str(parsed.get('header', {}).get('vendor_gstin') or parsed.get('header', {}).get('gstin') or parsed.get('gstin') or "").strip()
+                    logger.info(
+                        f"[GSTIN_RAW_OCR] upload_session_id={session_id} page_number={page_idx} "
+                        f"invoice_no={parsed.get('header', {}).get('invoice_no')} vendor_name={parsed.get('header', {}).get('vendor_name')} "
+                        f"gstin={raw_gstin_ocr} length={len(raw_gstin_ocr)}"
+                    )
+                    logger.info(
+                        f"[GSTIN_EXTRACTED] upload_session_id={session_id} page_number={page_idx} "
+                        f"invoice_no={parsed.get('header', {}).get('invoice_no')} vendor_name={parsed.get('header', {}).get('vendor_name')} "
+                        f"gstin={raw_gstin_ocr} length={len(raw_gstin_ocr)}"
+                    )
                     logger.info(f"[PARSER_VARIABLE_INIT] record={record_id} page={page_idx} stage=process_result")
                     try:
                         from ocr_pipeline.extraction import log_forensic_page_dto
@@ -425,6 +577,20 @@ class AIWorker(BaseWorker):
                     if ocr_text_val:
                         canonical_payload['_pdf_ocr_text'] = ocr_text_val
                         canonical_payload['_raw_text'] = ocr_text_val
+                    
+                    try:
+                        from ocr_pipeline.pipeline import trace_item_checkpoint
+                        trace_item_checkpoint(
+                            record_id=str(record_id),
+                            invoice_no=canonical_payload.get('invoice_no') or "",
+                            page_number=page_idx,
+                            stage="ITEM_TRACE_EXTRACTED",
+                            item_count=len(canonical_payload.get('items', [])),
+                            item_status=canonical_payload.get('item_status'),
+                            snapshot_item_count=None
+                        )
+                    except Exception as trace_err:
+                        logger.error(f"[TRACE_ERR] ITEM_TRACE_EXTRACTED: {trace_err}")
                     
                     is_failed = not self._is_dto_valid(canonical_payload, is_final=True)
                     if is_failed:

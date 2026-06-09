@@ -147,8 +147,11 @@ class FinalizeWorker(BaseWorker):
                 if not is_failed:
                     logger.info(f"[PURCHASE_SAVE_SERVICE_START] record={record_id} session={canonical_session_id}")
                     try:
-                         record_obj = InvoiceTempOCR.objects.filter(id=record_id).first()
-                         if record_obj:
+                         all_session_records = list(InvoiceTempOCR.objects.filter(
+                             upload_session_id=canonical_session_id,
+                             processed=False
+                         ))
+                         if all_session_records:
                              from ocr_pipeline.views import get_save_eligible_rows, get_pending_purchase_eligible_rows
                              eligible_save_tuples = get_save_eligible_rows(canonical_session_id, tenant_id)
                              eligible_pending_tuples = get_pending_purchase_eligible_rows(canonical_session_id, tenant_id=tenant_id)
@@ -156,69 +159,70 @@ class FinalizeWorker(BaseWorker):
                              eligible_save_ids = [str(t[0].id) for t in eligible_save_tuples]
                              eligible_pending_ids = [str(t[0].id) for t in eligible_pending_tuples]
                              
-                             eligible = str(record_obj.id) in eligible_save_ids or str(record_obj.id) in eligible_pending_ids
-                             reason = None if eligible else "NOT_ELIGIBLE_VIA_HELPER"
-                             if not eligible:
-                                 logger.warning(f"[SAVE_ELIGIBILITY_FAILED] record_id={record_id} reason={reason}")
-                                 logger.info(f"[PURCHASE_SAVE_SERVICE_SKIPPED] record={record_id} reason={reason}")
-                                 # Set record status to FINALIZED but processed=False since it's not saved/eligible
-                                 updated = InvoiceTempOCR.objects.filter(id=record_id).update(
-                                     status=PipelineStatus.FINALIZED,
-                                     processed=False
-                                 )
-                                 logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state={PipelineStatus.FINALIZED} processed=False")
-                             else:
-                                 from ocr_pipeline.pipeline import validate_and_process
-                                 logger.info(f"[PURCHASE_DB_INSERT_START] record={record_id} vendor_id={getattr(record_obj, 'vendor_id', None)} validation_status={getattr(record_obj, 'validation_status', None)}")
-                                 from django.db import transaction as _tx_save
-                                 try:
-                                     with _tx_save.atomic():
-                                         save_result = validate_and_process(record_obj, auto_save=True)
-                                         save_status = save_result.get('status') if isinstance(save_result, dict) else None
-                                         
-                                         if save_status == 'VOUCHER_CREATED':
-                                             logger.info(f"[PURCHASE_DB_INSERT_SUCCESS] record={record_id} status=VOUCHER_CREATED")
-                                             logger.info(f"[PURCHASE_COMMIT_SUCCESS] record={record_id} voucher_id={save_result.get('voucher_id')}")
-                                             InvoiceTempOCR.objects.filter(id=record_id).update(
-                                                 status=PipelineStatus.FINALIZED,
-                                                 validation_status='VOUCHER_CREATED',
-                                                 processed=True
-                                             )
-                                             logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state=FINALIZED processed=True validation_status=VOUCHER_CREATED")
-                                         elif save_status in ('DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'):
-                                             logger.info(f"[PURCHASE_DUPLICATE_DETECTED] record={record_id} status={save_status} validation_status={save_result.get('validation_message') if isinstance(save_result, dict) else ''}")
-                                             InvoiceTempOCR.objects.filter(id=record_id).update(
-                                                 status=PipelineStatus.FINALIZED,
-                                                 validation_status=save_status,
-                                                 processed=True
-                                             )
-                                             logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state=FINALIZED processed=True validation_status={save_status}")
-                                         elif save_status == 'PENDING_PURCHASE':
-                                             logger.info(f"[PURCHASE_PENDING_STORED] record={record_id} status=PENDING_PURCHASE")
-                                             InvoiceTempOCR.objects.filter(id=record_id).update(
-                                                 status=PipelineStatus.FINALIZED,
-                                                 validation_status='PENDING_PURCHASE',
-                                                 processed=True
-                                             )
-                                             logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state=FINALIZED processed=True validation_status=PENDING_PURCHASE")
-                                         else:
-                                             msg = save_result.get('validation_message') if isinstance(save_result, dict) else save_result
-                                             logger.warning(f"[PURCHASE_SAVE_NOT_CREATED] record={record_id} save_status={save_status} message={msg}")
-                                             InvoiceTempOCR.objects.filter(id=record_id).update(
-                                                 status=PipelineStatus.FINALIZED,
-                                                 processed=False
-                                             )
-                                             logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state=FINALIZED processed=False")
-                                 except Exception as tx_err:
-                                     logger.error(f"[DB_ROLLBACK] record={record_id} error={tx_err}")
-                                     logger.exception(f"[FINALIZE_EXCEPTION] record={record_id} purchase_save rollback triggered")
-                                     InvoiceTempOCR.objects.filter(id=record_id).update(
+                             for record_obj in all_session_records:
+                                 eligible = str(record_obj.id) in eligible_save_ids or str(record_obj.id) in eligible_pending_ids
+                                 reason = None if eligible else "NOT_ELIGIBLE_VIA_HELPER"
+                                 if not eligible:
+                                     logger.warning(f"[SAVE_ELIGIBILITY_FAILED] record_id={record_obj.id} reason={reason}")
+                                     logger.info(f"[PURCHASE_SAVE_SERVICE_SKIPPED] record={record_obj.id} reason={reason}")
+                                     # Set record status to FINALIZED but processed=False since it's not saved/eligible
+                                     InvoiceTempOCR.objects.filter(id=record_obj.id).update(
                                          status=PipelineStatus.FINALIZED,
                                          processed=False
                                      )
-                                     logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state=FINALIZED processed=False (transaction failure)")
+                                     logger.info(f"[STATE_MACHINE_TRANSITION] record={record_obj.id} new_state={PipelineStatus.FINALIZED} processed=False")
+                                 else:
+                                     from ocr_pipeline.pipeline import validate_and_process
+                                     logger.info(f"[PURCHASE_DB_INSERT_START] record={record_obj.id} vendor_id={getattr(record_obj, 'vendor_id', None)} validation_status={getattr(record_obj, 'validation_status', None)}")
+                                     from django.db import transaction as _tx_save
+                                     try:
+                                         with _tx_save.atomic():
+                                             save_result = validate_and_process(record_obj, auto_save=True)
+                                             save_status = save_result.get('status') if isinstance(save_result, dict) else None
+                                             
+                                             if save_status == 'VOUCHER_CREATED':
+                                                 logger.info(f"[PURCHASE_DB_INSERT_SUCCESS] record={record_obj.id} status=VOUCHER_CREATED")
+                                                 logger.info(f"[PURCHASE_COMMIT_SUCCESS] record={record_obj.id} voucher_id={save_result.get('voucher_id')}")
+                                                 InvoiceTempOCR.objects.filter(id=record_obj.id).update(
+                                                     status=PipelineStatus.FINALIZED,
+                                                     validation_status='VOUCHER_CREATED',
+                                                     processed=True
+                                                 )
+                                                 logger.info(f"[STATE_MACHINE_TRANSITION] record={record_obj.id} new_state=FINALIZED processed=True validation_status=VOUCHER_CREATED")
+                                             elif save_status in ('DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'):
+                                                 logger.info(f"[PURCHASE_DUPLICATE_DETECTED] record={record_obj.id} status={save_status} validation_status={save_result.get('validation_message') if isinstance(save_result, dict) else ''}")
+                                                 InvoiceTempOCR.objects.filter(id=record_obj.id).update(
+                                                     status=PipelineStatus.FINALIZED,
+                                                     validation_status=save_status,
+                                                     processed=True
+                                                 )
+                                                 logger.info(f"[STATE_MACHINE_TRANSITION] record={record_obj.id} new_state=FINALIZED processed=True validation_status={save_status}")
+                                             elif save_status == 'PENDING_PURCHASE':
+                                                 logger.info(f"[PURCHASE_PENDING_STORED] record={record_obj.id} status=PENDING_PURCHASE")
+                                                 InvoiceTempOCR.objects.filter(id=record_obj.id).update(
+                                                     status=PipelineStatus.FINALIZED,
+                                                     validation_status='PENDING_PURCHASE',
+                                                     processed=True
+                                                 )
+                                                 logger.info(f"[STATE_MACHINE_TRANSITION] record={record_obj.id} new_state=FINALIZED processed=True validation_status=PENDING_PURCHASE")
+                                             else:
+                                                 msg = save_result.get('validation_message') if isinstance(save_result, dict) else save_result
+                                                 logger.warning(f"[PURCHASE_SAVE_NOT_CREATED] record={record_obj.id} save_status={save_status} message={msg}")
+                                                 InvoiceTempOCR.objects.filter(id=record_obj.id).update(
+                                                     status=PipelineStatus.FINALIZED,
+                                                     processed=False
+                                                 )
+                                                 logger.info(f"[STATE_MACHINE_TRANSITION] record={record_obj.id} new_state=FINALIZED processed=False")
+                                     except Exception as tx_err:
+                                         logger.error(f"[DB_ROLLBACK] record={record_obj.id} error={tx_err}")
+                                         logger.exception(f"[FINALIZE_EXCEPTION] record={record_obj.id} purchase_save rollback triggered")
+                                         InvoiceTempOCR.objects.filter(id=record_obj.id).update(
+                                             status=PipelineStatus.FINALIZED,
+                                             processed=False
+                                         )
+                                         logger.info(f"[STATE_MACHINE_TRANSITION] record={record_obj.id} new_state=FINALIZED processed=False (transaction failure)")
                          else:
-                             logger.warning(f"[PURCHASE_SAVE_RECORD_MISSING] record={record_id} — InvoiceTempOCR not found, skipping purchase save")
+                             logger.warning(f"[PURCHASE_SAVE_RECORD_MISSING] record={record_id} — No unprocessed InvoiceTempOCR records found in session {canonical_session_id}")
                     except Exception as ps_err:
                          logger.error(f"[PURCHASE_SAVE_SERVICE_ERROR] record={record_id} error={ps_err}")
                          logger.exception(f"[FINALIZE_EXCEPTION] record={record_id} purchase_save_service threw")

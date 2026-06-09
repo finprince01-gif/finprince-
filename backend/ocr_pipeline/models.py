@@ -452,9 +452,10 @@ class SessionFinalizationState(models.Model):
                     db_snapshot = db_state.get('snapshot_complete')
                     db_snapshot_created = db_state.get('snapshot_created')
                     
-                    terminal_statuses = {'FINALIZED', 'FAILED', 'COMPLETED'}
+                    terminal_statuses = {'FINALIZED', 'COMPLETED'}
                     is_final = (
                         db_status in terminal_statuses
+                        or (db_status == 'FAILED' and self.status == 'FAILED')
                         or (db_export and db_materialize and db_snapshot)
                     )
                     if is_final:
@@ -585,11 +586,17 @@ class InvoiceTempOCR(models.Model):
                     db_val_status = db_record.get('validation_status')
                     db_extracted = db_record.get('extracted_data') or {}
                     
-                    terminal_statuses = {'FINALIZED', 'FAILED', 'COMPLETED'}
-                    if db_status in terminal_statuses:
+                    # [RESTORATION FIX] A status of 'FINALIZED' is only terminal if processed=True.
+                    # If processed=False, the business validation and voucher save has not run yet.
+                    is_db_terminal = (db_status == 'COMPLETED') or (db_status == 'FINALIZED' and db_processed)
+                    if is_db_terminal and self.status not in {'FINALIZED', 'FAILED', 'COMPLETED', 'VOUCHER_CREATED'}:
                         raise RuntimeError(f"Post-finalization mutation blocked: record {self.pk} is in terminal state '{db_status}'")
                     
-                    is_db_finalized = db_status in ('FINALIZED', 'FAILED') or db_processed is True or db_val_status in ('VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE', 'PENDING_PURCHASE')
+                    is_db_finalized = (
+                        (db_status in ('FINALIZED', 'COMPLETED') and db_processed)
+                        or db_processed is True
+                        or db_val_status in ('VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE', 'PENDING_PURCHASE')
+                    )
                     
                     if is_db_finalized:
                         # Prevent status/processed oscillation

@@ -41,6 +41,76 @@ class CriticalPipelineError(ValueError):
     """Exception raised when critical invariants of the pipeline are violated."""
     pass
 
+def trace_item_checkpoint(record_id, invoice_no, page_number, stage, item_count, item_status, snapshot_item_count=None):
+    from core.redis_orchestrator import orchestrator
+    
+    # 1. Log the checkpoint
+    logger.info(
+        f"[{stage}] record_id={record_id} invoice_no={invoice_no} page_number={page_number} "
+        f"item_count={item_count} item_status={item_status} snapshot_item_count={snapshot_item_count}"
+    )
+    
+    # 2. Redis tracking for transitions
+    redis_key = f"item_trace:{record_id}"
+    
+    # Let's define the order of stages to determine transition:
+    stages_order = [
+        "ITEM_TRACE_EXTRACTED",
+        "ITEM_TRACE_AFTER_VALIDATION",
+        "ITEM_TRACE_AFTER_ASSEMBLY",
+        "ITEM_TRACE_BEFORE_SNAPSHOT",
+        "ITEM_TRACE_AFTER_SNAPSHOT",
+        "ITEM_TRACE_AFTER_HYDRATION"
+    ]
+    
+    # Let's save the current stage item count in Redis
+    try:
+        if not orchestrator.redis:
+            orchestrator._connect()
+        r = orchestrator.redis
+        if r:
+            # Get all previously recorded counts
+            all_counts = r.hgetall(redis_key)
+            all_counts = {k.decode('utf-8') if isinstance(k, bytes) else k: int(v) for k, v in all_counts.items()}
+        else:
+            all_counts = {}
+    except Exception as re_err:
+        logger.error(f"[REDIS_TRACE_ERROR] {re_err}")
+        all_counts = {}
+        
+    # Find the previous recorded stage in the order
+    current_idx = stages_order.index(stage) if stage in stages_order else -1
+    previous_stage = None
+    previous_item_count = 0
+    
+    for idx in range(current_idx - 1, -1, -1):
+        prev_stg = stages_order[idx]
+        if prev_stg in all_counts:
+            previous_stage = prev_stg
+            previous_item_count = all_counts[prev_stg]
+            break
+            
+    # Save current item count to Redis
+    try:
+        if r:
+            r.hset(redis_key, stage, str(item_count))
+            r.expire(redis_key, 86400) # Expire in 1 day
+    except Exception as re_err:
+        logger.error(f"[REDIS_TRACE_SAVE_ERROR] {re_err}")
+        
+    # Check for loss transition: previous_item_count > 0 and current_item_count == 0
+    if previous_stage and previous_item_count > 0 and item_count == 0:
+        logger.critical(
+            f"[ITEM_LOSS_DETECTED] "
+            f"record_id={record_id} "
+            f"invoice_no={invoice_no} "
+            f"previous_stage={previous_stage} "
+            f"current_stage={stage} "
+            f"previous_item_count={previous_item_count} "
+            f"current_item_count={item_count}"
+        )
+
+
 def acquire_redis_lock(lock_name: str, expiry_s: int = 60) -> bool:
     from core.redis_orchestrator import orchestrator
     if not orchestrator.redis:
@@ -449,57 +519,61 @@ def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wa
         # ── [PHASE 18] BARRIER INITIALIZATION ──
         # Initialize the deterministic assembly barrier for this record.
         # This ensures that even if AI tasks finish extremely fast, the barrier knows how many to expect.
-        state, created = SessionFinalizationState.objects.get_or_create(
-            id=str(record.id),
-            defaults={
-                'expected_pages': total_pages,
-                'total_pages_expected': total_pages, # Legacy
-                'completed_pages': 0,
-                'failed_pages': 0,
-                'ai_completed_pages': 0,
-                'snapshot_created': False
-            }
-        )
-        if not created:
-            # If it already existed (e.g. from a retry or stub row), just update expected_pages
-            # Do NOT reset snapshot_created, export_complete, or materialization_complete!
-            state.expected_pages = total_pages
-            state.total_pages_expected = total_pages
-            state.save(update_fields=['expected_pages', 'total_pages_expected'])
-
-        logger.info(f"[ASSEMBLY_BARRIER_CREATED] record={record.id} expected={total_pages}")
-        
-        if not record.extracted_data:
-            # ── [RECOVERY_IDEMPOTENCY_FIX] ──
-            # If the record is already past OCR stage, do NOT re-enqueue AI tasks.
-            in_flight_statuses = [
-                PipelineStatus.EXTRACTING, 
-                PipelineStatus.ASSEMBLING, 
-                PipelineStatus.FINALIZING, 
-                PipelineStatus.FINALIZED
-            ]
-            if record.status in in_flight_statuses and not is_reusable:
-                 logger.info(f"[PIPELINE_RECOVERY_SKIP] record={record.id} already in stage {record.status}. Bypassing re-extraction.")
-                 return {"status": "ENQUEUED"}
-
-            # PHASE 3: Transition to EXTRACTING
-            record.status = PipelineStatus.EXTRACTING
-            record.save(update_fields=['status'])
-
-            extracted = extract_invoice(
-                client=None, 
-                file_bytes=file_bytes, 
-                voucher_type=record.voucher_type or 'Purchase',
-                public_ip="0.0.0.0",
-                user_id='system',
-                tenant_id=str(record.tenant_id or 'system'),
-                wait_for_result=wait_for_ai,
-                record_id=record.id,
-                item_id=item_id,
-                upload_session_id=record.upload_session_id,
-                job_id=job_id,
-                file_path=file_path
+        with transaction.atomic():
+            state, created = SessionFinalizationState.objects.get_or_create(
+                id=str(record.id),
+                defaults={
+                    'expected_pages': total_pages,
+                    'total_pages_expected': total_pages, # Legacy
+                    'completed_pages': 0,
+                    'failed_pages': 0,
+                    'ai_completed_pages': 0,
+                    'snapshot_created': False
+                }
             )
+            # Row lock to serialize with trigger_next_fanout calls
+            state = SessionFinalizationState.objects.select_for_update().get(id=str(record.id))
+            
+            if not created:
+                # If it already existed (e.g. from a retry or stub row), just update expected_pages
+                # Do NOT reset snapshot_created, export_complete, or materialization_complete!
+                state.expected_pages = total_pages
+                state.total_pages_expected = total_pages
+                state.save(update_fields=['expected_pages', 'total_pages_expected'])
+
+            logger.info(f"[ASSEMBLY_BARRIER_CREATED] record={record.id} expected={total_pages}")
+            
+            if not record.extracted_data:
+                # ── [RECOVERY_IDEMPOTENCY_FIX] ──
+                # If the record is already past OCR stage, do NOT re-enqueue AI tasks.
+                in_flight_statuses = [
+                    PipelineStatus.EXTRACTING, 
+                    PipelineStatus.ASSEMBLING, 
+                    PipelineStatus.FINALIZING, 
+                    PipelineStatus.FINALIZED
+                ]
+                if record.status in in_flight_statuses and not is_reusable:
+                     logger.info(f"[PIPELINE_RECOVERY_SKIP] record={record.id} already in stage {record.status}. Bypassing re-extraction.")
+                     return {"status": "ENQUEUED"}
+
+                # PHASE 3: Transition to EXTRACTING
+                record.status = PipelineStatus.EXTRACTING
+                record.save(update_fields=['status'])
+
+                extracted = extract_invoice(
+                    client=None, 
+                    file_bytes=file_bytes, 
+                    voucher_type=record.voucher_type or 'Purchase',
+                    public_ip="0.0.0.0",
+                    user_id='system',
+                    tenant_id=str(record.tenant_id or 'system'),
+                    wait_for_result=wait_for_ai,
+                    record_id=record.id,
+                    item_id=item_id,
+                    upload_session_id=record.upload_session_id,
+                    job_id=job_id,
+                    file_path=file_path
+                )
             
             if not wait_for_ai:
                 # ── [PHASE 10: ASYNC INTEGRITY GATE] ──
@@ -780,12 +854,7 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         ]
         
         if failed_indices:
-            logger.error(f"[FAILURE_CONTAINMENT] Aborting assembly for record {record.id} because pages {failed_indices} are failed/partial. Banning DTO_PARTIAL_VALID.")
-            record.status = PipelineStatus.FAILED
-            record.validation_status = 'EXTRACTION_FAILED'
-            record.processed = False
-            record.save(update_fields=['status', 'validation_status', 'processed'])
-            
+            logger.warning(f"[FAILURE_CONTAINMENT] Processing page list with failed pages {failed_indices} for record {record.id}. NOT aborting assembly.")
             try:
                 b_state = SessionFinalizationState.objects.filter(id=str(record.id)).first()
                 if b_state:
@@ -793,8 +862,6 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                     b_state.save(update_fields=['failed_pages'])
             except Exception as _b_err:
                 logger.warning(f"[BARRIER_STATE_WRITE_FAILED] {_b_err}")
-                
-            return {"status": "EXTRACTION_FAILED", "failed_pages": failed_indices}
             
         # Filter out failed pages from mapping (BYPASSED)
         raw_pages = {
@@ -822,12 +889,32 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
             if not isinstance(payload_src, dict):
                 payload_src = {}
                 
-            p = get_canonical_export_record(payload_src, tenant_id=record.tenant_id)
+            page_int = int(k)
+            if page_int in failed_indices:
+                p = {
+                    "status": "PARTIAL_FAILED",
+                    "validation_warnings": ["page_ocr_failed"],
+                    "error": "Page failed raw OCR extraction.",
+                    "invoice_no": "FAILED",
+                    "vendor_name": "FAILED",
+                }
+            else:
+                try:
+                    p = get_canonical_export_record(payload_src, tenant_id=record.tenant_id)
+                except Exception as e_page:
+                    logger.error(f"[ASSEMBLY_PAGE_NORMALIZATION_FAILED] page={k} error={e_page}")
+                    p = {
+                        "status": "PARTIAL_FAILED",
+                        "validation_warnings": ["page_normalization_failed"],
+                        "error": f"Page normalization failed: {str(e_page)}",
+                        "invoice_no": "FAILED",
+                        "vendor_name": "FAILED",
+                    }
             
             # [FIX 4 & 5] Split physical page identity from runtime task ordering
             p["_page_no"] = p_idx                  # Sequential logical page for the UI/exported rows
-            p["_physical_page_no"] = int(k)        # True physical page from the PDF enumerate
-            p["_runtime_task_id"] = int(k)         # Preserve for async routing
+            p["_physical_page_no"] = page_int      # True physical page from the PDF enumerate
+            p["_runtime_task_id"] = page_int       # Preserve for async routing
             
             pages_list.append(p)
 
@@ -950,7 +1037,9 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
             # Run item validation during assembly before final freeze
             try:
                 from .inventory_validation import InventoryItemValidationService
-                inv_val = InventoryItemValidationService.validate_items(record.tenant_id, items)
+                v_id = ui_pay.get("vendor_id") or record.vendor_id
+                v_gst = ui_pay.get("vendor_gstin") or ui_pay.get("gstin") or record.gstin
+                inv_val = InventoryItemValidationService.validate_items(record.tenant_id, items, v_id, v_gst)
                 ui_pay["items"] = inv_val["items"]
                 ui_pay["item_status"] = inv_val["item_status"]
                 ui_pay["missing_items"] = inv_val["missing_items"]
@@ -962,6 +1051,19 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                 )
             except Exception as e_val:
                 logger.error(f"[ITEM_VALIDATION_ASSEMBLY_FAILED] error={e_val}")
+            
+            try:
+                trace_item_checkpoint(
+                    record_id=str(record.id),
+                    invoice_no=invoice_no,
+                    page_number=page_src,
+                    stage="ITEM_TRACE_AFTER_VALIDATION",
+                    item_count=len(ui_pay.get("items", [])),
+                    item_status=ui_pay.get("item_status"),
+                    snapshot_item_count=None
+                )
+            except Exception as trace_err:
+                logger.error(f"[TRACE_ERR] ITEM_TRACE_AFTER_VALIDATION: {trace_err}")
             
             logger.info(f"[NORMALIZATION_COMPLETE] page_no={page_src} invoice_no={invoice_no} merge_key=N/A dedupe_key=N/A filter_reason=None dropped=False")
             
@@ -1137,6 +1239,20 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         
         logger.info(f"[ASSEMBLY_PAGE_MERGED] record={record.id} invoices={len(final_invoices)}")
 
+        for ui_pay in final_invoices:
+            try:
+                trace_item_checkpoint(
+                    record_id=str(record.id),
+                    invoice_no=ui_pay.get("invoice_no") or "N/A",
+                    page_number=ui_pay.get("_page_no"),
+                    stage="ITEM_TRACE_AFTER_ASSEMBLY",
+                    item_count=len(ui_pay.get("items", [])),
+                    item_status=ui_pay.get("item_status"),
+                    snapshot_item_count=None
+                )
+            except Exception as trace_err:
+                logger.error(f"[TRACE_ERR] ITEM_TRACE_AFTER_ASSEMBLY: {trace_err}")
+
         # Snapshot persistence must use len(final_invoices) (Root Cause #3)
         export_rows_count = len(final_invoices)
         logger.info(f"[SNAPSHOT_ROW_COUNT] count={export_rows_count}")
@@ -1184,6 +1300,19 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                 raise CriticalPipelineError(
                     f"Item status lost despite extracted items before snapshot freeze: record_id={inv_ui.get('id') or record.id}"
                 )
+            
+            try:
+                trace_item_checkpoint(
+                    record_id=str(inv_ui.get("id") or record.id),
+                    invoice_no=inv_ui.get("invoice_no") or "N/A",
+                    page_number=inv_ui.get("_page_no"),
+                    stage="ITEM_TRACE_BEFORE_SNAPSHOT",
+                    item_count=len(inv_items),
+                    item_status=inv_ui.get("item_status"),
+                    snapshot_item_count=len(inv_items)
+                )
+            except Exception as trace_err:
+                logger.error(f"[TRACE_ERR] ITEM_TRACE_BEFORE_SNAPSHOT: {trace_err}")
 
         # 4. JSON SERIALIZATION & COMPRESSION (Phase 8: Snapshot Storage Hardening)
         try:
@@ -1415,6 +1544,8 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                             f"[PERSISTENCE_ATTEMPT] invoice_no={sib.supplier_invoice_no} "
                             f"group_key=sibling page_count=1 session={record.upload_session_id}"
                         )
+                    # Clear stale sibling records for the session to prevent unique key violation
+                    InvoiceTempOCR.objects.filter(upload_session_id=record.upload_session_id).exclude(id=record.id).delete()
                     InvoiceTempOCR.objects.bulk_create(siblings)
                     for sib in siblings:
                         logger.info(
@@ -1437,7 +1568,6 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                         logger.warning(f"[SNAPSHOT_S3_KEY_TOO_LONG] length={len(s3_key)}")
                 except Exception as ve:
                     logger.exception(f"[SNAPSHOT_VALIDATION_ERROR] {ve}")
-
                 try:
                     snapshot = FinalizedSnapshot.objects.create(
                         session_id=record.upload_session_id,
@@ -1447,8 +1577,27 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                         invoice_count=len(final_invoices),
                         finalized_at=timezone.now()
                     )
+                    # Forensic logging of GSTIN snapshot state
+                    for inv in final_invoices:
+                        logger.info(
+                            f"[GSTIN_SNAPSHOT] record_id={record.id} "
+                            f"gstin={inv.get('gstin')} status={record.status}"
+                        )
                     logger.info(f"[SNAPSHOT_ROW_CREATED] session={record.upload_session_id} snapshot_id={snapshot.id}")
                     logger.info(f"[SNAPSHOT_DB_FLUSH] session={record.upload_session_id} tenant={record.tenant_id}")
+                    for inv in final_invoices:
+                        try:
+                            trace_item_checkpoint(
+                                record_id=str(inv.get("id") or record.id),
+                                invoice_no=inv.get("invoice_no") or "N/A",
+                                page_number=inv.get("_page_no"),
+                                stage="ITEM_TRACE_AFTER_SNAPSHOT",
+                                item_count=len(inv.get("items", [])),
+                                item_status=inv.get("item_status"),
+                                snapshot_item_count=len(inv.get("items", []))
+                            )
+                        except Exception as trace_err:
+                            logger.error(f"[TRACE_ERR] ITEM_TRACE_AFTER_SNAPSHOT: {trace_err}")
                 except Exception as e_create:
                     logger.error(f"[ASSEMBLY_FATAL_ERROR] FinalizedSnapshot.objects.create failed: {e_create}")
                     import traceback; logger.error(traceback.format_exc())
@@ -1879,20 +2028,31 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         data = record.extracted_data or {}
 
         # Enforce strict immutability post-finalization
-        is_already_finalized = record.status in ['FINALIZED', 'VOUCHER_CREATED', 'COMPLETED', 'DUPLICATE', 'FAILED', 'ERROR'] or getattr(record, 'processed', False) is True
+        # Restored original execution path: a status of FINALIZED only means the OCR/assembly step finished.
+        # It is only business-finalized if processed=True or validation_status is in terminal states.
+        is_already_finalized = (
+            record.status in ['VOUCHER_CREATED', 'COMPLETED', 'DUPLICATE', 'FAILED', 'ERROR']
+            or (record.status == 'FINALIZED' and getattr(record, 'processed', False) is True)
+            or getattr(record, 'processed', False) is True
+            or record.validation_status in ['VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']
+        )
         if is_already_finalized:
             logger.info(f"[POST_FINALIZATION_MUTATION_BLOCKED] record_id={record.id} status={record.status} processed={record.processed}")
             logger.info(f"[CANONICAL_FREEZE_CONFIRMED] record_id={record.id}")
             return {"status": record.validation_status or "SUCCESS"}
 
         # Block any mutation or re-validation on frozen DTOs unless we are executing the final save
-        if data.get("is_canonical_frozen") and not auto_save:
+        # DO NOT bypass if the record has not been processed yet or validation status is PENDING
+        is_processed = getattr(record, 'processed', False) is True
+        has_validation = record.validation_status and record.validation_status != 'PENDING'
+
+        if data.get("is_canonical_frozen") and not auto_save and is_processed and has_validation:
             logger.info(f"[CANONICAL_FREEZE_BYPASS] Bypassing validate_and_process for frozen DTO of record {record.id}")
             return {"status": record.validation_status or "SUCCESS"}
 
         current_hash = get_dto_hash(data)
         val_rev = data.get("validation_revision")
-        if val_rev and isinstance(val_rev, dict) and val_rev.get("hash") == current_hash:
+        if val_rev and isinstance(val_rev, dict) and val_rev.get("hash") == current_hash and not auto_save and is_processed and has_validation:
             logger.info(f"[VALIDATION_SKIPPED_ALREADY_VALIDATED] Skip validate_and_process for record {record.id} hash {current_hash}")
             return {"status": record.validation_status or "SUCCESS"}
 
@@ -2154,7 +2314,9 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         )
 
         from .inventory_validation import InventoryItemValidationService
-        inv_val = InventoryItemValidationService.validate_items(tenant_id, items)
+        v_id = record.vendor_id
+        v_gst = gstin or record.gstin
+        inv_val = InventoryItemValidationService.validate_items(tenant_id, items, v_id, v_gst, record=record)
 
         # PHASE 2: PRINT REAL STRUCTURES - after validation
         logger.critical(
@@ -2233,6 +2395,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 if vendor:
                     record.vendor_id = vendor.id
                     record.vendor_status = 'EXISTS'  # [CANONICAL FIX] Persist vendor_status to DB
+                    record.save(update_fields=['vendor_id', 'vendor_status'])
                     logger.info(
                         f"[VENDOR_VALIDATION_RESULT] "
                         f"gstin={gstin_key} "
@@ -2293,9 +2456,8 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=NEED_VENDOR")
                 record.save()
                 
-                if not auto_save:
-                    return {"status": "NEED_VENDOR"}
-                # If auto_save is True, we allow it to proceed to Pending Purchase evaluation.
+                # Proceed to Pending Purchase evaluation regardless of auto_save.
+                pass
 
         # Sync vendor name from master if found
         if vendor:
@@ -2305,27 +2467,38 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         pass
 
         # ── [EXPLICIT PENDING EVALUATION STAGE] ──
-        if auto_save:
-            from ocr_pipeline.statuses import ValidationEnums
-            from pending_purchases.services import evaluate_pending_purchase
-            
-            vendor_status_enum = ValidationEnums.VENDOR_STATUS_EXISTING if vendor else ValidationEnums.VENDOR_STATUS_CREATE
-            voucher_status_enum = ValidationEnums.VOUCHER_STATUS_EXISTING if is_duplicate else ValidationEnums.VOUCHER_STATUS_NEW
-            item_status_enum = ValidationEnums.ITEM_STATUS_EXISTING if inv_val["item_status"] == "ALREADY EXIST" else ValidationEnums.ITEM_STATUS_CREATE
-            
-            is_pending = evaluate_pending_purchase(
-                record,
-                vendor_status_enum,
-                voucher_status_enum,
-                item_status_enum,
-                tenant_id
-            )
-            
-            if is_pending:
-                record.validation_status = "PENDING_PURCHASE"
-                record.save(update_fields=['validation_status'])
-                logger.info(f"[FINAL_STATUS] PENDING_PURCHASE record={record.id}")
-                return {"status": "PENDING_PURCHASE"}
+        # TIMING FIX: evaluate_pending_purchase runs UNCONDITIONALLY after all three
+        # validations are complete (vendor, item, duplicate-voucher check).
+        # This means Pending Purchase queue entries are created immediately after the
+        # initial validation pass — NOT only when Finalize & Save is clicked.
+        # auto_save=True (Finalize) proceeds through this block but will short-circuit
+        # below if the record is already queued, preventing duplicate queue entries.
+        from ocr_pipeline.statuses import ValidationEnums
+        from pending_purchases.services import evaluate_pending_purchase
+
+        vendor_status_enum = ValidationEnums.VENDOR_STATUS_EXISTING if vendor else ValidationEnums.VENDOR_STATUS_CREATE
+        voucher_status_enum = ValidationEnums.VOUCHER_STATUS_EXISTING if is_duplicate else ValidationEnums.VOUCHER_STATUS_NEW
+        item_status_enum = ValidationEnums.ITEM_STATUS_EXISTING if inv_val["item_status"] == "ALREADY EXIST" else ValidationEnums.ITEM_STATUS_CREATE
+        ui_row = {
+            'invoice_no': invoice_no,
+            'invoice_date': (canonical.get('invoice_date') or supplier.get('invoice_date') or supply.get('invoice_date') or ''),
+            'vendor_name': vendor_name,
+            'vendor_gstin': gstin,
+            'total_amount': (canonical.get('total_amount') or canonical.get('grand_total') or due.get('total_amount') or None),
+        }
+        is_pending = evaluate_pending_purchase(
+            record,
+            vendor_status_enum,
+            voucher_status_enum,
+            item_status_enum,
+            tenant_id,
+            ui_row=ui_row,
+            auto_save=auto_save
+        )
+
+        if is_pending:
+            logger.info(f"[FINAL_STATUS] PENDING_PURCHASE record={record.id} auto_save={auto_save}")
+            return {"status": "PENDING_PURCHASE"}
 
         # If it's a duplicate and NOT sent to pending purchase, NOW we return DUPLICATE
         if is_duplicate:
@@ -2334,6 +2507,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             return {"status": "DUPLICATE"}
 
         # 🔹 CREATE PURCHASE VOUCHER (ONLY IF auto_save IS TRUE)
+        # Finalize & Save must only create vouchers — Pending Purchase creation happens above.
         if not auto_save:
             record.status = "EXTRACTED"
             record.validation_status = "NEED_TO_SAVE"

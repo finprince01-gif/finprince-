@@ -1,21 +1,23 @@
-import os
-import sys
-import django
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
-
+import os, sys, django
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
 
-from ocr_pipeline.models import InvoicePageResult
+from ocr_pipeline.models import InvoicePageResult, InvoiceTempOCR
 
-for page in InvoicePageResult.objects.filter(record_id="1004965", page_number__in=[1, 2, 4, 5, 7, 8]):
-    payload = page.canonical_payload or {}
-    print(f"Page {page.page_number}:")
-    print(f"  invoice_no: {payload.get('invoice_no')}")
-    print(f"  items count: {len(payload.get('items', [])) if payload.get('items') else 0}")
-    print(f"  items: {payload.get('items')}")
-    print(f"  total_invoice_value: {payload.get('total_invoice_value')}")
+# Let's find pages 7 and 8 for the 3 records:
+records = [1005401, 1005418, 1005432]
+for rid in records:
+    pages = InvoicePageResult.objects.filter(record_id=rid, page_number__in=[7, 8])
+    print(f"=== Record {rid} ===")
+    for p in pages:
+        payload = p.canonical_payload or {}
+        print(f"  Page {p.page_number}:")
+        # Print details from canonical_payload
+        print(f"    invoice_no     : {payload.get('invoice_no')}")
+        print(f"    gstin          : {payload.get('gstin')}")
+        print(f"    vendor_name    : {payload.get('vendor_name')}")
+        print(f"    page_role      : {payload.get('_page_role')}")
+        print(f"    raw_gstin      : {payload.get('raw_gstin')}")
+        print(f"    canonical_gstin: {payload.get('canonical_gstin')}")
+        print(f"    is_failed      : {p.is_failed}")

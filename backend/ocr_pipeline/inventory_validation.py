@@ -64,35 +64,31 @@ class InventoryItemValidationService:
         return s
 
     @classmethod
-    def _evaluate_candidate(cls, ocr_code: str, ocr_hsn: str, ocr_name_norm: str, ocr_tokens: set, db_item: InventoryItem) -> Tuple[float, str]:
+    def _evaluate_candidate_fields(cls, ocr_code: str, ocr_hsn: str, ocr_name_norm: str, ocr_tokens: set, 
+                                   cand_code: str, cand_hsn: str, cand_name_norm: str, cand_tokens: set) -> Tuple[float, str]:
         """
-        Evaluates a single inventory candidate against the OCR fields.
+        Evaluates candidate fields against the OCR fields.
         Returns (confidence_score, strategy).
         """
-        db_code = getattr(db_item, '_clean_code', '')
-        db_hsn = getattr(db_item, '_clean_hsn', '')
-        db_name_norm = getattr(db_item, '_norm_name', '')
-        db_tokens = getattr(db_item, '_tokens', set())
-        
         # 1. EXACT_CANONICAL_MATCH:
         # Check normalized canonical name match or code match
-        if (ocr_name_norm and db_name_norm and ocr_name_norm == db_name_norm) or (ocr_code and db_code and ocr_code == db_code):
+        if (ocr_name_norm and cand_name_norm and ocr_name_norm == cand_name_norm) or (ocr_code and cand_code and ocr_code == cand_code):
             return 100.0, "EXACT_CANONICAL_MATCH"
             
         # 2. TOKEN_CANONICAL_MATCH:
         # Token set equality (order-independent)
-        if ocr_tokens and db_tokens and ocr_tokens == db_tokens:
+        if ocr_tokens and cand_tokens and ocr_tokens == cand_tokens:
             return 95.0, "TOKEN_CANONICAL_MATCH"
             
         # Calculate fuzzy similarity
         sim_score = 0.0
-        if ocr_name_norm and db_name_norm:
-            sim_score = fuzz.token_set_ratio(ocr_name_norm, db_name_norm)
+        if ocr_name_norm and cand_name_norm:
+            sim_score = fuzz.token_set_ratio(ocr_name_norm, cand_name_norm)
             
-        hsn_exact = (ocr_hsn and db_hsn and ocr_hsn == db_hsn)
+        hsn_exact = (ocr_hsn and cand_hsn and ocr_hsn == cand_hsn)
         hsn_prefix = False
-        if ocr_hsn and db_hsn:
-            if ocr_hsn.startswith(db_hsn) or db_hsn.startswith(ocr_hsn):
+        if ocr_hsn and cand_hsn:
+            if ocr_hsn.startswith(cand_hsn) or cand_hsn.startswith(ocr_hsn):
                 hsn_prefix = True
                 
         # 3. HSN_NAME_MATCH:
@@ -106,11 +102,24 @@ class InventoryItemValidationService:
         return sim_score, "NONE"
 
     @classmethod
-    def validate_items(cls, tenant_id: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _evaluate_candidate(cls, ocr_code: str, ocr_hsn: str, ocr_name_norm: str, ocr_tokens: set, db_item: InventoryItem) -> Tuple[float, str]:
         """
-        Validates extracted line items against the Inventory Master using intelligent item matching.
+        Evaluates a single inventory candidate against the OCR fields.
+        Returns (confidence_score, strategy).
         """
-        logger.info(f"[INVENTORY_VAL_START] tenant_id={tenant_id} items_count={len(items)}")
+        db_code = getattr(db_item, '_clean_code', '')
+        db_hsn = getattr(db_item, '_clean_hsn', '')
+        db_name_norm = getattr(db_item, '_norm_name', '')
+        db_tokens = getattr(db_item, '_tokens', set())
+        return cls._evaluate_candidate_fields(ocr_code, ocr_hsn, ocr_name_norm, ocr_tokens, db_code, db_hsn, db_name_norm, db_tokens)
+
+    @classmethod
+    def validate_items(cls, tenant_id: str, items: List[Dict[str, Any]], vendor_id: Any = None, vendor_gstin: Any = None, record: Any = None) -> Dict[str, Any]:
+        """
+        Validates extracted line items against the Inventory Master using intelligent item matching
+        and a 3-level hierarchical validation engine.
+        """
+        logger.info(f"[INVENTORY_VAL_START] tenant_id={tenant_id} items_count={len(items)} vendor_id={vendor_id} vendor_gstin={vendor_gstin}")
         
         if not items:
             logger.warning(f"[INVENTORY_VAL_EMPTY_ITEMS] No items provided for validation under tenant_id={tenant_id}")
@@ -120,6 +129,83 @@ class InventoryItemValidationService:
                 "validation_results": [],
                 "items": []
             }
+
+        # Extract vendor_id or vendor_gstin from items if not provided
+        if not vendor_id:
+            for item in items:
+                v_id = item.get("vendor_id") or item.get("vendor_basic_detail_id") or item.get("vendorBasicDetailId")
+                if v_id:
+                    vendor_id = v_id
+                    break
+        if not vendor_gstin:
+            for item in items:
+                v_gst = item.get("vendor_gstin") or item.get("gstin") or item.get("vendorGstin")
+                if v_gst:
+                    vendor_gstin = v_gst
+                    break
+
+        vendor_ids = set()
+        if vendor_id:
+            try:
+                vendor_ids.add(int(vendor_id))
+            except (ValueError, TypeError):
+                vendor_ids.add(vendor_id)
+        if vendor_gstin:
+            try:
+                from vendors.models import VendorMasterGSTDetails
+                matched_gsts = VendorMasterGSTDetails.objects.filter(tenant_id=tenant_id, gstin__iexact=str(vendor_gstin).strip())
+                for gst in matched_gsts:
+                    if gst.vendor_basic_detail_id:
+                        vendor_ids.add(gst.vendor_basic_detail_id)
+            except Exception as e_gst:
+                logger.error(f"[VENDOR_GST_RESOLVE_FAILED] gstin={vendor_gstin} error={e_gst}")
+
+        po_items = []
+        vp_items = []
+        mapping_items = []
+
+        if vendor_ids:
+            # 1. Fetch Vendor PO History Items
+            try:
+                from vendors.models import VendorTransactionPOItem
+                po_items = list(VendorTransactionPOItem.objects.filter(
+                    tenant_id=tenant_id,
+                    po__vendor_basic_detail_id__in=vendor_ids,
+                    po__status__in=['Approved', 'Closed'],
+                    is_active=True
+                ).select_related('po'))
+            except Exception as e_po:
+                logger.error(f"[HISTORY_FETCH_PO_FAILED] tenant_id={tenant_id} error={e_po}")
+
+            try:
+                from accounting.models_voucher_purchase import VoucherPurchaseItem
+                vp_items = list(VoucherPurchaseItem.objects.filter(
+                    tenant_id=tenant_id,
+                    supplier_details__vendor_basic_detail_id__in=vendor_ids
+                ).select_related('supplier_details'))
+            except Exception as e_vp:
+                logger.error(f"[HISTORY_FETCH_VOUCHER_FAILED] tenant_id={tenant_id} error={e_vp}")
+
+            # 2. Fetch Vendor Product/Service Mapping
+            try:
+                from vendors.vendorproduct_database import VendorProductServiceDatabase
+                for v_id in vendor_ids:
+                    mapping_res = VendorProductServiceDatabase.get_by_vendor(v_id)
+                    if mapping_res and mapping_res.get('items'):
+                        mapping_items.extend(mapping_res['items'])
+            except Exception as e_map:
+                logger.error(f"[MAPPING_FETCH_FAILED] tenant_id={tenant_id} error={e_map}")
+        
+        # Fallback to query voucher purchase items by gstin if vendor_ids set is empty but vendor_gstin is provided
+        if not vendor_ids and vendor_gstin:
+            try:
+                from accounting.models_voucher_purchase import VoucherPurchaseItem
+                vp_items = list(VoucherPurchaseItem.objects.filter(
+                    tenant_id=tenant_id,
+                    supplier_details__gstin__iexact=str(vendor_gstin).strip()
+                ).select_related('supplier_details'))
+            except Exception as e_vp:
+                logger.error(f"[HISTORY_FETCH_VOUCHER_GSTIN_FAILED] tenant_id={tenant_id} error={e_vp}")
             
         # Fetch all inventory items for this tenant to allow fuzzy matching
         tenant_inventory = list(InventoryItem.objects.filter(tenant_id=tenant_id))
@@ -133,6 +219,39 @@ class InventoryItemValidationService:
             db_item._clean_code = cls.clean_string(db_item.item_code)
             db_item._clean_hsn = cls.clean_string(db_item.hsn_code)
             db_item._tokens = set(db_item_repair["normalized_tokens"])
+
+        # Build lookup tables for fast resolution of history/mapping items to InventoryItem
+        inventory_by_code = {}
+        inventory_by_name = {}
+        inventory_by_norm_name = {}
+        
+        for db_item in tenant_inventory:
+            if db_item._clean_code:
+                inventory_by_code[db_item._clean_code] = db_item
+            name_cleaned = cls.clean_string(db_item.item_name)
+            if name_cleaned:
+                inventory_by_name[name_cleaned] = db_item
+            if db_item._norm_name:
+                inventory_by_norm_name[db_item._norm_name] = db_item
+
+        def resolve_to_inventory(cand_code, cand_supp_code, cand_name):
+            # 1. Exact code
+            c_code = cls.clean_string(cand_code)
+            if c_code and c_code in inventory_by_code:
+                return inventory_by_code[c_code]
+            # 2. Supplier code
+            s_code = cls.clean_string(cand_supp_code)
+            if s_code and s_code in inventory_by_code:
+                return inventory_by_code[s_code]
+            # 3. Exact name
+            c_name = cls.clean_string(cand_name)
+            if c_name and c_name in inventory_by_name:
+                return inventory_by_name[c_name]
+            # 4. Normalized name
+            cand_name_norm = cls.normalize_string(repair_item_identity(cand_name)["canonical_name"])
+            if cand_name_norm and cand_name_norm in inventory_by_norm_name:
+                return inventory_by_norm_name[cand_name_norm]
+            return None
 
         all_matched = True
         items_dto = []
@@ -151,28 +270,52 @@ class InventoryItemValidationService:
             ocr_tokens = set(repair_res["normalized_tokens"])
             ocr_name_norm = cls.normalize_string(canonical_name)
             
-            # Rank candidates
-            best_match = None
-            best_priority = 0
-            best_score = 0.0
-            best_strategy = "CREATE_ITEM"
-            
-            # Phase 4: Freeze validation output preservation
-            existing_match_id = item.get("inventory_item_id")
-            existing_strategy = item.get("inventory_match_strategy")
-            existing_canonical = item.get("canonical_name")
-            existing_confidence = item.get("inventory_match_confidence")
-            
-            is_frozen = (item.get("is_canonical_frozen") == True or item.get("_is_canonical_frozen") == True)
-            
-            # Compute current match
+            # Rank candidates using Waterfall logic
             computed_match = None
-            computed_priority = 0
             computed_score = 0.0
             computed_strategy = "CREATE_ITEM"
+            computed_match_level = "New"
             
-            for db_item in tenant_inventory:
-                score, strategy = cls._evaluate_candidate(ocr_code, ocr_hsn, ocr_name_norm, ocr_tokens, db_item)
+            # --- LEVEL 1: PO History Match ---
+            hist_best_match = None
+            hist_best_score = 0.0
+            hist_best_strategy = "NONE"
+            hist_priority = 0
+            
+            for hist_item in (po_items + vp_items):
+                cand_code = getattr(hist_item, 'item_code', '')
+                cand_supp_code = getattr(hist_item, 'supplier_item_code', '')
+                cand_name = getattr(hist_item, 'item_name', '')
+                
+                resolved_inv = resolve_to_inventory(cand_code, cand_supp_code, cand_name)
+                if not resolved_inv:
+                    continue
+                
+                cand_name_norm = cls.normalize_string(repair_item_identity(cand_name)["canonical_name"])
+                cand_tokens = set(repair_item_identity(cand_name)["normalized_tokens"])
+                cand_hsn = cls.clean_string(getattr(hist_item, 'hsn_sac', getattr(hist_item, 'hsn_code', '')))
+                
+                # Evaluate against canonical fields
+                score1, strategy1 = cls._evaluate_candidate_fields(
+                    ocr_code, ocr_hsn, ocr_name_norm, ocr_tokens,
+                    cls.clean_string(cand_code), cand_hsn, cand_name_norm, cand_tokens
+                )
+                
+                # Also evaluate against supplier/vendor fields if present in history
+                score2, strategy2 = 0.0, "NONE"
+                cand_supp_name = getattr(hist_item, 'supplier_item_name', '')
+                if cand_supp_name or cand_supp_code:
+                    supp_name_norm = cls.normalize_string(repair_item_identity(cand_supp_name)["canonical_name"]) if cand_supp_name else ""
+                    supp_tokens = set(repair_item_identity(cand_supp_name)["normalized_tokens"]) if cand_supp_name else set()
+                    score2, strategy2 = cls._evaluate_candidate_fields(
+                        ocr_code, ocr_hsn, ocr_name_norm, ocr_tokens,
+                        cls.clean_string(cand_supp_code), cand_hsn, supp_name_norm, supp_tokens
+                    )
+                
+                if score1 >= score2:
+                    score, strategy = score1, strategy1
+                else:
+                    score, strategy = score2, strategy2
                 
                 strat_priority = {
                     "EXACT_CANONICAL_MATCH": 5,
@@ -183,12 +326,113 @@ class InventoryItemValidationService:
                 }.get(strategy, 0)
                 
                 if strat_priority > 0:
-                    if (strat_priority > computed_priority) or (strat_priority == computed_priority and score > computed_score):
-                        computed_match = db_item
-                        computed_priority = strat_priority
-                        computed_score = score
-                        computed_strategy = strategy
-
+                    if (strat_priority > hist_priority) or (strat_priority == hist_priority and score > hist_best_score):
+                        hist_best_match = resolved_inv
+                        hist_priority = strat_priority
+                        hist_best_score = score
+                        hist_best_strategy = strategy
+            
+            if hist_best_match:
+                computed_match = hist_best_match
+                computed_score = hist_best_score
+                computed_strategy = hist_best_strategy
+                computed_match_level = "History"
+                
+            # --- LEVEL 2: Vendor Product/Service Mapping Match ---
+            if not computed_match:
+                map_best_match = None
+                map_best_score = 0.0
+                map_best_strategy = "NONE"
+                map_priority = 0
+                
+                for mapped_item in mapping_items:
+                    # Resolve to inventory using the target/canonical mapping
+                    resolved_inv = resolve_to_inventory(mapped_item.get('item_code'), '', mapped_item.get('item_name'))
+                    if not resolved_inv:
+                        continue
+                    
+                    # Evaluate against supplier representation (what the vendor calls it)
+                    cand_name = mapped_item.get('supplier_item_name') or mapped_item.get('item_name') or ''
+                    cand_code = mapped_item.get('supplier_item_code') or mapped_item.get('item_code') or ''
+                    
+                    cand_name_norm = cls.normalize_string(repair_item_identity(cand_name)["canonical_name"])
+                    cand_tokens = set(repair_item_identity(cand_name)["normalized_tokens"])
+                    cand_hsn = cls.clean_string(mapped_item.get('hsn_sac_code', ''))
+                    
+                    score1, strategy1 = cls._evaluate_candidate_fields(
+                        ocr_code, ocr_hsn, ocr_name_norm, ocr_tokens,
+                        cls.clean_string(cand_code), cand_hsn, cand_name_norm, cand_tokens
+                    )
+                    
+                    # Also evaluate against canonical representation if it is different
+                    score2, strategy2 = 0.0, "NONE"
+                    canon_name = mapped_item.get('item_name', '')
+                    canon_code = mapped_item.get('item_code', '')
+                    if canon_name != cand_name or canon_code != cand_code:
+                        canon_name_norm = cls.normalize_string(repair_item_identity(canon_name)["canonical_name"])
+                        canon_tokens = set(repair_item_identity(canon_name)["normalized_tokens"])
+                        score2, strategy2 = cls._evaluate_candidate_fields(
+                            ocr_code, ocr_hsn, ocr_name_norm, ocr_tokens,
+                            cls.clean_string(canon_code), cand_hsn, canon_name_norm, canon_tokens
+                        )
+                        
+                    if score1 >= score2:
+                        score, strategy = score1, strategy1
+                    else:
+                        score, strategy = score2, strategy2
+                    
+                    strat_priority = {
+                        "EXACT_CANONICAL_MATCH": 5,
+                        "TOKEN_CANONICAL_MATCH": 4,
+                        "HSN_NAME_MATCH": 3,
+                        "FUZZY_CANONICAL_MATCH": 2,
+                        "NONE": 0
+                    }.get(strategy, 0)
+                    
+                    if strat_priority > 0:
+                        if (strat_priority > map_priority) or (strat_priority == map_priority and score > map_best_score):
+                            map_best_match = resolved_inv
+                            map_priority = strat_priority
+                            map_best_score = score
+                            map_best_strategy = strategy
+                
+                if map_best_match:
+                    computed_match = map_best_match
+                    computed_score = map_best_score
+                    computed_strategy = map_best_strategy
+                    computed_match_level = "Mapping"
+            
+            # --- LEVEL 3: Inventory Master Match ---
+            if not computed_match:
+                master_best_match = None
+                master_best_score = 0.0
+                master_best_strategy = "NONE"
+                master_priority = 0
+                
+                for db_item in tenant_inventory:
+                    score, strategy = cls._evaluate_candidate(ocr_code, ocr_hsn, ocr_name_norm, ocr_tokens, db_item)
+                    
+                    strat_priority = {
+                        "EXACT_CANONICAL_MATCH": 5,
+                        "TOKEN_CANONICAL_MATCH": 4,
+                        "HSN_NAME_MATCH": 3,
+                        "FUZZY_CANONICAL_MATCH": 2,
+                        "NONE": 0
+                    }.get(strategy, 0)
+                    
+                    if strat_priority > 0:
+                        if (strat_priority > master_priority) or (strat_priority == master_priority and score > master_best_score):
+                            master_best_match = db_item
+                            master_priority = strat_priority
+                            master_best_score = score
+                            master_best_strategy = strategy
+                
+                if master_best_match:
+                    computed_match = master_best_match
+                    computed_score = master_best_score
+                    computed_strategy = master_best_strategy
+                    computed_match_level = "Master"
+            
             if computed_match:
                 computed_status = "ALREADY EXIST"
                 computed_matched_id = computed_match.id
@@ -197,7 +441,22 @@ class InventoryItemValidationService:
                 computed_matched_id = None
                 computed_strategy = "CREATE_ITEM"
                 computed_score = 0.0
+                computed_match_level = "New"
 
+            # Phase 4: Freeze validation output preservation
+            existing_match_id = item.get("inventory_item_id")
+            existing_strategy = item.get("inventory_match_strategy")
+            existing_canonical = item.get("canonical_name")
+            existing_confidence = item.get("inventory_match_confidence")
+            existing_match_level = item.get("inventory_match_level")
+            
+            is_frozen = (item.get("is_canonical_frozen") == True or item.get("_is_canonical_frozen") == True)
+            
+            if is_frozen and record:
+                is_voucher_created = bool(record.voucher_id or record.validation_status == 'VOUCHER_CREATED')
+                if not is_voucher_created:
+                    is_frozen = False
+            
             if is_frozen:
                 # Check for mutation on frozen item
                 existing_conf_val = float(existing_confidence) if existing_confidence is not None else 0.0
@@ -219,12 +478,14 @@ class InventoryItemValidationService:
                 best_score = float(existing_confidence or 100.0)
                 canonical_name = existing_canonical or canonical_name
                 status = "ALREADY EXIST" if matched_id else "CREATE ITEM"
+                best_match_level = existing_match_level or computed_match_level
             else:
                 # Non-frozen path
                 matched_id = computed_matched_id
                 best_strategy = computed_strategy
                 best_score = computed_score
                 status = computed_status
+                best_match_level = computed_match_level
 
             # Phase 5: Forensic logging for every item
             logger.info(f"[ITEM_IDENTITY_REPAIR] raw='{ocr_name_raw}' canonical='{canonical_name}' repairs={repair_res.get('repair_operations')}")
@@ -232,6 +493,16 @@ class InventoryItemValidationService:
             logger.info(f"[ITEM_MATCH_DECISION] item='{canonical_name}' status={status} matched_id={matched_id}")
             logger.info(f"[ITEM_MATCH_STRATEGY] item='{canonical_name}' strategy={best_strategy} confidence={best_score}")
             logger.info(f"[ITEM_OCR_CORRUPTION] item='{canonical_name}' score={repair_res.get('ocr_corruption_score')}")
+            
+            # ITEM_MATCH_TRACE_REPORT logging
+            logger.info(
+                f"[ITEM_MATCH_TRACE_REPORT] "
+                f"item_name='{ocr_name_raw}' "
+                f"resolved_level='{best_match_level}' "
+                f"matched_item_id={matched_id} "
+                f"strategy='{best_strategy}' "
+                f"confidence={best_score}"
+            )
 
             desc = item.get("description") or item.get("item_name") or ""
             item_dto = {
@@ -251,6 +522,7 @@ class InventoryItemValidationService:
                 "taxable_value": item.get("taxable_value") or item.get("taxableValue") or item.get("amount") or 0.0,
                 "item_status": status,
                 "inventory_item_id": matched_id,
+                "inventory_match_level": best_match_level,
                 
                 # Frozen fields (Phase 4)
                 "canonical_name": canonical_name,

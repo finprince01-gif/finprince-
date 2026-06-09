@@ -42,7 +42,7 @@ def canonicalize_gstin_ocr(raw_gstin: str) -> str:
     else:
         canonical = gstin
         
-    logger.info(f"[GSTIN_CANONICALIZATION] Raw='{raw_gstin}' Canonical='{canonical}'")
+    logger.info(f"[GSTIN_CANONICALIZATION] raw_gstin={raw_gstin} canonical_gstin={canonical} length={len(canonical)}")
     return canonical
 
 def normalize_branch(branch_name):
@@ -232,10 +232,8 @@ def resolve_vendor_for_gstin_branch(tenant_id, gstin, branch, record_id=None, ve
         )
 
     logger.info(
-        f"[VENDOR_STATUS_ASSIGNED] record_id={record_id} "
-        f"status={result.get('status')} vendor_id={result.get('vendor_id')}"
+        f"[GSTIN_VENDOR_VALIDATION] raw_gstin={gstin} normalized_gstin={v_gstin} vendor_status={result.get('status')}"
     )
-
     return result
 
 def validate_vendor_strict(tenant_id, gstin, branch, record_id=None, vendor_name=None):
@@ -290,6 +288,8 @@ def build_session_vendor_map(tenant_id, records):
         header = norm.get('header', {})
 
         gstin_raw = (
+            norm.get('canonical_vendor_gstin') or
+            norm.get('vendor_gstin') or
             getattr(r, 'gstin', None) or
             header.get('vendor_gstin') or
             supplier.get('gstin') or

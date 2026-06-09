@@ -63,6 +63,10 @@ def hydrate_identity_fields(page: Dict[str, Any]) -> Dict[str, Any]:
     if page.get("gstin") and not page.get("vendor_gstin"):
         page["vendor_gstin"] = page.get("gstin")
 
+    # Run pre-processing canonicalization layer to populate raw_* and canonical_*
+    from ocr_pipeline.canonicalizer import DocumentIdentityCanonicalizer
+    page = DocumentIdentityCanonicalizer.canonicalize_invoice(page)
+
     return page
 
 def detect_continuation_markers(text: str) -> List[str]:
@@ -119,6 +123,43 @@ class ZohoIntegrityEnforcer:
             logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: Failed OCR page")
             return False, "Failed OCR page (DO NOT MERGE)"
         
+        # ── CANONICAL MATCH CONTRACT (PHASE 5 CONSOLIDATION) ──
+        p_no = str(prev.get("invoice_no") or "").strip().upper()
+        c_no = str(curr.get("invoice_no") or "").strip().upper()
+        p_gstin = str(prev.get("gstin") or prev.get("vendor_gstin") or "").strip().upper()
+        c_gstin = str(curr.get("gstin") or curr.get("vendor_gstin") or "").strip().upper()
+        p_branch = str(prev.get("tenant_id") or prev.get("branch") or "").strip().upper()
+        c_branch = str(curr.get("tenant_id") or curr.get("branch") or "").strip().upper()
+        p_date = str(prev.get("invoice_date") or "").strip().upper()
+        c_date = str(curr.get("invoice_date") or "").strip().upper()
+
+        def clean_val(val):
+            val_str = str(val or "").strip().upper()
+            if val_str in ("MISSING", "NONE", "—", "NULL", "N/A", ""):
+                return ""
+            return val_str
+
+        p_no_c = clean_val(p_no)
+        c_no_c = clean_val(c_no)
+        p_gstin_c = clean_val(p_gstin)
+        c_gstin_c = clean_val(c_gstin)
+        p_branch_c = clean_val(p_branch)
+        c_branch_c = clean_val(c_branch)
+        p_date_c = clean_val(p_date)
+        c_date_c = clean_val(c_date)
+
+        # Did we satisfy canonical identity match?
+        canonical_match = (
+            p_no_c and c_no_c and p_no_c == c_no_c and
+            p_gstin_c and c_gstin_c and p_gstin_c == c_gstin_c and
+            p_branch_c and c_branch_c and p_branch_c == c_branch_c and
+            p_date_c and c_date_c and p_date_c == c_date_c
+        )
+
+        if canonical_match:
+            logger.info(f"[CANONICAL_MATCH_MERGE] Merging page/record based on canonical identity match: inv={c_no_c}")
+            return True, "Canonical identity match"
+
         # ── NEW HEADER DETECTED RULE ──
         curr_role = self.classify_page(ocr_text, curr.get("items", []), invoice_data=curr)
         if curr_role == "PAGE_ROLE_PRIMARY":
@@ -138,6 +179,22 @@ class ZohoIntegrityEnforcer:
         
         p_gstin = str(prev.get("gstin") or prev.get("vendor_gstin") or "").strip().upper()
         c_gstin = str(curr.get("gstin") or curr.get("vendor_gstin") or "").strip().upper()
+        
+        # [GROUPING_GSTIN_COMPARE]
+        raw_gstin_a = prev.get("raw_gstin") or prev.get("gstin") or ""
+        raw_gstin_b = curr.get("raw_gstin") or curr.get("gstin") or ""
+        canonical_gstin_a = prev.get("canonical_gstin") or prev.get("gstin") or ""
+        canonical_gstin_b = curr.get("canonical_gstin") or curr.get("gstin") or ""
+        exact_match = (str(canonical_gstin_a).strip().upper() == str(canonical_gstin_b).strip().upper())
+        ratio = SequenceMatcher(None, str(canonical_gstin_a).strip().upper(), str(canonical_gstin_b).strip().upper()).ratio()
+        fuzzy_match = (ratio > 0.8)
+        logger.info(
+            f"[GROUPING_GSTIN_COMPARE] "
+            f"raw_gstin_a={raw_gstin_a} raw_gstin_b={raw_gstin_b} "
+            f"canonical_gstin_a={canonical_gstin_a} canonical_gstin_b={canonical_gstin_b} "
+            f"exact_match={exact_match} fuzzy_match={fuzzy_match} confidence={ratio:.2f}"
+        )
+
         if p_gstin and c_gstin and p_gstin != c_gstin and p_gstin != "MISSING" and c_gstin != "MISSING":
             logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: Vendor mismatch '{p_gstin}' vs '{c_gstin}'")
             return False, "Vendor mismatch"

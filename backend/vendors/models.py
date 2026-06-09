@@ -443,6 +443,14 @@ class VendorMasterGSTDetails(models.Model):
 
 class VendorProductServiceItem(models.Model):
     """Normalized items for Vendor Master Product/Service"""
+    vendor_basic_detail = models.ForeignKey(
+        'VendorMasterBasicDetail',
+        on_delete=models.CASCADE,
+        db_column='vendor_basic_detail_id',
+        related_name='product_service_items',
+        null=True,
+        blank=True
+    )
     hsn_sac_code = models.CharField(max_length=20, null=True, blank=True)
     item_code = models.CharField(max_length=100, null=True, blank=True)
     item_name = models.CharField(max_length=255, null=True, blank=True)
@@ -450,7 +458,11 @@ class VendorProductServiceItem(models.Model):
     supplier_item_name = models.CharField(max_length=255, null=True, blank=True)
     
     tenant_id = models.CharField(max_length=36, db_index=True, default='')
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.CharField(max_length=100, default='', blank=True)
+    updated_by = models.CharField(max_length=100, default='', blank=True)
     
     class Meta:
         db_table = 'vendor_master_vendorcreation_productservices_items'

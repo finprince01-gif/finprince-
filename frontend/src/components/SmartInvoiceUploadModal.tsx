@@ -27,7 +27,7 @@ import { getVoucherSchema, VOUCHER_SCHEMAS, getVoucherFlatHeaders, type VoucherS
 type VendorStatus = 'FOUND' | 'MISSING' | 'RESOLVED' | 'ERROR' | 'EXISTS' | 'NEW' | 'MATCHED' | 'CREATE_VENDOR';
 type ValidationStatus = 'READY' | 'VENDOR_MISSING' | 'VALIDATION_FAILED' | 'EXTRACTION_FAILED' | 'PENDING' | 'RESOLVED' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT' | 'ERROR' | 'VOUCHER_CREATED' | 'NEEDS_ATTENTION' | 'LOW_CONFIDENCE' | 'processing' | 'DUPLICATE' | 'DUPLICATE_IN_BATCH' | 'SUCCESS' | 'FAILED' | 'NEED_VENDOR' | 'INCOMPLETE' | 'EXTRACTING' | 'SCANNING' | 'PROCESSING' | 'NEED_TO_SAVE' | 'PENDING_PURCHASE';
 
-interface ScanResult {
+export interface ScanResult {
     id: string;
     file_hash: string;
     file_path: string;
@@ -322,7 +322,7 @@ const normalizeVoucherField = (k: string, voucherType: string) => {
 // Edit Modal ──────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 
-const EditInvoiceModal: React.FC<{
+export const EditInvoiceModal: React.FC<{
     row: ScanResult;
     voucherType: string;
     onClose: () => void;
@@ -749,6 +749,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const retryCountRef = useRef(0); // Mirror retryCount in a ref for non-stale access in interval
     const stalledAt100Ref = useRef<number | null>(null);
     const eventSourceRef = useRef<EventSource | null>(null);
+    const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         isMounted.current = true;
@@ -758,6 +759,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             if (pollingTimeoutRef.current) clearTimeout(pollingTimeoutRef.current);
             if (pollingIntervalRef2.current) clearInterval(pollingIntervalRef2.current);
             if (eventSourceRef.current) eventSourceRef.current.close();
+            if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
         };
     }, []);
 
@@ -1228,6 +1230,57 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         setRetryCount(0);
         stalledAt100Ref.current = null;
     }, []);
+
+    const performCloseCleanup = useCallback(() => {
+        console.log("[FORENSIC] performCloseCleanup initiated");
+        // Stop frontend polling
+        stopAllPolling();
+
+        // Clear timers/intervals
+        if (progressIntervalRef.current) {
+            console.log("[FORENSIC] Clearing progressInterval");
+            clearInterval(progressIntervalRef.current);
+            progressIntervalRef.current = null;
+        }
+
+        // Clear loading states
+        setIsLoading(false);
+        setFinalizing(false);
+        setScanProgress(0);
+
+        // Clear upload session state in Zustand store
+        useOcrWorkflowStore.getState().clearWorkflow();
+
+        // Call the parent onClose callback
+        onClose();
+    }, [onClose, stopAllPolling]);
+
+    const handleClose = useCallback(() => {
+        console.log("Close clicked");
+        performCloseCleanup();
+    }, [performCloseCleanup]);
+
+    const handleCancel = useCallback(() => {
+        console.log("Cancel clicked");
+        performCloseCleanup();
+    }, [performCloseCleanup]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                // If a sub-modal/panel is open, let it handle Escape
+                if (isCreateVendorModalOpen || isCreateItemModalOpen || detailsRow) {
+                    return;
+                }
+                console.log("Escape key pressed");
+                handleClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isCreateVendorModalOpen, isCreateItemModalOpen, detailsRow, handleClose]);
 
     /**
      * Execute a single fetch of staged invoices and update state.
@@ -1792,9 +1845,13 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     return prev;
                 });
             }, 1000);
+            progressIntervalRef.current = progressInterval;
 
             const res: any = await httpClient.postFormData('/api/ocr-staging/', formData);
-            clearInterval(progressInterval);
+            if (progressIntervalRef.current) {
+                clearInterval(progressIntervalRef.current);
+                progressIntervalRef.current = null;
+            }
 
             setScanCurrentFile(`Queued for AI extraction...`);
 
@@ -1820,6 +1877,10 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             fetchStagedInvoices(uploadSessionId);
             // [ISSUE 1 FIX] Removed setStep('review') so UI stays in scanning state until progressive hydration begins.
         } catch (err: any) {
+            if (progressIntervalRef.current) {
+                clearInterval(progressIntervalRef.current);
+                progressIntervalRef.current = null;
+            }
             const msg = err?.response?.data?.error || err?.message || 'Scan failed. Please try again.';
             showError(`❌ Scan failed: ${msg}`);
             setStep('upload');
@@ -2409,9 +2470,8 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                         </div>
 
                         <button
-                            onClick={onClose}
-                            disabled={step === 'scanning' || step === 'finalizing'}
-                            className="text-indigo-200 hover:text-white transition-colors ml-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                            onClick={handleClose}
+                            className="text-indigo-200 hover:text-white transition-colors ml-2"
                         >
                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2901,10 +2961,50 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                                         </svg>
                                                                     </button>
-                                                                    <button onClick={() => handleRescan(row)} className="p-1 hover:bg-violet-100 rounded text-violet-600" title="Rescan (AI re-extraction)">
-                                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                                                        </svg>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-gray-300">—</span>
+                                                            )}
+                                                        </td>
+                                                        {/* Voucher Status */}
+                                                        <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
+                                                            {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
+                                                                <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
+                                                                    <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
+                                                                </span>
+                                                            ) : row.validationStatus === "VOUCHER_CREATED" ? (
+                                                                <span className="bg-emerald-600 text-white px-2 py-1 rounded">✅ Saved</span>
+                                                            ) : (row.validationStatus === "DUPLICATE" || row.validationStatus === "DUPLICATE_IN_BATCH" || row.validationStatus === "DUPLICATE_INVOICE") ? (
+                                                                <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">Already Exist</span>
+                                                            ) : (effectiveVendorId || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_TO_SAVE', 'PENDING_PURCHASE'].includes(row.validationStatus)) ? (
+                                                                <span className="bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 rounded">Need to Save</span>
+                                                            ) : (['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'GSTIN_CONFLICT', 'CREATE_VENDOR'].includes(row.validationStatus)) ? (
+                                                                <span className="bg-orange-100 text-orange-700 border border-orange-200 px-2 py-1 rounded">Create Vendor First</span>
+                                                            ) : row.validationStatus === "EXTRACTION_FAILED" ? (
+                                                                <span className="bg-red-100 text-red-700 border border-red-200 px-2 py-1 rounded">Failed</span>
+                                                            ) : (
+                                                                <span className="bg-amber-50 text-amber-600 border border-amber-200 px-2 py-1 rounded">Pending</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-2 py-3 text-center">
+                                                            <div
+                                                                className="flex items-center justify-center gap-1"
+                                                                style={{
+                                                                    opacity: (['PENDING', 'processing', 'PROCESSING', 'SCANNING', 'EXTRACTING', 'scanning', 'resolving', 'validating'].includes(row.validationStatus)) ? 0.3 : 1,
+                                                                    pointerEvents: (['PENDING', 'processing', 'PROCESSING', 'SCANNING', 'EXTRACTING', 'scanning', 'resolving', 'validating'].includes(row.validationStatus)) ? 'none' : 'auto'
+                                                                }}
+                                                            >
+                                                                {!hasEffectiveMatch && ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND'].includes(row.validationStatus) && (
+                                                                    <button onClick={(e) => {
+                                                                        console.log('[DIAGNOSTIC][CREATE_VENDOR] button onClick fired');
+                                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                                        const x = rect.left + rect.width / 2;
+                                                                        const y = rect.top + rect.height / 2;
+                                                                        const el = document.elementFromPoint(x, y);
+                                                                        console.log('[DIAGNOSTIC][CREATE_VENDOR] Element under coordinates (', x, ',', y, ') is:', el);
+                                                                        openCreateVendorModal(row);
+                                                                    }} className="px-2 py-1 bg-orange-500 text-white rounded text-[10px] font-bold hover:bg-orange-600 uppercase border-2 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]">
+                                                                        CREATE VENDOR
                                                                     </button>
 
                                                                     <button onClick={() => handleRemove(row.file_hash)} className="p-1 hover:bg-red-100 rounded text-red-600" title="Remove Invoice">
@@ -3084,10 +3184,10 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                         </div>
                         <div className="flex items-center gap-3">
                             {step === 'done' ? (
-                                <button onClick={onClose} className="px-8 py-2.5 bg-gray-800 text-white rounded-xl text-sm font-bold shadow-lg">Close & Finish</button>
+                                <button onClick={handleClose} className="px-8 py-2.5 bg-gray-800 text-white rounded-xl text-sm font-bold shadow-lg">Close & Finish</button>
                             ) : (
                                 <>
-                                    <button onClick={onClose} disabled={step === 'scanning' || step === 'finalizing'} className="px-6 py-2.5 text-sm font-bold text-gray-600 hover:text-gray-900 font-bold transition-colors">Cancel</button>
+                                    <button onClick={handleCancel} className="px-6 py-2.5 text-sm font-bold text-gray-600 hover:text-gray-900 font-bold transition-colors">Cancel</button>
 
                                     {step === 'upload' && (
                                         <div className="flex items-center gap-3">

@@ -1,225 +1,222 @@
-import fitz  # PyMuPDF
-import re
 import logging
 import hashlib
 import json
-from typing import List, Tuple
+from typing import List, Dict, Any
 from .repository import InvoiceTempOCR
 
 logger = logging.getLogger(__name__)
 
-def segment_pdf_by_boundaries(file_bytes: bytes) -> List[bytes]:
-    """
-    STRICT Identity-Based Segmentation Engine.
-    Ensures no merging happens when invoice numbers or totals differ.
-    """
-    try:
-        doc = fitz.open(stream=file_bytes, filetype="pdf")
-    except Exception as e:
-        logger.error(f"Failed to open PDF for segmentation: {e}")
-        return [file_bytes]
-
-    total_pages = len(doc)
-    if total_pages <= 1:
-        return [file_bytes]
-
-    invoice_groups: List[List[int]] = []
-    current_group = [0]
-    
-    # ── Rules ──
-    LABEL_PATTERNS = [r"INVOICE\s*NO", r"INVOICE\s*NUMBER", r"BILL\s*NO", r"INV\s*NO", r"INVOICE\s*#"]
-    REJECTION_WORDS = ["HSN", "QTY", "RATE", "AMOUNT", "CGST", "SGST", "TAX", "TOTAL"]
-
-    def is_valid_format(val: str) -> bool:
-        if not val: return False
-        val = val.strip().upper()
-        if len(val) < 3 or len(val) > 25: return False
-        has_special = any(c in val for c in ["/", "-", ".", "_", " "])
-        has_alpha = any(c.isalpha() for c in val)
-        has_digit = any(c.isdigit() for c in val)
-        if val.isdigit() and len(val) > 7: return False
-        return has_digit and (has_special or has_alpha)
-
-    def extract_high_fidelity_invoice_no(page_obj):
-        blocks = page_obj.get_text("blocks")
-        page_height = page_obj.rect.height
-        candidates = []
-
-        for b_idx, b in enumerate(blocks):
-            text = b[4].upper()
-            y_pos = b[1]
-            found_label = any(re.search(lp, text) for lp in LABEL_PATTERNS)
-            if found_label:
-                match = re.search(r"(?:NO|#|NUM)?[\s.:]*([A-Z0-9\/\-\.\_\s]{3,})", text)
-                if match:
-                    val = match.group(1).strip()
-                    if is_valid_format(val):
-                        candidates.append({"val": val, "y": y_pos})
-                if b_idx + 1 < len(blocks):
-                    next_text = blocks[b_idx+1][4].strip().upper()
-                    if is_valid_format(next_text):
-                        candidates.append({"val": next_text, "y": blocks[b_idx+1][1]})
-
-        filtered = [c for c in candidates if not any(rw in c["val"] for rw in REJECTION_WORDS)]
-        if not filtered: return None
-        # Score by position (top of page is best)
-        best = max(filtered, key=lambda c: 100 if c["y"] < (page_height * 0.30) else 0)
-        return best["val"]
-
-    def extract_total_amount(page_obj):
-        blocks = page_obj.get_text("blocks")
-        total_patterns = [r"TOTAL", r"GRAND\s*TOTAL", r"INVOICE\s*VALUE", r"NET\s*AMOUNT"]
-        for b in blocks:
-            text = b[4].upper()
-            if any(re.search(p, text) for p in total_patterns):
-                match = re.search(r"(?:₹|RS\.?|INR)?\s*([\d,]+(?:\.\d{1,2})?)\b", text)
-                if match:
-                    try:
-                        val = float(match.group(1).replace(",", ""))
-                        if val > 0: return val
-                    except: pass
-        return None
-
-    last_inv_no = extract_high_fidelity_invoice_no(doc[0])
-    last_total = extract_total_amount(doc[0])
-    
-    for i in range(1, total_pages):
-        page = doc[i]
-        curr_inv_no = extract_high_fidelity_invoice_no(page)
-        curr_total = extract_total_amount(page)
-        text = page.get_text("text").upper()
-        
-        split_decision = False
-        reason = "Continuing same invoice"
-        
-        # --- UPDATED SEGMENTATION LOGIC (Conservative) ---
-        if curr_inv_no:
-            if last_inv_no and last_inv_no != curr_inv_no:
-                # We found a DIFFERENT invoice number → definite split
-                split_decision = True
-                reason = f"New invoice number: {curr_inv_no} (prev: {last_inv_no})"
-            elif not last_inv_no:
-                # We didn't have a previous number but found one now
-                # This could be a split if the previous page was a "blind" continuation
-                # or it could be the first page of a new invoice. 
-                # To be safe, we split only if the previous page had a total amount.
-                if last_total:
-                    split_decision = True
-                    reason = "New invoice detected (previous had no number but had total)"
-                else:
-                    split_decision = False
-                    reason = "Initial invoice number found"
-            else:
-                # curr_inv_no == last_inv_no
-                split_decision = False
-                reason = "Same invoice number"
-        else:
-            # Current page has NO invoice number
-            # We assume it's a CONTINUATION unless the total amount significantly changes
-            # or other logic (like a fresh GSTIN or Vendor Name) suggests otherwise.
-            # But here we stay conservative to prevent breaking multi-page invoices.
-            split_decision = False
-            reason = "Continuation (no new invoice number)"
-
-        # DEBUG LOGGING (MANDATORY FORMAT)
-        logger.info(json.dumps({
-            "page": i + 1,
-            "prev_invoice": last_inv_no,
-            "curr_invoice": curr_inv_no,
-            "decision": "split" if split_decision else "merge",
-            "reason": reason
-        }))
-
-        if split_decision:
-            invoice_groups.append(current_group)
-            current_group = [i]
-        else:
-            current_group.append(i)
-
-        if curr_inv_no: last_inv_no = curr_inv_no
-        if curr_total: last_total = curr_total
-
-    invoice_groups.append(current_group)
-
-    # Final Segments Conversion
-    blobs = []
-    for group in invoice_groups:
-        new_doc = fitz.open()
-        new_doc.insert_pdf(doc, from_page=group[0], to_page=group[-1])
-        blobs.append(new_doc.write())
-        new_doc.close()
-
-    doc.close()
-    logger.info(
-        f"[SEGMENTATION COMPLETE] total_pages={total_pages} "
-        f"segments={len(blobs)} groups={[g for g in invoice_groups]}"
-    )
-    return blobs
-
 def run_grouping_logic(tenant_id, upload_session_id):
     """
-    STRICT Grouping logic: Groups only if invoice_no matches EXACTLY.
+    Consolidated Grouping logic: routes all grouping decisions through the
+    canonical ForensicMerger to ensure consistency.
     """
     if not upload_session_id:
         return
 
-    logger.info(f"[GROUPING START] session={upload_session_id} tenant={tenant_id}")
+    logger.info(f"[CANONICAL GROUPING START] session={upload_session_id} tenant={tenant_id}")
 
-    records = InvoiceTempOCR.objects.filter(
+    records_qs = InvoiceTempOCR.objects.filter(
         tenant_id=str(tenant_id),
         upload_session_id=upload_session_id,
         processed=False
     ).order_by('created_at', 'id')
 
-    record_count = records.count()
-    logger.info(f"[GROUPING] {record_count} unprocessed records found for session {upload_session_id}")
+    records = list(records_qs)
 
-    seen = {}  # invoice_no -> group_id
+    # ── CONSISTENCY LAYER: ALIGN GSTIN VARIANTS FOR SAME INVOICE ──
+    from collections import defaultdict
+    from difflib import SequenceMatcher
+    import re
 
+    def score_gstin(gstin_val: str) -> int:
+        if not gstin_val:
+            return 0
+        gst = gstin_val.strip().upper()
+        if len(gst) != 15:
+            return 1
+        if re.match(r'^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}Z[A-Z\d]{1}$', gst):
+            return 10
+        return 5
+
+    def are_gstins_similar(g1: str, g2: str) -> bool:
+        if not g1 or not g2:
+            return False
+        g1 = g1.strip().upper()
+        g2 = g2.strip().upper()
+        if g1 == g2:
+            return True
+        return SequenceMatcher(None, g1, g2).ratio() > 0.85
+
+    # Group records by non-empty supplier_invoice_no
+    inv_groups = defaultdict(list)
     for r in records:
         inv_no = (r.supplier_invoice_no or "").strip()
-        gstin = (r.gstin or "").strip().upper()
-        file_hash = (r.file_hash or "")[:12]
+        if inv_no and inv_no.upper() not in ("MISSING", "N/A", "—"):
+            inv_groups[inv_no].append(r)
 
-        if not inv_no:
-            # Cannot group safely without invoice number
-            logger.info(
-                f"[GROUPING] record={r.id} hash={file_hash}... "
-                f"inv_no=MISSING → STANDALONE"
-            )
-            r.is_primary = True
-            r.group_id = None
-            r.save()
+    for inv_no, rec_list in inv_groups.items():
+        if len(rec_list) <= 1:
             continue
-
-        # CRITICAL FIX: Group by (InvoiceNo + GSTIN) to prevent multi-vendor collision
-        # If GSTIN is missing, we use 'UNKNOWN' to keep them distinct from records with GSTINs
-        key = f"{inv_no.lower()}|{gstin or 'UNKNOWN_GSTIN'}"
         
-        if key not in seen:
-            # STEP 1: New Group
-            group_id = hashlib.sha256(f"{key}_{upload_session_id}".encode()).hexdigest()[:16]
-            seen[key] = group_id
-            r.is_primary = True
-            r.group_id = group_id
+        # Collect distinct non-empty GSTINs
+        gstin_to_recs = defaultdict(list)
+        for r in rec_list:
+            ext_data = r.extracted_data or {}
+            gst = (ext_data.get("canonical_vendor_gstin") or ext_data.get("vendor_gstin") or r.gstin or "").strip().upper()
+            if gst and gst not in ("MISSING", "N/A", "—"):
+                gstin_to_recs[gst].append(r)
+                
+        if len(gstin_to_recs) <= 1:
+            continue
+            
+        # Group GSTINs by similarity
+        distinct_gstins = list(gstin_to_recs.keys())
+        similarity_groups = [] # list of sets of similar GSTINs
+        
+        for gst in distinct_gstins:
+            added = False
+            for group in similarity_groups:
+                first = list(group)[0]
+                if are_gstins_similar(first, gst):
+                    group.add(gst)
+                    added = True
+                    break
+            if not added:
+                similarity_groups.append({gst})
+                
+        # For each similarity group with variants, choose canonical and align
+        for group in similarity_groups:
+            if len(group) <= 1:
+                continue
+                
+            def sort_key(gst):
+                recs_count = len(gstin_to_recs[gst])
+                return (score_gstin(gst), recs_count, gst)
+                
+            canonical_gstin = max(group, key=sort_key)
+            logger.info(f"[OCR_GSTIN_INCONSISTENCY] invoice_no='{inv_no}' variants={list(group)} chosen='{canonical_gstin}'")
+            
+            # Update all records in the group
+            for gst in group:
+                if gst == canonical_gstin:
+                    continue
+                for r in gstin_to_recs[gst]:
+                    r.gstin = canonical_gstin
+                    # Also update extracted_data if necessary
+                    if isinstance(r.extracted_data, dict):
+                        dirty = False
+                        ext = dict(r.extracted_data)
+                        if 'gstin' in ext:
+                            ext['gstin'] = canonical_gstin
+                            dirty = True
+                        if 'vendor_gstin' in ext:
+                            ext['vendor_gstin'] = canonical_gstin
+                            dirty = True
+                        if 'canonical_gstin' in ext:
+                            ext['canonical_gstin'] = canonical_gstin
+                            dirty = True
+                        if 'canonical_vendor_gstin' in ext:
+                            ext['canonical_vendor_gstin'] = canonical_gstin
+                            dirty = True
+                        if dirty:
+                            r.extracted_data = ext
+                    r.save(update_fields=['gstin', 'extracted_data'])
+                    logger.info(f"[OCR_GSTIN_ALIGNED] record={r.id} invoice_no='{inv_no}' old='{gst}' new='{canonical_gstin}'")
+
+    # ── DETERMINISTIC PHYSICAL PAGE SORTING ──
+    def get_record_physical_page(r):
+        ext = r.extracted_data if isinstance(r.extracted_data, dict) else {}
+        val = ext.get("_physical_page_no") or ext.get("_page_no")
+        if val is not None:
+            try:
+                return int(val)
+            except (ValueError, TypeError):
+                pass
+        return r.id or 0
+
+    records = sorted(records, key=get_record_physical_page)
+
+    record_count = len(records)
+    if record_count == 0:
+        logger.info(f"[CANONICAL GROUPING] No unprocessed records found for session {upload_session_id}")
+        return
+
+    # Build payloads compatible with ForensicMerger
+    payloads = []
+    record_map = {} # _page_no -> record object
+    
+    for idx, r in enumerate(records):
+        page_no = idx + 1
+        
+        # Extract date
+        date_val = ""
+        if r.supplier_invoice_date:
+            if hasattr(r.supplier_invoice_date, 'strftime'):
+                date_val = r.supplier_invoice_date.strftime("%Y-%m-%d")
+            else:
+                date_val = str(r.supplier_invoice_date)
+        
+        ext_data = r.extracted_data if isinstance(r.extracted_data, dict) else {}
+        
+        # Determine physical page number
+        phys_page = ext_data.get("_physical_page_no") or ext_data.get("_page_no") or page_no
+        try:
+            phys_page = int(phys_page)
+        except (ValueError, TypeError):
+            phys_page = page_no
+
+        gst_val = (ext_data.get("canonical_vendor_gstin") or ext_data.get("vendor_gstin") or r.gstin or "").strip().upper()
+        payload = {
+            "invoice_no": (r.supplier_invoice_no or "").strip(),
+            "gstin": gst_val,
+            "vendor_name": (r.vendor_name or "").strip(),
+            "tenant_id": str(r.tenant_id),
+            "invoice_date": date_val,
+            "raw_gstin": (ext_data.get("raw_vendor_gstin") or gst_val).strip().upper(),
+            "canonical_gstin": gst_val,
+            "_page_no": page_no,
+            "_physical_page_no": phys_page,
+            "items": ext_data.get("items", []),
+            "_raw_text": ext_data.get("_raw_text") or "",
+            "_pdf_ocr_text": ext_data.get("_pdf_ocr_text") or "",
+            "record_id": str(r.id),
+            "upload_session_id": upload_session_id
+        }
+        payloads.append(payload)
+        record_map[page_no] = r
+
+    # Run ForensicMerger grouping
+    from .forensic_merger import get_forensic_merger
+    merger = get_forensic_merger()
+    groups_dict = merger.group_invoices(payloads)
+
+    logger.info(f"[CANONICAL GROUPING] Formed {len(groups_dict)} groups from {record_count} records")
+
+    # Update records in database
+    for group_key, group_payloads in groups_dict.items():
+        # Sort members by _page_no to be deterministic
+        sorted_payloads = sorted(group_payloads, key=lambda x: x["_page_no"])
+        
+        # Compute deterministic group_id
+        member_ids = ",".join(str(p["record_id"]) for p in sorted_payloads)
+        group_hash = hashlib.sha256(f"{member_ids}_{upload_session_id}".encode('utf-8')).hexdigest()[:16]
+        group_id = f"GRP_HASH_{group_hash}"
+
+        # Update first as primary
+        for p_idx, p in enumerate(sorted_payloads):
+            r = record_map[p["_page_no"]]
+            is_primary = (p_idx == 0)
+            
+            r.is_primary = is_primary
+            # If the group only contains a single record, group_id should be None (standalone)
+            r.group_id = group_id if len(sorted_payloads) > 1 else None
+            r.save(update_fields=['is_primary', 'group_id'])
+            
             logger.info(
-                f"[GROUPING] record={r.id} hash={file_hash}... "
-                f"key='{key}' → NEW_PRIMARY group_id={group_id}"
-            )
-        else:
-            # Subsequent page for the same invoice/vendor pair
-            existing_group_id = seen[key]
-            r.is_primary = False
-            r.group_id = existing_group_id
-            logger.info(
-                f"[GROUPING] record={r.id} hash={file_hash}... "
-                f"key='{key}' → CONTINUATION of group_id={existing_group_id}"
+                f"[CANONICAL GROUPING UPDATE] record={r.id} "
+                f"is_primary={is_primary} group_id={r.group_id} "
+                f"invoice_no='{r.supplier_invoice_no}' gstin='{r.gstin}'"
             )
 
-        r.save()
-
-    groups_formed = len(seen)
-    logger.info(
-        f"[GROUPING COMPLETE] session={upload_session_id} "
-        f"records={record_count} distinct_invoices={groups_formed} standalone={record_count - sum(1 for _ in seen)}"
-    )
+    logger.info(f"[CANONICAL GROUPING COMPLETE] session={upload_session_id}")

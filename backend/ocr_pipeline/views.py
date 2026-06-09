@@ -398,6 +398,25 @@ class CleanOCRStagingView(views.APIView):
         v_id = getattr(r, 'vendor_id', None)
         v_status_record = getattr(r, 'status', "PROCESSING")
         tenant_id = getattr(r, 'tenant_id', None)
+
+        # On-the-fly GSTIN classification fallback for UI mapping of legacy/historical records
+        if norm and not norm.get("canonical_vendor_gstin"):
+            raw_text = norm.get("_pdf_ocr_text") or norm.get("_raw_text") or ""
+            if raw_text:
+                try:
+                    from ocr_pipeline.gstin_classifier import GSTINOwnershipClassifier
+                    extracted_data_dict = {
+                        "gstin": getattr(r, 'gstin', None) or norm.get("gstin") or "",
+                        "vendor_gstin": norm.get("vendor_gstin") or norm.get("gstin") or "",
+                        "buyer_gstin": norm.get("buyer_gstin") or norm.get("bill_to_gstin") or "",
+                        "consignee_gstin": norm.get("consignee_gstin") or norm.get("ship_to_gstin") or "",
+                        "vendor_name": getattr(r, 'vendor_name', None) or norm.get("vendor_name") or ""
+                    }
+                    classification = GSTINOwnershipClassifier.classify_gstins(raw_text, extracted_data_dict, tenant_id)
+                    norm = dict(norm)
+                    norm.update(classification)
+                except Exception as _fe:
+                    logger.warning(f"[GSTIN_ON_THE_FLY_FALLBACK_FAILED] record_id={getattr(r, 'id', None)} error={_fe}")
         # [CANONICAL VENDOR RESOLUTION] Also check record.vendor_status DB field
         db_vendor_status = getattr(r, 'vendor_status', 'PENDING')
 
@@ -405,7 +424,7 @@ class CleanOCRStagingView(views.APIView):
         if not v_id and vendor_map:
             try:
                 from vendors.vendor_validation_logic import normalize_branch as _nb
-                gstin_key = (getattr(r, 'gstin', None) or norm.get('gstin') or '').strip().upper()
+                gstin_key = (norm.get('canonical_vendor_gstin') or norm.get('vendor_gstin') or getattr(r, 'gstin', None) or norm.get('gstin') or '').strip().upper()
                 branch_raw = (getattr(r, 'branch', None) or norm.get('branch') or '')
                 branch_key = _nb(branch_raw or 'Main Branch')
                 if gstin_key:
@@ -545,6 +564,26 @@ class CleanOCRStagingView(views.APIView):
             getattr(r, 'id', None), inv_no, len(items_val), item_status, list(norm.keys())
         )
 
+        try:
+            from ocr_pipeline.pipeline import trace_item_checkpoint
+            snapshot_count_temp = len(norm.get("items", []))
+            if not norm.get("items"):
+                _ae_temp = norm.get("assembled_exports") or []
+                if _ae_temp and isinstance(_ae_temp, list) and _ae_temp[0]:
+                    snapshot_count_temp = len(_ae_temp[0].get("items", []))
+            
+            trace_item_checkpoint(
+                record_id=str(getattr(r, 'id', None)),
+                invoice_no=inv_no,
+                page_number=norm.get('_page_no') or norm.get('page_no') or getattr(r, 'page_no', None),
+                stage="ITEM_TRACE_AFTER_HYDRATION",
+                item_count=len(items_val),
+                item_status=item_status,
+                snapshot_item_count=snapshot_count_temp
+            )
+        except Exception as trace_err:
+            logger.error(f"[TRACE_ERR] ITEM_TRACE_AFTER_HYDRATION: {trace_err}")
+
         # PHASE 6: HYDRATION ITEM VERIFY CHECKPOINT
         snapshot_count = len(norm.get("items", []))
         if not norm.get("items"):
@@ -636,8 +675,22 @@ class CleanOCRStagingView(views.APIView):
             ),
             "branch": branch,
             "vendor_name": vendor_name_val,
-            "vendor_gstin": getattr(r, 'gstin', None) or header.get("vendor_gstin") or norm.get("gstin") or supplier.get("gstin") or norm.get("vendor_gstin") or "—",
-            "gstin": getattr(r, 'gstin', None) or header.get("gstin") or norm.get("gstin") or supplier.get("gstin") or "—",
+            "vendor_gstin": norm.get("canonical_vendor_gstin") or norm.get("vendor_gstin") or getattr(r, 'gstin', None) or header.get("vendor_gstin") or norm.get("gstin") or supplier.get("gstin") or "—",
+            "gstin": norm.get("canonical_vendor_gstin") or norm.get("vendor_gstin") or getattr(r, 'gstin', None) or header.get("gstin") or norm.get("gstin") or supplier.get("gstin") or "—",
+            "buyer_gstin": norm.get("buyer_gstin") or norm.get("bill_to_gstin") or "—",
+            "consignee_gstin": norm.get("consignee_gstin") or norm.get("ship_to_gstin") or "—",
+            "ship_to_gstin": norm.get("ship_to_gstin") or norm.get("consignee_gstin") or "—",
+            "bill_to_gstin": norm.get("bill_to_gstin") or norm.get("buyer_gstin") or "—",
+            "raw_vendor_gstin": norm.get("raw_vendor_gstin") or getattr(r, 'gstin', None) or norm.get("gstin") or "—",
+            "raw_buyer_gstin": norm.get("raw_buyer_gstin") or "—",
+            "raw_consignee_gstin": norm.get("raw_consignee_gstin") or "—",
+            "raw_bill_to_gstin": norm.get("raw_bill_to_gstin") or "—",
+            "raw_ship_to_gstin": norm.get("raw_ship_to_gstin") or "—",
+            "canonical_vendor_gstin": norm.get("canonical_vendor_gstin") or getattr(r, 'gstin', None) or norm.get("gstin") or "—",
+            "canonical_buyer_gstin": norm.get("canonical_buyer_gstin") or "—",
+            "canonical_consignee_gstin": norm.get("canonical_consignee_gstin") or "—",
+            "canonical_bill_to_gstin": norm.get("canonical_bill_to_gstin") or "—",
+            "canonical_ship_to_gstin": norm.get("canonical_ship_to_gstin") or "—",
             "vendor_id": v_id,
             "status": final_status,
             "validationStatus": ui_status,
@@ -724,6 +777,16 @@ class CleanOCRStagingView(views.APIView):
             f"gstin={res.get('gstin')}"
         )
         logger.info(f"[READONLY_HYDRATION_CONFIRMED] Completed readonly hydration for record_id={getattr(r, 'id', None)} validation_status={ui_status}")
+        
+        # Forensic logging of GSTIN hydration and API response states
+        logger.info(
+            f"[GSTIN_HYDRATION] upload_session_id={getattr(r, 'upload_session_id', None)} "
+            f"record_id={getattr(r, 'id', None)} gstin={res.get('gstin')} status={res.get('status')}"
+        )
+        logger.info(
+            f"[GSTIN_API_RESPONSE] upload_session_id={getattr(r, 'upload_session_id', None)} "
+            f"record_id={getattr(r, 'id', None)} gstin={res.get('gstin')} status={res.get('status')}"
+        )
         return res
 
     def _log_final_api_response_rows(self, data, source):
@@ -747,7 +810,7 @@ class CleanOCRStagingView(views.APIView):
         tenant_id = getattr(request.user, 'branch_id', None) or getattr(request.user, 'tenant_id', None) or '88fe4389-58a9-4244-9878-8a4e646898bd'
         resume = request.query_params.get('resume') == 'true'
 
-        if not resume and session_id in ['None', 'null', 'undefined', '', None]:
+        if not resume and not file_hash and session_id in ['None', 'null', 'undefined', '', None]:
             logger.warning(f"[ORPHAN_POLL_BLOCKED] Rejected staging poll with session_id='{session_id}'")
             return Response({
                 "status": "EMPTY_SESSION_TERMINAL",
@@ -780,6 +843,30 @@ class CleanOCRStagingView(views.APIView):
                 "poll_latency": round(time.time() - t_poll_start, 3)
             })
 
+        # [SINGLE RECORD DIRECT FETCH] If no session_id is provided, but a file_hash/id is specified,
+        # we can bypass session-level barrier/snapshot checks and return the single record directly.
+        if not session_id and file_hash:
+            logger.info(f"[SINGLE_RECORD_FETCH] record_id={prim_rec.id} file_hash={prim_rec.file_hash}")
+            from vendors.vendor_validation_logic import build_session_vendor_map
+            rec_tenant_id = prim_rec.tenant_id or tenant_id
+            _vendor_map = {}
+            try:
+                _vendor_map = build_session_vendor_map(rec_tenant_id, [prim_rec])
+            except Exception as _vme:
+                logger.warning(f"[SINGLE_RECORD_VENDOR_MAP_FAILED] error={_vme}")
+            mapped = self._map_record_to_ui_row(prim_rec, norm_data=prim_rec.extracted_data, vendor_map=_vendor_map)
+            return Response({
+                "status": "FINALIZED",
+                "data": [mapped],
+                "pipeline_status": "completed",
+                "terminal": True,
+                "hydration_pending": False,
+                "completed": True,
+                "failed": False,
+                "progress_percent": 100.0,
+                "poll_latency": round(time.time() - t_poll_start, 3)
+            })
+
         # Fetch database barrier state
         from ocr_pipeline.models import SessionFinalizationState, FinalizedSnapshot
         barrier_state = SessionFinalizationState.objects.filter(id=str(prim_rec.id)).first()
@@ -805,10 +892,73 @@ class CleanOCRStagingView(views.APIView):
 
         # Check for failure status
         if barrier_state.status == 'FAILED' or (barrier_state.status == 'FINALIZED' and barrier_state.failed_pages > 0 and not barrier_state.terminal_consistency):
-            logger.info(f"[LIFECYCLE_TERMINAL_STATE] session={session_id} tenant_id={tenant_id} state=failed")
+            logger.info(f"[LIFECYCLE_TERMINAL_STATE] session={session_id} tenant_id={tenant_id} state=failed — attempting recovery hydration")
+            
+            snapshots = FinalizedSnapshot.objects.filter(session_id=session_id).order_by('created_at', 'id')
+            if not snapshots.exists():
+                snapshots = FinalizedSnapshot.objects.filter(session_id=prim_rec.upload_session_id).order_by('created_at', 'id')
+                
+            mapped_data = []
+            _snap_vendor_map = {}
+            try:
+                all_db_records = list(InvoiceTempOCR.objects.filter(upload_session_id=session_id))
+                if not all_db_records:
+                    all_db_records = list(InvoiceTempOCR.objects.filter(upload_session_id=prim_rec.upload_session_id))
+                if all_db_records:
+                    from vendors.vendor_validation_logic import build_session_vendor_map
+                    _snap_vendor_map = build_session_vendor_map(tenant_id, all_db_records)
+            except Exception as _vme:
+                logger.warning(f"[SNAPSHOT_VENDOR_MAP_FAILED] session={session_id} error={_vme}")
+
+            if snapshots.exists():
+                for snapshot in snapshots:
+                    snapshot_data = self._get_snapshot_data(snapshot)
+                    raw_rows = snapshot_data.get('data', [])
+                    for row in raw_rows:
+                        inv_no = row.get('invoice_no')
+                        db_record = InvoiceTempOCR.objects.filter(
+                            upload_session_id=session_id,
+                            supplier_invoice_no=inv_no
+                        ).first()
+                        if not db_record and row.get('id'):
+                            db_record = InvoiceTempOCR.objects.filter(id=row.get('id')).first()
+                        
+                        if db_record:
+                            norm_source = db_record.extracted_data or row
+                            dummy = db_record
+                        else:
+                            norm_source = row
+                            from types import SimpleNamespace
+                            dummy = SimpleNamespace(**{
+                                'id': row.get('id'),
+                                'tenant_id': tenant_id,
+                                'status': 'FAILED',
+                                'processed': False,
+                                'validation_status': 'EXTRACTION_FAILED',
+                                'vendor_id': row.get('vendor_id'),
+                                'vendor_status': 'PENDING',
+                                'supplier_invoice_no': inv_no,
+                                'gstin': row.get('gstin'),
+                                'irn': row.get('irn'),
+                                'ack_no': row.get('ack_no'),
+                                'ack_date': row.get('ack_date'),
+                                'created_at': row.get('created_at'),
+                                'voucher_type': row.get('voucher_type'),
+                                'branch': row.get('branch')
+                            })
+                        mapped = self._map_record_to_ui_row(dummy, norm_data=norm_source, vendor_map=_snap_vendor_map)
+                        mapped_data.append(mapped)
+            else:
+                all_db_records = list(InvoiceTempOCR.objects.filter(upload_session_id=session_id))
+                if not all_db_records:
+                    all_db_records = list(InvoiceTempOCR.objects.filter(upload_session_id=prim_rec.upload_session_id))
+                for db_record in all_db_records:
+                    mapped = self._map_record_to_ui_row(db_record, norm_data=db_record.extracted_data, vendor_map=_snap_vendor_map)
+                    mapped_data.append(mapped)
+
             return Response({
                 "status": "FAILED",
-                "data": [],
+                "data": mapped_data,
                 "pipeline_status": "failed",
                 "terminal": True,
                 "hydration_pending": False,
@@ -869,7 +1019,8 @@ class CleanOCRStagingView(views.APIView):
                         if not getattr(db_record, 'vendor_id', None) and _snap_vendor_map:
                             try:
                                 from vendors.vendor_validation_logic import normalize_branch as _nb
-                                gstin_key = (getattr(db_record, 'gstin', None) or '').strip().upper()
+                                db_norm = getattr(db_record, 'extracted_data', {}) or {}
+                                gstin_key = (db_norm.get('canonical_vendor_gstin') or db_norm.get('vendor_gstin') or getattr(db_record, 'gstin', None) or '').strip().upper()
                                 branch_key = _nb(getattr(db_record, 'branch', None) or 'Main Branch')
                                 vmap_result = _snap_vendor_map.get((gstin_key, branch_key))
                                 if vmap_result and vmap_result.get('status') == 'EXISTING_VENDOR':
@@ -1068,6 +1219,21 @@ class CleanOCRStagingView(views.APIView):
             # Instead of calling old validate_vendor(), run the full pipeline validate_and_process
             # so the status, vendor_id and branch matching all stay in sync.
             
+            # If the record in the DB is terminal, we temporarily unblock it to allow re-validation on patch.
+            db_status = record.status
+            db_processed = record.processed
+            
+            # We temporarily reset processed to False in the DB using update()
+            # so that validate_and_process actually runs the validation logic
+            InvoiceTempOCR.objects.filter(id=record.id).update(
+                processed=False,
+                status='FINALIZED',
+                validation_status='PENDING'
+            )
+            
+            # Reload record to get clean state
+            record = InvoiceTempOCR.objects.get(id=record.id)
+            
             # RE-NORMALIZE on patch to ensure manual header edits propagate to line item tax types
             normalized_patch = get_canonical_export_record(updated_data, tenant_id=record.tenant_id)
             # Preserve the hierarchical 'sections' field so that nested objects (due_details, transit_details, etc.) are kept intact
@@ -1089,6 +1255,13 @@ class CleanOCRStagingView(views.APIView):
             # Run the authoritative pipeline validation
             from .pipeline import validate_and_process
             v_res = validate_and_process(record)
+            
+            # Restore terminal status in the DB if it was terminal before
+            if db_processed:
+                InvoiceTempOCR.objects.filter(id=record.id).update(
+                    processed=True,
+                    status=db_status
+                )
 
             # Re-run grouping after manual edit
             try:
@@ -1575,8 +1748,12 @@ class OCRStagingFinalizeView(views.APIView):
                             db_rec.validation_status = 'DUPLICATE'
                             db_rec.save(update_fields=['validation_status'])
                         elif save_status == 'PENDING_PURCHASE':
-                            summary['created'] += 1
-                            logger.info(f"[PENDING_PURCHASE_CREATED] record={db_rec.id}")
+                            # Pending Purchase entries are created at validation time (not finalize time).
+                            # If validate_and_process still returns PENDING_PURCHASE during finalize,
+                            # the record has unresolved items/vendor and cannot be auto-saved.
+                            # Count as skipped — the queue entry is handled by evaluate_pending_purchase.
+                            summary['skipped'] += 1
+                            logger.info(f"[PENDING_PURCHASE_ALREADY_QUEUED] record={db_rec.id} — skipping voucher creation")
                         else:
                             summary['failed'] += 1
                             err_msg = res.get('validation_message') if isinstance(res, dict) else "Finalization failed"
