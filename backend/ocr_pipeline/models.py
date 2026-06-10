@@ -586,52 +586,74 @@ class InvoiceTempOCR(models.Model):
                     db_val_status = db_record.get('validation_status')
                     db_extracted = db_record.get('extracted_data') or {}
                     
-                    # [RESTORATION FIX] A status of 'FINALIZED' is only terminal if processed=True.
-                    # If processed=False, the business validation and voucher save has not run yet.
-                    is_db_terminal = (db_status == 'COMPLETED') or (db_status == 'FINALIZED' and db_processed)
-                    if is_db_terminal and self.status not in {'FINALIZED', 'FAILED', 'COMPLETED', 'VOUCHER_CREATED'}:
-                        raise RuntimeError(f"Post-finalization mutation blocked: record {self.pk} is in terminal state '{db_status}'")
-                    
-                    is_db_finalized = (
-                        (db_status in ('FINALIZED', 'COMPLETED') and db_processed)
-                        or db_processed is True
-                        or db_val_status in ('VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE', 'PENDING_PURCHASE')
-                    )
-                    
-                    if is_db_finalized:
-                        # Prevent status/processed oscillation
-                        if self.status not in ('FINALIZED', 'FAILED'):
-                            _log.warning(f"[IMMUTABILITY_GUARD_BLOCKED] Attempted status regression from {db_status} to {self.status} for record={self.pk}")
-                            self.status = db_status
-                        if not self.processed and db_processed:
-                            _log.warning(f"[IMMUTABILITY_GUARD_BLOCKED] Attempted processed regression from True to False for record={self.pk}")
-                            self.processed = True
-                        if self.validation_status != db_val_status and db_val_status in ('VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE', 'PENDING_PURCHASE'):
-                            _log.warning(f"[IMMUTABILITY_GUARD_BLOCKED] Attempted validation_status regression from {db_val_status} to {self.validation_status} for record={self.pk}")
-                            self.validation_status = db_val_status
-                        if self.extracted_data != db_extracted:
-                            _log.warning(f"[IMMUTABILITY_GUARD_BLOCKED] Attempted post-finalization DTO mutation for record={self.pk}")
-                            self.extracted_data = db_extracted
+                    # Stack bypass inspection
+                    bypass_guard = getattr(self, '_bypass_immutability_guard', False)
+                    if not bypass_guard:
+                        for frame in inspect.stack():
+                            func_name = frame.function
+                            if any(k in func_name for k in ('revalidate', 'validate_and_process', 'evaluate_pending_purchase', 'patch', 'process_pending_purchase', 'resolve')):
+                                bypass_guard = True
+                                break
+
+                    if bypass_guard:
+                        _log.info(f"[IMMUTABILITY_GUARD_BYPASS] Legitimate pipeline trigger or bypass flag detected. Bypassing guard for record={self.pk}")
+
+                    if not bypass_guard:
+                        # [RESTORATION FIX] A status of 'FINALIZED' is only terminal if processed=True.
+                        # If processed=False, the business validation and voucher save has not run yet.
+                        is_db_terminal = (db_status == 'COMPLETED') or (db_status == 'FINALIZED' and db_processed)
+                        if is_db_terminal and self.status not in {'FINALIZED', 'FAILED', 'COMPLETED', 'VOUCHER_CREATED'}:
+                            raise RuntimeError(f"Post-finalization mutation blocked: record {self.pk} is in terminal state '{db_status}'")
+                        
+                        is_db_finalized = (
+                            (db_status in ('FINALIZED', 'COMPLETED') and db_processed)
+                            or db_processed is True
+                            or db_val_status in ('VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE', 'PENDING_PURCHASE')
+                        )
+                        
+                        if is_db_finalized:
+                            # Prevent status/processed oscillation
+                            if self.status not in ('FINALIZED', 'FAILED'):
+                                _log.warning(f"[IMMUTABILITY_GUARD_BLOCKED] Attempted status regression from {db_status} to {self.status} for record={self.pk}")
+                                self.status = db_status
+                            if not self.processed and db_processed:
+                                _log.warning(f"[IMMUTABILITY_GUARD_BLOCKED] Attempted processed regression from True to False for record={self.pk}")
+                                self.processed = True
+                            if self.validation_status != db_val_status and db_val_status in ('VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE', 'PENDING_PURCHASE'):
+                                _log.warning(f"[IMMUTABILITY_GUARD_BLOCKED] Attempted validation_status regression from {db_val_status} to {self.validation_status} for record={self.pk}")
+                                self.validation_status = db_val_status
+                            if self.extracted_data != db_extracted:
+                                _log.warning(f"[IMMUTABILITY_GUARD_BLOCKED] Attempted post-finalization DTO mutation for record={self.pk}")
+                                self.extracted_data = db_extracted
             except Exception as _imm_err:
                 if isinstance(_imm_err, RuntimeError):
                     raise
                 _log.warning(f"[IMMUTABILITY_GUARD_FAILED] record={self.pk} error={_imm_err}")
 
-            current_status = self.validation_status
-            # Fetch actual DB value to check — only if we're about to write something weaker
-            if current_status in self.OVERWRITE_BLOCKED_STATUSES:
-                try:
-                    db_val = InvoiceTempOCR.objects.filter(pk=self.pk).values_list('validation_status', flat=True).first()
-                    if db_val in self.IMMUTABLE_VALIDATION_STATUSES:
-                        _log.error(
-                            f"[READY_OVERWRITE_BLOCKED] id={self.pk} "
-                            f"attempted to write validation_status='{current_status}' "
-                            f"but DB has immutable status='{db_val}'. Write BLOCKED."
-                        )
-                        # Force back to DUPLICATE so the save proceeds with correct value
-                        self.validation_status = db_val
-                except Exception as _e:
-                    _log.warning(f"[IMMUTABILITY_CHECK_FAILED] id={self.pk} error={_e}")
+            if not getattr(self, '_bypass_immutability_guard', False):
+                # Also double check stack bypass for overwrite guard
+                bypass_overwrite = False
+                for frame in inspect.stack():
+                    if any(k in frame.function for k in ('revalidate', 'validate_and_process', 'evaluate_pending_purchase', 'patch', 'process_pending_purchase', 'resolve')):
+                        bypass_overwrite = True
+                        break
+                
+                if not bypass_overwrite:
+                    current_status = self.validation_status
+                    # Fetch actual DB value to check — only if we're about to write something weaker
+                    if current_status in self.OVERWRITE_BLOCKED_STATUSES:
+                        try:
+                            db_val = InvoiceTempOCR.objects.filter(pk=self.pk).values_list('validation_status', flat=True).first()
+                            if db_val in self.IMMUTABLE_VALIDATION_STATUSES:
+                                _log.error(
+                                    f"[READY_OVERWRITE_BLOCKED] id={self.pk} "
+                                    f"attempted to write validation_status='{current_status}' "
+                                    f"but DB has immutable status='{db_val}'. Write BLOCKED."
+                                )
+                                # Force back to DUPLICATE so the save proceeds with correct value
+                                self.validation_status = db_val
+                        except Exception as _e:
+                            _log.warning(f"[IMMUTABILITY_CHECK_FAILED] id={self.pk} error={_e}")
 
             # [FORENSIC_STATUS_MUTATION] Tracing
             try:

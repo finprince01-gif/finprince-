@@ -219,7 +219,7 @@ class CleanOCRStagingView(views.APIView):
         # Check if client is using direct S3 upload via session_ids
         session_ids = get_list(request.data, 'session_ids')
         if session_ids:
-            return self._handle_session_metadata_upload(request, session_ids, tenant_id)
+            return _handle_session_metadata_upload(request, session_ids, tenant_id)
 
         if not files:
             return Response({'error': 'No files uploaded'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1296,109 +1296,6 @@ class CleanOCRStagingView(views.APIView):
             logger.error(f"PATCH failure: {str(e)}")
             return Response({'error': str(e)}, status=400)
 
-    def delete(self, request, file_hash=None):
-        if not file_hash:
-            return Response({'error': 'Id or file_hash required'}, status=400)
-            
-        if str(file_hash).isdigit():
-            deleted, _ = InvoiceTempOCR.objects.filter(id=int(file_hash), tenant_id=request.user.branch_id).delete()
-        else:
-            deleted, _ = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.branch_id).delete()
-            
-        return Response({'success': bool(deleted)})
-
-    def _handle_session_metadata_upload(self, request, session_ids, tenant_id):
-        """Processes metadata for files already uploaded to S3 via pre-signed URLs."""
-        from core.sqs import QueueService
-        queue = QueueService()
-        voucher_type = request.data.get('voucher_type', 'PURCHASE')
-        upload_type = request.data.get('upload_type', '').strip().upper() or 'UNKNOWN'
-        upload_session_id = request.data.get('upload_session_id')
-        
-        # ── BACKPRESSURE GATING (Phase 13) ──
-        depth = queue.get_queue_depth(queue_type='ingestion')
-        from core.observability import observability
-        observability.api_metric(event="BACKPRESSURE_CHECK", queue_depth=depth)
-        
-        if depth > 1000: # Threshold for 1000 pending invoices
-            logger.warning(f"[API_BACKPRESSURE] Queue depth {depth} exceeds threshold.")
-            observability.api_metric(event="BACKPRESSURE_THROTTLED", queue_depth=depth)
-            return Response({
-                "error": "Processing queue is full. Please wait a few minutes.",
-                "status": "BACKPRESSURE_THROTTLED",
-                "queue_depth": depth
-            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
-
-        sessions = UploadSession.objects.filter(id__in=session_ids, tenant_id=tenant_id)
-        if not sessions.exists():
-            return Response({'error': 'Invalid session_ids'}, status=400)
-            
-        job = OCRJob.objects.create(
-            tenant_id=tenant_id,
-            total_files=sessions.count(),
-            status='PENDING',
-            upload_type=upload_type
-        )
-        
-        queued_count = 0
-        for session in sessions:
-            task = OCRTask.objects.create(
-                job=job,
-                file_name=session.file_name,
-                file_url=f"s3://{session.s3_key}", # Internal S3 ref
-                status='PENDING'
-            )
-            
-            # [PHASE 11.5] Use Canonical Message Factory
-            from vouchers.message_factory import message_factory
-            from core.middleware import get_correlation_id
-            
-            ingestion_payload = {
-                "record_id": task.id,
-                "job_id": str(job.id),
-                "file_key": session.s3_key,
-                "voucher_type": voucher_type,
-                "upload_type": upload_type,
-                "upload_session_id": upload_session_id or str(session.id)
-            }
-            
-            msg = message_factory.create_message(
-                task_type="INGESTION",
-                tenant_id=tenant_id,
-                session_id=upload_session_id or str(session.id),
-                payload=ingestion_payload,
-                correlation_id=get_correlation_id()
-            )
-            
-            logger.info(f"[DISTRIBUTED_PIPELINE_ACTIVE] session_id='{upload_session_id or str(session.id)}' status='ACTIVE'")
-            logger.info(f"[REDIS_COORDINATION_ACTIVE] session_id='{upload_session_id or str(session.id)}' coordinator='redis'")
-            from copy import deepcopy
-            msg_copy = deepcopy(msg)
-            
-            try:
-                queue.push(msg_copy, queue_type='ingestion')
-                logger.info(f"[QUEUE_FORWARD_SUCCESS] target_queue=ingestion msg_id={msg_copy['id']}")
-                logger.info(f"[DOWNSTREAM_ENQUEUE_SUCCESS] target_queue=ingestion msg_id={msg_copy['id']}")
-            except Exception as e:
-                logger.error(f"[QUEUE_FORWARD_FAILURE] target_queue=ingestion error={e}")
-                logger.error(f"[DOWNSTREAM_ENQUEUE_FAILED] target_queue=ingestion error={e}")
-                raise
-            logger.info(f"[SQS_DISPATCH_SUCCESS] session_id='{upload_session_id or str(session.id)}' msg_id='{msg.get('id')}' queue='ingestion'")
-            logger.info(f"[CLUSTER_WORKER_ACTIVE] role='ingestion' status='POLLING'")
-            session.status = 'COMPLETED'
-            session.save()
-            queued_count += 1
-            
-        from core.observability import observability
-        observability.api_metric(event="BULK_UPLOAD_METADATA", count=queued_count, session_id=upload_session_id)
-            
-        return Response({
-            "success": True,
-            "job_id": str(job.id),
-            "status": "PROCESSING",
-            "message": f"Enqueued {queued_count} direct S3 tasks."
-        }, status=status.HTTP_202_ACCEPTED)
-
     def _get_snapshot_data(self, snapshot):
         """Helper to retrieve snapshot JSON from S3 or DB (Phase 5C)."""
         if snapshot.s3_key:
@@ -1412,8 +1309,258 @@ class CleanOCRStagingView(views.APIView):
                 return json.loads(data)
             except Exception as e:
                 logger.error(f"[S3_FETCH_FAILED] {e}")
-                return snapshot.snapshot_json or {} # Fallback
+                return snapshot.snapshot_json or {}  # Fallback
         return snapshot.snapshot_json or {}
+
+    def delete(self, request, file_hash=None):
+        if not file_hash:
+            return Response({'error': 'Id or file_hash required'}, status=400)
+            
+        if str(file_hash).isdigit():
+            deleted, _ = InvoiceTempOCR.objects.filter(id=int(file_hash), tenant_id=request.user.branch_id).delete()
+        else:
+            deleted, _ = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.branch_id).delete()
+            
+        return Response({'success': bool(deleted)})
+
+
+class OCRStagingMatchItemView(views.APIView):
+    """
+    Direct Inventory Match Endpoint — NO vendor required.
+
+    POST /api/ocr-staging/<file_hash>/match-item/
+    Body: {
+        "inventory_item_id": <int>,
+        "item_name": "<canonical master item name>",
+        "line_index": <int>          # 0-based index of the line item in extracted_data.items[]
+    }
+
+    Sets match_source='MANUAL_MATCH', item_status='ALREADY EXIST' on the targeted line item
+    and immediately persists. Does NOT create any vendor product mapping.
+    Returns the updated UI row so the frontend can refresh without a full poll cycle.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, file_hash=None):
+        if not file_hash:
+            return Response({'error': 'file_hash or id required'}, status=400)
+
+        tenant_id = getattr(request.user, 'branch_id', None) or getattr(request.user, 'tenant_id', None)
+
+        # ── Resolve staging record ───────────────────────────────────────────
+        if str(file_hash).isdigit():
+            record = InvoiceTempOCR.objects.filter(id=int(file_hash), tenant_id=tenant_id).first()
+        else:
+            record = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=tenant_id).first()
+
+        if not record:
+            return Response({'error': f'Staging record not found for identifier: {file_hash}'}, status=404)
+
+        # ── Validate payload ─────────────────────────────────────────────────
+        inventory_item_id = request.data.get('inventory_item_id')
+        matched_item_name = request.data.get('item_name', '')
+        line_index = request.data.get('line_index')
+
+        if not inventory_item_id:
+            return Response({'error': 'inventory_item_id is required'}, status=400)
+
+        # ── Verify the inventory item exists for this tenant ─────────────────
+        try:
+            from inventory.models import InventoryItem
+            inv_item = InventoryItem.objects.filter(id=int(inventory_item_id), tenant_id=tenant_id).first()
+            if not inv_item:
+                return Response({'error': f'Inventory item {inventory_item_id} not found for this tenant.'}, status=404)
+            canonical_name = inv_item.item_name or matched_item_name
+        except Exception as e:
+            logger.error(f"[MATCH_ITEM_INV_LOOKUP_FAILED] id={inventory_item_id} error={e}")
+            return Response({'error': f'Failed to verify inventory item: {e}'}, status=400)
+
+        # ── Patch the targeted line item in extracted_data ───────────────────
+        try:
+            data = record.extracted_data or {}
+            if not isinstance(data, dict):
+                data = {}
+
+            # Items can be at top-level or inside sections
+            items = data.get('items') or []
+            if not items and 'sections' in data:
+                items = data.get('sections', {}).get('items', [])
+
+            if not isinstance(items, list):
+                items = []
+
+            patched = False
+            for i, item in enumerate(items):
+                target = (line_index is not None and int(line_index) == i) or (line_index is None and i == 0)
+                if target:
+                    item['inventory_item_id'] = inv_item.id
+                    item['matched_item_name'] = canonical_name
+                    item['canonical_name'] = canonical_name
+                    item['match_source'] = 'MANUAL_MATCH'
+                    item['item_status'] = 'ALREADY EXIST'
+                    item['inventory_match_level'] = 'MANUAL_MATCH'
+                    item['inventory_match_strategy'] = 'MANUAL_MATCH'
+                    item['inventory_match_confidence'] = 100.0
+                    patched = True
+                    logger.info(
+                        f"[MANUAL_MATCH_APPLIED] record={record.id} line_index={i} "
+                        f"inventory_item_id={inv_item.id} name='{canonical_name}'"
+                    )
+
+            if not patched:
+                return Response({'error': f'Line item at index {line_index} not found in staging record.'}, status=404)
+
+            # Persist items back
+            if 'sections' in data and 'items' not in data:
+                data['sections']['items'] = items
+            else:
+                data['items'] = items
+
+            # Recompute overall item_status based on all items
+            has_create = any(itm.get('item_status') in ('CREATE ITEM', 'CREATE_ITEM') for itm in items)
+            has_exist = any(itm.get('item_status') in ('ALREADY EXIST', 'ALREADY_EXIST') for itm in items)
+            if has_create and has_exist:
+                overall_item_status = 'PARTIAL'
+            elif has_create:
+                overall_item_status = 'CREATE ITEM'
+            else:
+                overall_item_status = 'ALREADY EXIST'
+
+            data['item_status'] = overall_item_status
+            data['missing_items'] = [itm for itm in items if itm.get('item_status') in ('CREATE ITEM', 'CREATE_ITEM')]
+
+            if 'assembled_exports' in data and data['assembled_exports']:
+                data['assembled_exports'][0]['items'] = items
+                data['assembled_exports'][0]['item_status'] = overall_item_status
+                data['assembled_exports'][0]['missing_items'] = data['missing_items']
+
+            record.extracted_data = data
+
+            # Use update() to bypass immutability guard on extracted_data only
+            InvoiceTempOCR.objects.filter(id=record.id).update(extracted_data=data)
+
+            logger.info(
+                f"[MANUAL_MATCH_PERSISTED] record={record.id} "
+                f"overall_item_status={overall_item_status} tenant={tenant_id}"
+            )
+
+        except Exception as e:
+            logger.error(f"[MATCH_ITEM_PATCH_FAILED] record={record.id} error={e}", exc_info=True)
+            return Response({'error': f'Failed to apply match: {e}'}, status=500)
+
+        # ── Build UI row response ────────────────────────────────────────────
+        try:
+            record.refresh_from_db()
+            from vendors.vendor_validation_logic import build_session_vendor_map
+            _vendor_map = {}
+            try:
+                _vendor_map = build_session_vendor_map(tenant_id, [record])
+            except Exception:
+                pass
+            from ocr_pipeline.views import CleanOCRStagingView
+            view_instance = CleanOCRStagingView()
+            view_instance.request = request
+            mapped = view_instance._map_record_to_ui_row(record, vendor_map=_vendor_map)
+        except Exception as e:
+            logger.warning(f"[MATCH_ITEM_UI_ROW_BUILD_FAILED] record={record.id} error={e}")
+            mapped = {}
+
+        return Response({
+            'success': True,
+            'inventory_item_id': inv_item.id,
+            'matched_item_name': canonical_name,
+            'item_status': overall_item_status,
+            'row': mapped,
+        }, status=status.HTTP_200_OK)
+
+
+def _handle_session_metadata_upload(request, session_ids, tenant_id):
+    """Processes metadata for files already uploaded to S3 via pre-signed URLs."""
+    from core.sqs import QueueService
+    queue = QueueService()
+    voucher_type = request.data.get('voucher_type', 'PURCHASE')
+    upload_type = request.data.get('upload_type', '').strip().upper() or 'UNKNOWN'
+    upload_session_id = request.data.get('upload_session_id')
+
+    # ── BACKPRESSURE GATING (Phase 13) ──
+    depth = queue.get_queue_depth(queue_type='ingestion')
+    from core.observability import observability
+    observability.api_metric(event="BACKPRESSURE_CHECK", queue_depth=depth)
+
+    if depth > 1000:
+        logger.warning(f"[API_BACKPRESSURE] Queue depth {depth} exceeds threshold.")
+        observability.api_metric(event="BACKPRESSURE_THROTTLED", queue_depth=depth)
+        return Response({
+            "error": "Processing queue is full. Please wait a few minutes.",
+            "status": "BACKPRESSURE_THROTTLED",
+            "queue_depth": depth
+        }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+    sessions = UploadSession.objects.filter(id__in=session_ids, tenant_id=tenant_id)
+    if not sessions.exists():
+        return Response({'error': 'Invalid session_ids'}, status=400)
+
+    job = OCRJob.objects.create(
+        tenant_id=tenant_id,
+        total_files=sessions.count(),
+        status='PENDING',
+        upload_type=upload_type
+    )
+
+    queued_count = 0
+    for session in sessions:
+        task = OCRTask.objects.create(
+            job=job,
+            file_name=session.file_name,
+            file_url=f"s3://{session.s3_key}",
+            status='PENDING'
+        )
+
+        from vouchers.message_factory import message_factory
+        from core.middleware import get_correlation_id
+
+        ingestion_payload = {
+            "record_id": task.id,
+            "job_id": str(job.id),
+            "file_key": session.s3_key,
+            "voucher_type": voucher_type,
+            "upload_type": upload_type,
+            "upload_session_id": upload_session_id or str(session.id)
+        }
+
+        msg = message_factory.create_message(
+            task_type="INGESTION",
+            tenant_id=tenant_id,
+            session_id=upload_session_id or str(session.id),
+            payload=ingestion_payload,
+            correlation_id=get_correlation_id()
+        )
+
+        logger.info(f"[DISTRIBUTED_PIPELINE_ACTIVE] session_id='{upload_session_id or str(session.id)}' status='ACTIVE'")
+        from copy import deepcopy
+        msg_copy = deepcopy(msg)
+
+        try:
+            queue.push(msg_copy, queue_type='ingestion')
+            logger.info(f"[QUEUE_FORWARD_SUCCESS] target_queue=ingestion msg_id={msg_copy['id']}")
+        except Exception as e:
+            logger.error(f"[QUEUE_FORWARD_FAILURE] target_queue=ingestion error={e}")
+            raise
+        logger.info(f"[SQS_DISPATCH_SUCCESS] session_id='{upload_session_id or str(session.id)}' msg_id='{msg.get('id')}' queue='ingestion'")
+        session.status = 'COMPLETED'
+        session.save()
+        queued_count += 1
+
+    from core.observability import observability as _obs
+    _obs.api_metric(event="BULK_UPLOAD_METADATA", count=queued_count, session_id=upload_session_id)
+
+    return Response({
+        "success": True,
+        "job_id": str(job.id),
+        "status": "PROCESSING",
+        "message": f"Enqueued {queued_count} direct S3 tasks."
+    }, status=status.HTTP_202_ACCEPTED)
+
 
 class PipelineStatusSSEView(views.APIView):
     """

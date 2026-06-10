@@ -16,6 +16,7 @@ import { getXLSX } from '../utils/xlsx';
 import { showError, showSuccess, showInfo } from '../utils/toast';
 import CreateNewVendorFullModal from './CreateNewVendorFullModal';
 import { CreateNewInventoryItemModal } from './CreateNewInventoryItemModal';
+import { MatchExistingItemModal } from './MatchExistingItemModal';
 import Icon from './Icon';
 import { getVoucherSchema, VOUCHER_SCHEMAS, getVoucherFlatHeaders, type VoucherSchema } from '../configs/schemaConfig';
 
@@ -815,8 +816,8 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         const supplier = sections.supplier_details || row.extracted_data || {};
         const rawItems = sections.items || row.extracted_data?.items || row.extracted_data?.line_items || [];
         const supplier_items = rawItems.map((it: any) => ({
-            supplierItemCode: String(it['Item Code'] || it['item_code'] || it['Part No'] || ''),
-            supplierItemName: String(it['Item Name'] || it['item_name'] || it['Description'] || it['description'] || it['Item'] || ''),
+            supplierItemCode: String(it['item_code'] || it['itemCode'] || it['supplierItemCode'] || it['product_code'] || it['productCode'] || it['code'] || ''),
+            supplierItemName: String(it['item_name'] || it['itemName'] || it['supplierItemName'] || it['product_name'] || it['productName'] || it['description'] || it['name'] || ''),
             hsnSac: String(it['HSN/SAC'] || it['hsn_sac'] || it['HSN Code'] || it['hsnSac'] || '')
         }));
 
@@ -837,8 +838,10 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     };
 
     const [isCreateItemModalOpen, setIsCreateItemModalOpen] = useState(false);
+    const [isMatchItemModalOpen, setIsMatchItemModalOpen] = useState(false);
     const [extractedItemData, setExtractedItemData] = useState<any>(null);
     const [itemResolvingRow, setItemResolvingRow] = useState<ScanResult | null>(null);
+    const [matchingLineIndex, setMatchingLineIndex] = useState<number>(0);
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
     const toggleExpandRow = (rowId: string) => {
@@ -851,6 +854,31 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             }
             return next;
         });
+    };
+
+    const openMatchItemModal = (row: ScanResult, item: any, lineIdx: number = 0) => {
+        console.info('[FORENSIC][INVOICE_SCANNER_ITEM_LIFECYCLE] MATCH_ITEM_BUTTON_CLICK', item);
+        setItemResolvingRow(row);
+        setMatchingLineIndex(lineIdx);
+        
+        const prefData = {
+            item_code: item.item_code || '',
+            item_name: item.item_name || '',
+            hsn_code: item.hsn_code || '',
+            description: item.description || '',
+            gst_rate: item.gst_rate ?? '0.00',
+            rate: item.rate ?? '0.00',
+            uom: item.uom || 'nos',
+            cgst_rate: item.cgst_rate ?? 0.0,
+            sgst_rate: item.sgst_rate ?? 0.0,
+            igst_rate: item.igst_rate ?? 0.0,
+            cess_rate: item.cess_rate ?? 0.0,
+            computed_gst_rate: item.computed_gst_rate ?? 0.0,
+            taxable_value: item.taxable_value ?? 0.0,
+        };
+        
+        setExtractedItemData(prefData);
+        setIsMatchItemModalOpen(true);
     };
 
     const openCreateItemModal = (row: ScanResult, item: any) => {
@@ -2384,6 +2412,30 @@ const handleRemove = async (fileHash: string) => {
                 />
             )}
 
+            {isMatchItemModalOpen && itemResolvingRow && (
+                <MatchExistingItemModal
+                    stagingId={itemResolvingRow.id}
+                    lineIndex={matchingLineIndex}
+                    extractedItem={extractedItemData}
+                    onClose={() => {
+                        setIsMatchItemModalOpen(false);
+                        setItemResolvingRow(null);
+                    }}
+                    onItemMatched={(updatedRow?: any) => {
+                        setIsMatchItemModalOpen(false);
+                        if (updatedRow && itemResolvingRow) {
+                            // Directly update the row in scan results without full revalidation
+                            setScanResults(prev =>
+                                prev.map(r => String(r.id) === String(itemResolvingRow.id) ? { ...r, ...updatedRow } : r)
+                            );
+                        } else if (itemResolvingRow) {
+                            handleRevalidateRow(itemResolvingRow);
+                        }
+                        setItemResolvingRow(null);
+                    }}
+                />
+            )}
+
             {/* Edit — handled by parent via onEditRow (opens canonical Purchase Voucher form) */}
 
             {/* Details Side Panel */}
@@ -2902,17 +2954,11 @@ const handleRemove = async (fileHash: string) => {
                                                                 {!hasEffectiveMatch && ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND'].includes(row.validationStatus) && (
                                                                     <button onClick={(e) => {
                                                                         console.log('[DIAGNOSTIC][CREATE_VENDOR] button onClick fired');
-                                                                        const rect = e.currentTarget.getBoundingClientRect();
-                                                                        const x = rect.left + rect.width / 2;
-                                                                        const y = rect.top + rect.height / 2;
-                                                                        const el = document.elementFromPoint(x, y);
-                                                                        console.log('[DIAGNOSTIC][CREATE_VENDOR] Element under coordinates (', x, ',', y, ') is:', el);
                                                                         openCreateVendorModal(row);
                                                                     }} className="px-2 py-1 bg-orange-500 text-white rounded text-[10px] font-bold hover:bg-orange-600 uppercase border-2 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]">
                                                                         CREATE VENDOR
                                                                     </button>
                                                                 )}
-                                                                {/* Revalidate button — triggers a fresh vendor check without opening edit modal */}
                                                                 {!['PENDING', 'VOUCHER_CREATED'].includes(row.validationStatus) && (
                                                                     <button
                                                                         onClick={async () => {
@@ -2933,14 +2979,18 @@ const handleRemove = async (fileHash: string) => {
                                                                                         vendor_id: result.vendor_id ?? r.vendor_id,
                                                                                         vendor_name: result.vendor_name || r.vendor_name,
                                                                                         vendor_status: ((result.vendor_id ?? r.vendor_id) ? 'EXISTS' : (result.vendor_status || 'NEW')) as VendorStatus,
+                                                                                        item_status: result.item_status ?? r.item_status,
+                                                                                        missing_items: result.missing_items ?? r.missing_items ?? [],
+                                                                                        items: result.items ?? r.items,
                                                                                     };
                                                                                     if (newStatus === 'VENDOR_MISSING') setTimeout(() => openCreateVendorModal(updated), 150);
                                                                                     return updated;
                                                                                 }));
+                                                                                fetchResumeCounts();
                                                                             } catch { fetchStagedInvoices(); }
                                                                         }}
                                                                         className="p-1 hover:bg-indigo-100 rounded text-indigo-400 hover:text-indigo-700 transition-colors"
-                                                                        title="Revalidate vendor"
+                                                                        title="Revalidate — re-run full vendor, item and voucher validation"
                                                                     >
                                                                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                                                     </button>
@@ -3063,18 +3113,21 @@ const handleRemove = async (fileHash: string) => {
                                                                                     <td className="px-3 py-2 text-center">
 
                                                                                         {item.item_status === 'CREATE ITEM' ? (
-
-                                                                                            <button
-
-                                                                                                onClick={() => openCreateItemModal(row, item)}
-
-                                                                                                className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white border border-amber-600 px-3 py-1 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-sm"
-
-                                                                                            >
-
-                                                                                                Create Item
-
-                                                                                            </button>
+                                                                                            <div className="flex items-center justify-center gap-1.5">
+                                                                                                <button
+                                                                                                    onClick={() => openCreateItemModal(row, item)}
+                                                                                                    className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white border border-amber-600 px-3 py-1 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-sm"
+                                                                                                >
+                                                                                                    Create Item
+                                                                                                </button>
+                                                                                                <button
+                                                                                                    onClick={() => openMatchItemModal(row, item, item.line_index ?? itemIdx)}
+                                                                                                    className="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white border border-indigo-700 px-3 py-1 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-sm flex items-center gap-1"
+                                                                                                >
+                                                                                                    <Icon name="link" className="w-3 h-3" />
+                                                                                                    Match Existing
+                                                                                                </button>
+                                                                                            </div>
 
                                                                                         ) : (
 

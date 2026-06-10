@@ -25,6 +25,16 @@ class CanonicalInvoiceItem(BaseModel):
     raw_hsn: str = ""
     canonical_hsn: str = ""
 
+    # Manual inventory matching fields (preserved across normalization)
+    inventory_item_id: Optional[int] = None
+    inventory_match_strategy: Optional[str] = None
+    inventory_match_level: Optional[str] = None
+    inventory_match_confidence: Optional[float] = None
+    match_source: Optional[str] = None
+    matched_item_name: Optional[str] = None
+    canonical_name: Optional[str] = None
+    item_status: Optional[str] = None
+
 class CanonicalInvoiceSchema(BaseModel):
     """
     [CANONICAL_SCHEMA_LOCKED]

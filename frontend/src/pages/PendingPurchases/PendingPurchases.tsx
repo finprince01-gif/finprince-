@@ -7,9 +7,11 @@ import Edit2 from 'lucide-react/dist/esm/icons/edit-2';
 import Zap from 'lucide-react/dist/esm/icons/zap';
 import AlertTriangle from 'lucide-react/dist/esm/icons/alert-triangle';
 import { CreateNewInventoryItemModal } from '../../components/CreateNewInventoryItemModal';
+import { MatchExistingItemModal } from '../../components/MatchExistingItemModal';
 import CreateNewVendorFullModal from '../../components/CreateNewVendorFullModal';
 import { EditInvoiceModal, type ScanResult } from '../../components/SmartInvoiceUploadModal';
 import { showSuccess, showError } from '../../utils/toast';
+import Icon from '../../components/Icon';
 
 interface PendingPurchasesProps {
   onNavigate?: (page: string, params?: any) => void;
@@ -66,8 +68,10 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
 
   // Modal states
   const [isCreateItemModalOpen, setIsCreateItemModalOpen] = useState(false);
+  const [isMatchItemModalOpen, setIsMatchItemModalOpen] = useState(false);
   const [itemResolvingRow, setItemResolvingRow] = useState<any>(null);
   const [extractedItemData, setExtractedItemData] = useState<any>(null);
+  const [matchingLineIndex, setMatchingLineIndex] = useState<number>(0);
 
   const [isCreateVendorModalOpen, setIsCreateVendorModalOpen] = useState(false);
   const [vendorResolvingRow, setVendorResolvingRow] = useState<any>(null);
@@ -144,7 +148,19 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
     setRevalidating(prev => new Set([...prev, purchase.id]));
     try {
       const res = await httpClient.post<any>(`/api/pending-purchases/${purchase.id}/revalidate/`);
-      showSuccess(`Revalidation complete — Vendor: ${res.vendor_status}, Item: ${res.item_status}`);
+      // Immediately patch the row in state so vendor/item/voucher badges refresh without waiting for a full list reload
+      setPurchases(prev => prev.map(p => {
+        if (p.id !== purchase.id) return p;
+        return {
+          ...p,
+          vendor_status: res.vendor_status ?? p.vendor_status,
+          item_status: res.item_status ?? p.item_status,
+          voucher_status: res.voucher_status ?? p.voucher_status,
+          pending_purchase_status: res.pending_purchase_status ?? p.pending_purchase_status,
+        };
+      }));
+      showSuccess(`Revalidation complete — Vendor: ${res.vendor_status}, Item: ${res.item_status}, Voucher: ${res.voucher_status}`);
+      // Full refresh to ensure list consistency
       await fetchPurchases();
     } catch (error: any) {
       showError(error?.response?.data?.error || 'Revalidation failed');
@@ -213,6 +229,28 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
     setIsCreateItemModalOpen(true);
   };
 
+  const openMatchItemModal = (purchase: any, item: any, lineIdx: number = 0) => {
+    const name = item.item_name || item.name || item.description || '';
+    const hsn = item.hsn_code || item.hsn || item.hsn_sac || item.hsnSacCode || '';
+    const rate = item.rate || item.unit_price || item.price || '0.00';
+    const uom = item.uom || item.unit || 'nos';
+    const desc = item.description || name || '';
+
+    const prefData = {
+      item_name: name,
+      item_code: item.item_code || '',
+      hsn_code: hsn,
+      description: desc,
+      rate: rate,
+      uom: uom,
+      gst_rate: item.gst_rate || item.igst_rate || '',
+    };
+    setExtractedItemData(prefData);
+    setMatchingLineIndex(lineIdx);
+    setItemResolvingRow(purchase);
+    setIsMatchItemModalOpen(true);
+  };
+
   const openCreateVendorModal = (purchase: any) => {
     setVendorResolvingRow(purchase);
     setIsCreateVendorModalOpen(true);
@@ -258,6 +296,28 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
         />
       )}
 
+      {isMatchItemModalOpen && itemResolvingRow && (
+        <MatchExistingItemModal
+          stagingId={itemResolvingRow.source_scan_row_id}
+          lineIndex={matchingLineIndex}
+          extractedItem={extractedItemData}
+          onClose={() => {
+            setIsMatchItemModalOpen(false);
+            setItemResolvingRow(null);
+          }}
+          onItemMatched={async () => {
+            const rowToRevalidate = itemResolvingRow;
+            setIsMatchItemModalOpen(false);
+            setItemResolvingRow(null);
+            if (rowToRevalidate) {
+              await revalidatePurchase(rowToRevalidate);
+            } else {
+              await fetchPurchases();
+            }
+          }}
+        />
+      )}
+
       {/* Create Vendor Modal */}
       {isCreateVendorModalOpen && vendorResolvingRow && (
         <CreateNewVendorFullModal
@@ -278,8 +338,8 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
             const supplierItems = rawItems.map((itm: any) => ({
               hsnSacCode: itm.hsn_code || itm.hsn || itm.hsn_sac || itm.hsnSacCode || '',
               itemName: itm.item_name || itm.name || itm.description || '',
-              supplierItemName: itm.item_name || itm.name || itm.description || '',
-              supplierItemCode: vendorName, // Invoice Vendor Name -> Supplier Code/Supplier Reference
+              supplierItemName: itm.supplierItemName || itm.item_name || itm.name || itm.description || '',
+              supplierItemCode: itm.supplierItemCode || itm.item_code || itm.code || itm.itemCode || '',
               itemCode: itm.item_code || itm.code || itm.itemCode || '',
             }));
             
@@ -317,8 +377,13 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
           voucherType="Purchase"
           onClose={() => setEditingRow(null)}
           onSave={async (_updatedData, _reval) => {
+            const rowToRevalidate = editingRow.pendingPurchase;
             setEditingRow(null);
-            await fetchPurchases();
+            if (rowToRevalidate) {
+                await revalidatePurchase(rowToRevalidate);
+            } else {
+                await fetchPurchases();
+            }
           }}
         />
       )}
@@ -667,12 +732,21 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
                                         </td>
                                         <td className="px-3 py-2 text-center">
                                           {(item.item_status === 'CREATE ITEM' || item.item_status === 'ITEM_STATUS_CREATE' || !item.item_status) ? (
-                                            <button
-                                              onClick={() => openCreateItemModal(purchase, item)}
-                                              className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white border border-amber-600 px-3 py-1 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-sm"
-                                            >
-                                              Create Item
-                                            </button>
+                                            <div className="flex items-center justify-center gap-1.5">
+                                              <button
+                                                onClick={() => openCreateItemModal(purchase, item)}
+                                                className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white border border-amber-600 px-2.5 py-1 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-sm whitespace-nowrap"
+                                              >
+                                                Create Item
+                                              </button>
+                                              <button
+                                                onClick={() => openMatchItemModal(purchase, item, item.line_index ?? itemIdx)}
+                                                className="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white border border-indigo-700 px-2.5 py-1 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-sm whitespace-nowrap flex items-center gap-1"
+                                              >
+                                                <Icon name="link" className="w-3 h-3" />
+                                                Match Existing
+                                              </button>
+                                            </div>
                                           ) : (
                                             <span className="text-gray-400">—</span>
                                           )}

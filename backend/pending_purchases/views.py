@@ -63,7 +63,11 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
                 'gstin': staging.gstin,
                 'branch': staging.branch,
                 'validation_status': staging.validation_status,
+                'status': staging.status,
+                'validation_message': staging.validation_message,
                 'vendor_id': staging.vendor_id,
+                'vendor_name': getattr(staging, 'vendor_name', pp.vendor_name),
+                'vendor_status': getattr(staging, 'vendor_status', pp.vendor_status),
                 'voucher_id': staging.voucher_id,
             }
             return Response({'staging_row': staging_data, 'pending_purchase': PendingPurchaseSerializer(pp).data})
@@ -103,7 +107,9 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
             staging = InvoiceTempOCR.objects.get(id=pp.source_scan_row_id)
 
             from ocr_pipeline.pipeline import validate_and_process
-            result = validate_and_process(staging, auto_save=False)
+            # Pass auto_save=True so that if the pending purchase is fully resolved,
+            # it automatically proceeds to create the Voucher.
+            result = validate_and_process(staging, auto_save=True)
 
             logger.info(
                 f"[PENDING_REVALIDATE_RESULT] id={pp.id} result={result} "
@@ -122,6 +128,41 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
             })
         except Exception as e:
             logger.exception(f"[PENDING_REVALIDATE_ERROR] pk={pk} error={e}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], url_path='match-item')
+    def match_item(self, request, pk=None):
+        """
+        Direct inventory match for a pending purchase staging item.
+        Delegates to OCRStagingMatchItemView — NO vendor required.
+        Body: { inventory_item_id, item_name, line_index }
+        """
+        try:
+            pp = self.get_object()
+            from ocr_pipeline.models import InvoiceTempOCR
+            staging = InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).first()
+            if not staging:
+                return Response(
+                    {'error': f'Staging record {pp.source_scan_row_id} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Delegate to OCRStagingMatchItemView using the staging record id
+            from ocr_pipeline.views import OCRStagingMatchItemView
+            match_view = OCRStagingMatchItemView()
+            match_view.request = request
+            result = match_view.post(request, file_hash=str(staging.id))
+
+            # After match, run validation pipeline to recompute all statuses
+            if getattr(result, 'status_code', 200) == 200:
+                from ocr_pipeline.pipeline import validate_and_process
+                staging.refresh_from_db()
+                validate_and_process(staging, auto_save=False)
+                pp.refresh_from_db()
+
+            return result
+        except Exception as e:
+            logger.exception(f"[PENDING_MATCH_ITEM_ERROR] pk={pk} error={e}")
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'])

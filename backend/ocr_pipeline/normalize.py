@@ -755,7 +755,7 @@ def get_normalized_items(invoice: Any, tenant_id: str = None) -> List[Dict[str, 
     """
     items_source = []
     if isinstance(invoice, dict):
-        items_source = invoice.get('items') or invoice.get('sections', {}).get('items') or []
+        items_source = invoice.get('sections', {}).get('items') or invoice.get('items') or invoice.get('line_items') or []
     
     normalized_items = []
     for item in items_source:
@@ -864,7 +864,7 @@ def get_normalized_items(invoice: Any, tenant_id: str = None) -> List[Dict[str, 
             "igst": ig_amt,
             "cgst": cg_amt,
             "sgst": sg_amt,
-            "total_amount": normalize_amount(item.get("total_amount") or item.get("Invoice Value")),
+            "total_amount": normalize_amount(item.get("total_amount") or item.get("amount") or item.get("Invoice Value")),
             "igst_rate": ig_rate,
             "cgst_rate": cg_rate,
             "sgst_rate": sg_rate,
@@ -1012,7 +1012,17 @@ def get_canonical_export_record(invoice: Any, tenant_id: str = None) -> Dict[str
                 raw_item_name=str(item.get("raw_item_name", "")),
                 canonical_item_name=str(item.get("canonical_item_name", "")),
                 raw_hsn=str(item.get("raw_hsn", "")),
-                canonical_hsn=str(item.get("canonical_hsn", ""))
+                canonical_hsn=str(item.get("canonical_hsn", "")),
+                
+                # Manual matching fields
+                inventory_item_id=item.get("inventory_item_id"),
+                inventory_match_strategy=item.get("inventory_match_strategy"),
+                inventory_match_level=item.get("inventory_match_level"),
+                inventory_match_confidence=item.get("inventory_match_confidence"),
+                match_source=item.get("match_source"),
+                matched_item_name=item.get("matched_item_name"),
+                canonical_name=item.get("canonical_name"),
+                item_status=item.get("item_status"),
             )
             canonical_items.append(c_item)
         except Exception as ie:

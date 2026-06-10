@@ -16,29 +16,6 @@ class CriticalPipelineError(ValueError):
     """Exception raised when critical pipeline contracts or integrity rules are violated."""
     pass
 
-class ItemStatus(str):
-    def __new__(cls, val, alternate_val=None):
-        obj = super().__new__(cls, val)
-        obj.alternate_val = alternate_val
-        return obj
-    def __eq__(self, other):
-        self_is_existing = (str(self) in ("ALREADY EXIST", "ALREADY_EXIST", "ITEM_STATUS_EXISTING") or 
-                            self.alternate_val in ("ALREADY EXIST", "ALREADY_EXIST", "ITEM_STATUS_EXISTING"))
-        self_is_create = (str(self) in ("CREATE ITEM", "CREATE_ITEM", "ITEM_STATUS_CREATE") or 
-                          self.alternate_val in ("CREATE ITEM", "CREATE_ITEM", "ITEM_STATUS_CREATE"))
-        
-        other_str = str(other)
-        if self_is_existing and other_str in ("ALREADY EXIST", "ALREADY_EXIST", "ITEM_STATUS_EXISTING"):
-            return True
-        if self_is_create and other_str in ("CREATE ITEM", "CREATE_ITEM", "ITEM_STATUS_CREATE"):
-            return True
-            
-        return super().__eq__(other)
-    def __ne__(self, other):
-        return not self.__eq__(other)
-    def __hash__(self):
-        return super().__hash__()
-
 class InventoryItemValidationService:
     @staticmethod
     def clean_string(val: Any) -> str:
@@ -298,8 +275,58 @@ class InventoryItemValidationService:
             computed_score = 0.0
             computed_strategy = "CREATE_ITEM"
             computed_match_level = "New"
-            match_source = None
-            computed_status = None
+
+            # ── MANUAL MATCH BYPASS ──────────────────────────────────────────────────
+            # If a user has manually linked this item to an inventory master record,
+            # preserve their choice unconditionally. Vendor mapping is NOT required.
+            if item.get("match_source") == "MANUAL_MATCH" and item.get("inventory_item_id"):
+                manual_inv_id = item["inventory_item_id"]
+                manual_name = item.get("matched_item_name") or item.get("canonical_name") or ocr_name_raw
+                try:
+                    manual_db_item = InventoryItem.objects.filter(id=int(manual_inv_id), tenant_id=tenant_id).first()
+                except Exception:
+                    manual_db_item = None
+                if manual_db_item:
+                    logger.info(
+                        f"[MANUAL_MATCH_PRESERVED] item='{ocr_name_raw}' → "
+                        f"inventory_item_id={manual_inv_id} name='{manual_db_item.item_name}'"
+                    )
+                    item_dto = {
+                        "line_index": item.get("line_index", idx),
+                        "item_name": ocr_name_raw or "—",
+                        "item_code": item.get("item_code") or item.get("itemCode") or "",
+                        "description": item.get("description") or ocr_name_raw or "",
+                        "hsn_code": item.get("hsn_code") or item.get("hsn_sac") or item.get("hsnSac") or "",
+                        "qty": item.get("qty") or item.get("quantity") or 0.0,
+                        "uom": item.get("uom") or "nos",
+                        "rate": item.get("rate") or item.get("itemRate") or 0.0,
+                        "cgst_rate": item.get("cgst_rate") or item.get("cgst") or 0.0,
+                        "sgst_rate": item.get("sgst_rate") or item.get("sgst") or 0.0,
+                        "igst_rate": item.get("igst_rate") or item.get("igst") or 0.0,
+                        "cess_rate": item.get("cess_rate") or item.get("cess") or 0.0,
+                        "computed_gst_rate": item.get("computed_gst_rate") or item.get("gst_rate") or 0.0,
+                        "taxable_value": item.get("taxable_value") or item.get("taxableValue") or item.get("amount") or 0.0,
+                        "item_status": "ALREADY EXIST",
+                        "inventory_item_id": manual_db_item.id,
+                        "inventory_match_level": "MANUAL_MATCH",
+                        "canonical_name": manual_db_item.item_name,
+                        "matched_item_name": manual_db_item.item_name,
+                        "match_source": "MANUAL_MATCH",
+                        "inventory_match_confidence": 100.0,
+                        "inventory_match_strategy": "MANUAL_MATCH",
+                        "normalized_item_name": ocr_name_norm,
+                    }
+                    for k, v in item.items():
+                        if k not in item_dto:
+                            item_dto[k] = v
+                    items_dto.append(item_dto)
+                    continue  # Skip waterfall for this item
+                else:
+                    logger.warning(
+                        f"[MANUAL_MATCH_ITEM_MISSING] inventory_item_id={manual_inv_id} "
+                        f"not found in tenant={tenant_id}. Falling back to waterfall."
+                    )
+            # ── END MANUAL MATCH BYPASS ──────────────────────────────────────────────
 
             # --- LEVEL 1: PO History Match ---
             hist_best_match = None
@@ -362,8 +389,6 @@ class InventoryItemValidationService:
                 computed_score = hist_best_score
                 computed_strategy = hist_best_strategy
                 computed_match_level = "History"
-                computed_status = ItemStatus("ALREADY EXIST", "ITEM_STATUS_EXISTING")
-                match_source = "VENDOR_PO_HISTORY"
                 
             # --- LEVEL 2: Vendor Product/Service Mapping Match ---
             if not computed_match:
@@ -428,8 +453,6 @@ class InventoryItemValidationService:
                     computed_score = map_best_score
                     computed_strategy = map_best_strategy
                     computed_match_level = "Mapping"
-                    computed_status = ItemStatus("ALREADY EXIST", "ITEM_STATUS_EXISTING")
-                    match_source = "VENDOR_PRODUCT_MAPPING"
             
             # --- LEVEL 3: Inventory Master Match ---
             if not computed_match:
@@ -461,18 +484,16 @@ class InventoryItemValidationService:
                     computed_score = master_best_score
                     computed_strategy = master_best_strategy
                     computed_match_level = "Master"
-                    computed_status = ItemStatus("ALREADY EXIST", "ITEM_STATUS_EXISTING")
-                    match_source = "INVENTORY_MASTER"
             
             if computed_match:
+                computed_status = "ALREADY EXIST"
                 computed_matched_id = computed_match.id
             else:
-                computed_status = ItemStatus("CREATE ITEM", "ITEM_STATUS_CREATE")
+                computed_status = "CREATE ITEM"
                 computed_matched_id = None
                 computed_strategy = "CREATE_ITEM"
                 computed_score = 0.0
                 computed_match_level = "New"
-                match_source = "CREATE_ITEM"
 
             # Phase 4: Freeze validation output preservation
             existing_match_id = item.get("inventory_item_id")
@@ -508,18 +529,8 @@ class InventoryItemValidationService:
                 best_strategy = existing_strategy
                 best_score = float(existing_confidence or 100.0)
                 canonical_name = existing_canonical or canonical_name
-                status = ItemStatus("ALREADY EXIST", "ITEM_STATUS_EXISTING") if matched_id else ItemStatus("CREATE ITEM", "ITEM_STATUS_CREATE")
+                status = "ALREADY EXIST" if matched_id else "CREATE ITEM"
                 best_match_level = existing_match_level or computed_match_level
-                
-                # Derive match source from frozen level
-                if best_match_level == "History":
-                    match_source = "VENDOR_PO_HISTORY"
-                elif best_match_level == "Mapping":
-                    match_source = "VENDOR_PRODUCT_MAPPING"
-                elif best_match_level == "Master":
-                    match_source = "INVENTORY_MASTER"
-                else:
-                    match_source = "CREATE_ITEM"
             else:
                 # Non-frozen path
                 matched_id = computed_matched_id
@@ -562,7 +573,6 @@ class InventoryItemValidationService:
                 "computed_gst_rate": item.get("computed_gst_rate") or item.get("gstRate") or item.get("gst_rate") or 0.0,
                 "taxable_value": item.get("taxable_value") or item.get("taxableValue") or item.get("amount") or 0.0,
                 "item_status": status,
-                "match_source": match_source,
                 "inventory_item_id": matched_id,
                 "inventory_match_level": best_match_level,
                 
@@ -624,14 +634,14 @@ class InventoryItemValidationService:
         if not items_dto:
             voucher_status = None
         else:
-            has_already_exist = any(i.get("item_status") in ("ALREADY EXIST", "ALREADY_EXIST", "ITEM_STATUS_EXISTING") for i in items_dto)
-            has_create_item = any(i.get("item_status") in ("CREATE ITEM", "CREATE_ITEM", "ITEM_STATUS_CREATE") for i in items_dto)
+            has_already_exist = any(i.get("item_status") in ("ALREADY EXIST", "ALREADY_EXIST") for i in items_dto)
+            has_create_item = any(i.get("item_status") in ("CREATE ITEM", "CREATE_ITEM") for i in items_dto)
             if has_already_exist and has_create_item:
-                voucher_status = ItemStatus("PARTIAL", "ITEM_STATUS_PARTIAL")
+                voucher_status = "PARTIAL"
             elif has_create_item:
-                voucher_status = ItemStatus("CREATE ITEM", "ITEM_STATUS_CREATE")
+                voucher_status = "CREATE ITEM"
             else:
-                voucher_status = ItemStatus("ALREADY EXIST", "ITEM_STATUS_EXISTING")
+                voucher_status = "ALREADY EXIST"
         
         logger.info(
             f"[INVENTORY_VAL_COMPLETE] tenant_id={tenant_id} "

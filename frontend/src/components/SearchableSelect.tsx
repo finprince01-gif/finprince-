@@ -102,7 +102,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
             <div className="relative">
                 <input
                     type="text"
-                    className={`w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:ring-indigo-500 focus:border-indigo-500 pr-10 ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-slate-900 bg-white focus:ring-indigo-500 focus:border-indigo-500 pr-10 ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     value={searchValue}
                     disabled={disabled}
                     onChange={(e) => {
