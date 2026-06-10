@@ -2931,7 +2931,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                     </span>
                                                                 ) : row.validationStatus === "VOUCHER_CREATED" ? (
                                                                     <span className="bg-emerald-600 text-white px-2 py-1 rounded">✅ Saved</span>
-                                                                ) : (row.validationStatus === "DUPLICATE" || row.validationStatus === "DUPLICATE_IN_BATCH" || row.validationStatus === "DUPLICATE_INVOICE") ? (
+                                                                ) : (row.validationStatus === "DUPLICATE" || row.validationStatus === "DUPLICATE_IN_BATCH") ? (
                                                                     <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">Already Exist</span>
                                                                 ) : (effectiveVendorId || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_TO_SAVE', 'PENDING_PURCHASE'].includes(row.validationStatus)) ? (
                                                                     <span className="bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 rounded">Need to Save</span>
@@ -3018,83 +3018,8 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                         </svg>
                                                                     </button>
                                                                 </div>
-                                                            ) : (
-                                                                <span className="text-gray-300">—</span>
-                                                            )}
-                                                        </td>
-                                                        {/* Voucher Status */}
-                                                        <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
-                                                            {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
-                                                                <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
-                                                                    <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
-                                                                </span>
-                                                            ) : row.validationStatus === "VOUCHER_CREATED" ? (
-                                                                <span className="bg-emerald-600 text-white px-2 py-1 rounded">✅ Saved</span>
-                                                            ) : (row.validationStatus === "DUPLICATE" || row.validationStatus === "DUPLICATE_IN_BATCH" || row.validationStatus === "DUPLICATE_INVOICE") ? (
-                                                                <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">Already Exist</span>
-                                                            ) : (effectiveVendorId || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_TO_SAVE', 'PENDING_PURCHASE'].includes(row.validationStatus)) ? (
-                                                                <span className="bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 rounded">Need to Save</span>
-                                                            ) : (['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'GSTIN_CONFLICT', 'CREATE_VENDOR'].includes(row.validationStatus)) ? (
-                                                                <span className="bg-orange-100 text-orange-700 border border-orange-200 px-2 py-1 rounded">Create Vendor First</span>
-                                                            ) : row.validationStatus === "EXTRACTION_FAILED" ? (
-                                                                <span className="bg-red-100 text-red-700 border border-red-200 px-2 py-1 rounded">Failed</span>
-                                                            ) : (
-                                                                <span className="bg-amber-50 text-amber-600 border border-amber-200 px-2 py-1 rounded">Pending</span>
-                                                            )}
-                                                        </td>
-                                                        <td className="px-2 py-3 text-center">
-                                                            <div
-                                                                className="flex items-center justify-center gap-1"
-                                                                style={{
-                                                                    opacity: (['PENDING', 'processing', 'PROCESSING', 'SCANNING', 'EXTRACTING', 'scanning', 'resolving', 'validating'].includes(row.validationStatus)) ? 0.3 : 1,
-                                                                    pointerEvents: (['PENDING', 'processing', 'PROCESSING', 'SCANNING', 'EXTRACTING', 'scanning', 'resolving', 'validating'].includes(row.validationStatus)) ? 'none' : 'auto'
-                                                                }}
-                                                            >
-                                                                {!hasEffectiveMatch && ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND'].includes(row.validationStatus) && (
-                                                                    <button onClick={(e) => {
-                                                                        console.log('[DIAGNOSTIC][CREATE_VENDOR] button onClick fired');
-                                                                        openCreateVendorModal(row);
-                                                                    }} className="px-2 py-1 bg-orange-500 text-white rounded text-[10px] font-bold hover:bg-orange-600 uppercase border-2 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]">
-                                                                        CREATE VENDOR
-                                                                    </button>
-                                                                )}
-                                                                {!['PENDING', 'VOUCHER_CREATED'].includes(row.validationStatus) && (
-                                                                    <button
-                                                                        onClick={async () => {
-                                                                            setScanResults(prev => prev.map(r => r.file_hash === row.file_hash ? { ...r, validationStatus: 'PENDING' } : r));
-                                                                            try {
-                                                                                const result: any = await httpClient.patch(`/api/ocr-staging/${row.file_hash}/`, { extracted_data: row.extracted_data });
-                                                                                setScanResults(prev => prev.map(r => {
-                                                                                    if (r.file_hash !== row.file_hash) return r;
-                                                                                    let newStatus: ValidationStatus = 'VENDOR_MISSING';
-                                                                                    const s = result.status || '';
-                                                                                    if (s === 'READY' || s === 'found' || s === 'FOUND') newStatus = 'READY';
-                                                                                    else if (s === 'DUPLICATE' || s === 'duplicate') newStatus = 'DUPLICATE';
-                                                                                    else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found' || s === 'CREATE_VENDOR') newStatus = 'VENDOR_MISSING';
-                                                                                    else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') newStatus = 'GSTIN_CONFLICT';
-                                                                                    const updated = {
-                                                                                        ...r,
-                                                                                        validationStatus: newStatus,
-                                                                                        vendor_id: result.vendor_id ?? r.vendor_id,
-                                                                                        vendor_name: result.vendor_name || r.vendor_name,
-                                                                                        vendor_status: ((result.vendor_id ?? r.vendor_id) ? 'EXISTS' : (result.vendor_status || 'NEW')) as VendorStatus,
-                                                                                        item_status: result.item_status ?? r.item_status,
-                                                                                        missing_items: result.missing_items ?? r.missing_items ?? [],
-                                                                                        items: result.items ?? r.items,
-                                                                                    };
-                                                                                    if (newStatus === 'VENDOR_MISSING') setTimeout(() => openCreateVendorModal(updated), 150);
-                                                                                    return updated;
-                                                                                }));
-                                                                                fetchResumeCounts();
-                                                                            } catch { fetchStagedInvoices(); }
-                                                                        }}
-                                                                        className="p-1 hover:bg-indigo-100 rounded text-indigo-400 hover:text-indigo-700 transition-colors"
-                                                                        title="Revalidate — re-run full vendor, item and voucher validation"
-                                                                    >
-                                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                                                                    </button>
-                                                                </div>
                                                             </td>
+
                                                         </tr>
 
                                                         {expandedRows.has(row.id) && (
