@@ -386,7 +386,7 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
             AdvanceAllocation.objects.create(
                 tenant_id=tenant_id,
                 transaction=instance,
-                type='payment_single',
+                type='payment_single_amount_only',
                 reference_id='ADVANCE',
                 reference_number=v_num,
                 reference_type='ADVANCE',
@@ -477,6 +477,8 @@ def get_advances_by_ledger(ledger_id=None, tenant_id=None, category=None):
     # ── Source 1: AdvanceAllocation (Voucher-based and Portal-based advances) ──
     payment_qs = AdvanceAllocation.objects.filter(
         amount__gt=0
+    ).exclude(
+        type__in=['receipt_single_amount_only', 'payment_single_amount_only']
     ).select_related('pay_to_ledger', 'pay_from_ledger')
     
     if ledger_id:
@@ -503,6 +505,8 @@ def get_advances_by_ledger(ledger_id=None, tenant_id=None, category=None):
     receipt_qs = PendingTransaction.objects.filter(
         is_advance=True,
         amount__gt=0
+    ).exclude(
+        type__in=['receipt_single_amount_only', 'payment_single_amount_only']
     ).select_related('pay_from_ledger', 'pay_to_ledger')
     
     if ledger_id:

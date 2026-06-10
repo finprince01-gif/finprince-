@@ -171,7 +171,7 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
             AdvanceAllocation.objects.create(
                 tenant_id=tenant_id,
                 transaction=instance,
-                type='receipt_single',
+                type='receipt_single_amount_only',
                 reference_id='ADVANCE',
                 reference_number=v_num,
                 reference_type='ADVANCE',

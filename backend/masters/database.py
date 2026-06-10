@@ -180,12 +180,68 @@ def get_hierarchy_by_id(hierarchy_id):
     return MasterHierarchyRaw.objects.get(id=hierarchy_id)
 
 
+def ensure_default_vouchers(tenant_id, voucher_type=None):
+    """
+    Ensure default voucher configurations exist for the tenant.
+    If voucher_type is specified, only ensures for that type.
+    If voucher_type is None, ensures for all 9 types.
+    """
+    from django.utils import timezone
+    
+    # Calculate current Indian financial year suffix (YY-YY)
+    now = timezone.now()
+    year = now.year
+    month = now.month
+    fy_start = year if month >= 4 else year - 1
+    fy_end = fy_start + 1
+    fy = f"{str(fy_start)[-2:]}-{str(fy_end)[-2:]}"
+    
+    defaults_map = {
+        'sales':      (MasterVoucherSales,       'Sales Voucher',    'SAL'),
+        'creditnote': (MasterVoucherCreditNote,  'Credit Note',      'CRN'),
+        'receipts':   (MasterVoucherReceipts,    'Receipt Voucher',  'REC'),
+        'purchase':   (MasterVoucherPurchases,   'Purchase Voucher', 'PUR'),
+        'debitnote':  (MasterVoucherDebitNote,   'Debit Note',       'DBN'),
+        'payments':   (MasterVoucherPayments,    'Payment Voucher',  'PAY'),
+        'expenses':   (MasterVoucherExpenses,    'Expense Voucher',  'EXP'),
+        'journal':    (MasterVoucherJournal,     'Journal Voucher',  'JRN'),
+        'contra':     (MasterVoucherContra,      'Contra Voucher',   'CON'),
+    }
+    
+    types_to_check = [voucher_type] if voucher_type else list(defaults_map.keys())
+    
+    for v_type in types_to_check:
+        if v_type not in defaults_map:
+            continue
+        Model, voucher_name, prefix = defaults_map[v_type]
+        
+        # Check if any active configuration exists for this tenant
+        exists = Model.objects.filter(tenant_id=tenant_id, is_active=True).exists()
+        if not exists:
+            # Also check if it exists but is inactive, so we don't duplicate by name
+            name_exists = Model.objects.filter(tenant_id=tenant_id, voucher_name=voucher_name).exists()
+            if not name_exists:
+                Model.objects.create(
+                    tenant_id=tenant_id,
+                    voucher_name=voucher_name,
+                    prefix=prefix,
+                    suffix=fy,
+                    start_from=1,
+                    current_number=None,
+                    required_digits=4,
+                    enable_auto_numbering=True,
+                    is_active=True,
+                )
+                logger.info(f"Auto-seeded '{voucher_name}' for tenant {tenant_id}")
+
+
 # ============================================================================
 # VOUCHER CONFIGURATION QUERIES
 # ============================================================================
 
 def get_all_voucher_configurations(tenant_id, voucher_type='sales'):
     """Get all voucher configurations for a tenant and voucher type."""
+    ensure_default_vouchers(tenant_id, voucher_type)
     model = MODEL_MAP.get(voucher_type, MasterVoucherSales)
     return model.objects.filter(tenant_id=tenant_id)  # type: ignore
 
