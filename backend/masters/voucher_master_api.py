@@ -56,6 +56,24 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
             if qs is None:
                 return models.QuerySet().none()
                 
+            # Map model class name to voucher_type keyword
+            model_class_to_type = {
+                'MasterVoucherSales': 'sales',
+                'MasterVoucherCreditNote': 'creditnote',
+                'MasterVoucherReceipts': 'receipts',
+                'MasterVoucherPurchases': 'purchase',
+                'MasterVoucherDebitNote': 'debitnote',
+                'MasterVoucherPayments': 'payments',
+                'MasterVoucherExpenses': 'expenses',
+                'MasterVoucherJournal': 'journal',
+                'MasterVoucherContra': 'contra',
+            }
+            model_name = qs.model.__name__
+            v_type = model_class_to_type.get(model_name)
+            if v_type:
+                from .database import ensure_default_vouchers
+                ensure_default_vouchers(tenant_id, v_type)
+
             queryset = qs.filter(tenant_id=tenant_id)
             if self.action == 'list':
                 return queryset.filter(is_active=True)
