@@ -9,15 +9,24 @@ import { httpClient } from '../services/httpClient';
 import { showError, showSuccess, showInfo } from '../utils/toast';
 import { BILLING_CURRENCIES } from '../constants/customerPortalConstants';
 import { ChevronDown } from 'lucide-react';
+import { Country, State, City } from 'country-state-city';
 
 /* ─── Types ──────────────────────────────────────────────── */
 interface PlaceOfBusiness {
     id: string;
     referenceName: string;
     address: string;
+    addressLine1: string;
+    addressLine2: string;
+    addressLine3: string;
     contactPerson: string;
     email: string;
     contactNumber: string;
+    pincode: string;
+    city: string;
+    state: string;
+    country: string;
+    isExpanded?: boolean;
 }
 
 interface GSTRecord {
@@ -203,10 +212,10 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
             if (prefilledData.email) setVendorEmail(prefilledData.email);
             if (prefilledData.contact_no) setContactNo(prefilledData.contact_no);
             if (prefilledData.vendor_category) setVendorCategory(prefilledData.vendor_category);
+            if (prefilledData.tcs_applicable !== undefined) setTcsApplicable(!!prefilledData.tcs_applicable);
 
             if (prefilledData.gstin) {
                 const address = prefilledData.address || '';
-                const branchName = prefilledData.branch || 'Main Branch';
                 const state = prefilledData.state || '';
 
                 setGstRecords([{
@@ -218,7 +227,7 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                     isExpanded: true,
                     placesOfBusiness: [{
                         id: genId(),
-                        referenceName: branchName,
+                        referenceName: '',
                         address: address,
                         contactPerson: prefilledData.contact_person || '',
                         email: prefilledData.email || '',
@@ -233,8 +242,8 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                     hsnSacCode: it.hsnSac || it.hsnSacCode || '',
                     itemCode: it.supplierItemCode || it.itemCode || '',
                     itemName: it.supplierItemName || it.itemName || '',
-                    supplierItemCode: it.supplierItemCode || '',
-                    supplierItemName: it.supplierItemName || ''
+                    supplierItemCode: '',
+                    supplierItemName: ''
                 }));
                 setItems(itemsToSet);
             }
@@ -315,6 +324,44 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
     const removeGstRecord = (id: string) =>
         setGstRecords(prev => prev.filter(r => r.id !== id));
 
+    const [loadingGstFetch, setLoadingGstFetch] = useState(false);
+
+    const handleFetchGstDetails = async (id: string) => {
+        setLoadingGstFetch(true);
+        // Simulate API call
+        setTimeout(() => {
+            setGstRecords(prev => prev.map(r => {
+                if (r.id === id) {
+                    return {
+                        ...r,
+                        tradeName: 'Mock Trade Name Ltd',
+                        legalName: 'Mock Legal Name Ltd',
+                        placesOfBusiness: [
+                            {
+                                id: Date.now().toString() + '_1',
+                                referenceName: 'Main Branch',
+                                address: '123, Business Park, Tech City, India',
+                                contactPerson: 'John Doe',
+                                email: 'john@example.com',
+                                contactNumber: '9876543210'
+                            },
+                            {
+                                id: Date.now().toString() + '_2',
+                                referenceName: 'Warehouse 1',
+                                address: '456, Industrial Area, Tech City, India',
+                                contactPerson: 'Jane Smith',
+                                email: 'jane@example.com',
+                                contactNumber: '9876541111'
+                            }
+                        ]
+                    };
+                }
+                return r;
+            }));
+            setLoadingGstFetch(false);
+        }, 1000);
+    };
+
     const updateGstField = (id: string, field: keyof GSTRecord, value: any) =>
         setGstRecords(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
 
@@ -323,7 +370,28 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
 
     const addPob = (gstId: string) => setGstRecords(prev => prev.map(r =>
         r.id === gstId
-            ? { ...r, placesOfBusiness: [...r.placesOfBusiness, { id: genId(), referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '' }] }
+            ? {
+                ...r,
+                placesOfBusiness: [
+                    ...r.placesOfBusiness,
+                    {
+                        id: genId(),
+                        referenceName: '',
+                        address: '',
+                        addressLine1: '',
+                        addressLine2: '',
+                        addressLine3: '',
+                        contactPerson: '',
+                        email: '',
+                        contactNumber: '',
+                        pincode: '',
+                        city: '',
+                        state: '',
+                        country: '',
+                        isExpanded: true
+                    }
+                ]
+            }
             : r,
     ));
 
@@ -333,12 +401,26 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
             : r,
     ));
 
-    const updatePob = (gstId: string, pobId: string, field: keyof PlaceOfBusiness, value: string) =>
+    const updatePob = (gstId: string, pobId: string, field: keyof PlaceOfBusiness, value: any) =>
         setGstRecords(prev => prev.map(r =>
             r.id === gstId
                 ? { ...r, placesOfBusiness: r.placesOfBusiness.map(p => p.id === pobId ? { ...p, [field]: value } : p) }
                 : r,
         ));
+
+    const togglePobExpand = (recordId: string, pobId: string) => {
+        setGstRecords(prev => prev.map(r => {
+            if (r.id === recordId) {
+                return {
+                    ...r,
+                    placesOfBusiness: r.placesOfBusiness.map(p =>
+                        p.id === pobId ? { ...p, isExpanded: !p.isExpanded } : p
+                    )
+                };
+            }
+            return r;
+        }));
+    };
 
     /* ─── Product helpers ──────────────────── */
     const addItem = () => setItems(prev => [...prev, {
@@ -514,7 +596,7 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
 
                     const branches = gst.placesOfBusiness.length > 0
                         ? gst.placesOfBusiness
-                        : [{ referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '' }];
+                        : [{ referenceName: '', address: '', addressLine1: '', addressLine2: '', addressLine3: '', contactPerson: '', email: '', contactNumber: '', pincode: '', city: '', state: '', country: '' } as PlaceOfBusiness];
 
                     for (let branchIndex = 0; branchIndex < branches.length; branchIndex++) {
                         const branch = branches[branchIndex];
@@ -526,10 +608,17 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                             legal_name: gst.legalName || vendorName || 'N/A',
                             trade_name: gst.tradeName || gst.legalName || vendorName || 'N/A',
                             reference_name: resolvedReferenceName,
-                            branch_address: branch.address || '',
-                            branch_contact_person: (branch as any).contactPerson || '',
+                            branch_address: [branch.addressLine1, branch.addressLine2, branch.addressLine3].filter(Boolean).join(', ') || branch.address || '',
+                            branch_address_line1: branch.addressLine1 || '',
+                            branch_address_line2: branch.addressLine2 || '',
+                            branch_address_line3: branch.addressLine3 || '',
+                            branch_contact_person: branch.contactPerson || '',
                             branch_email: branch.email || '',
-                            branch_contact_no: (branch as any).contactNumber || '',
+                            branch_contact_no: branch.contactNumber || '',
+                            branch_pincode: branch.pincode || '',
+                            branch_city: branch.city || '',
+                            branch_state: branch.state || '',
+                            branch_country: branch.country || ''
                         };
                         const existing = existingGstList.find(g =>
                             (g.gstin || '') === gstPayload.gstin && (g.reference_name || '') === resolvedReferenceName,
@@ -741,6 +830,18 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                         </button>
                     ))}
                 </div>
+
+                <div className="flex items-center gap-3">
+                    <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">GST TCS Applicable</span>
+                    {[true, false].map(v => (
+                        <button key={String(v)} type="button" onClick={() => setTcsApplicable(v)}
+                            className={`px-5 py-1.5 text-sm border-2 rounded transition-colors ${tcsApplicable === v
+                                ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-semibold'
+                                : 'border-gray-300 text-gray-600 hover:border-gray-400'}`}>
+                            {v ? 'Yes' : 'No'}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {isAlsoCustomer && (
@@ -822,10 +923,10 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
     const renderGST = () => (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
-                <p className={sectionTitle + ' mb-0 border-0'}>GST Details</p>
+                <p className={sectionTitle + ' mb-0 border-0'}>Branch details</p>
                 <button type="button" onClick={addGstRecord}
-                    className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 border border-indigo-300 rounded px-3 py-1.5 transition-colors">
-                    + Add GSTIN
+                    className="flex items-center gap-1 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded px-4 py-2 transition-colors uppercase tracking-wider">
+                    + ADD BRANCH RECORD
                 </button>
             </div>
             {gstRecords.map((rec, idx) => (
@@ -834,7 +935,7 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                         className="flex items-center justify-between px-4 py-3 bg-gray-50 cursor-pointer"
                         onClick={() => toggleGst(rec.id)}>
                         <span className="text-sm font-semibold text-gray-700">
-                            GST Record #{idx + 1} {rec.gstin && `– ${rec.gstin}`}
+                            GSTIN #{idx + 1} {rec.gstin && `– ${rec.gstin}`}
                         </span>
                         <div className="flex items-center gap-2">
                             {gstRecords.length > 1 && (
@@ -849,9 +950,20 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className={labelCls}>GSTIN</label>
-                                    <input className={inputCls} value={rec.gstin}
-                                        onChange={e => updateGstField(rec.id, 'gstin', e.target.value.toUpperCase().slice(0, 15))}
-                                        placeholder="22AAAAA0000A1Z5" maxLength={15} />
+                                    <div className="flex gap-2">
+                                        <input className={inputCls + ' flex-1'} value={rec.gstin}
+                                            onChange={e => updateGstField(rec.id, 'gstin', e.target.value.toUpperCase().slice(0, 15))}
+                                            placeholder="22AAAAA0000A1Z5" maxLength={15}
+                                            disabled={rec.registrationType === 'Unregistered'} />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleFetchGstDetails(rec.id)}
+                                            disabled={rec.registrationType === 'Unregistered' || loadingGstFetch || !rec.gstin}
+                                            className="px-4 py-2 border border-indigo-500 text-indigo-600 text-xs font-bold rounded-[4px] hover:bg-indigo-50/50 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                        >
+                                            {loadingGstFetch ? 'Fetching...' : 'FETCH BRANCH DETAILS'}
+                                        </button>
+                                    </div>
                                 </div>
                                 <div>
                                     <label className={labelCls}>Registration Type</label>
@@ -862,13 +974,15 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                                 </div>
                                 <div>
                                     <label className={labelCls}>Legal Name</label>
-                                    <input className={inputCls} value={rec.legalName || ''}
-                                        onChange={e => updateGstField(rec.id, 'legalName', e.target.value)} placeholder="Legal entity name" />
+                                    <input className={inputCls + (rec.registrationType !== 'Unregistered' ? ' bg-gray-100 cursor-not-allowed' : '')} value={rec.legalName || ''}
+                                        onChange={e => updateGstField(rec.id, 'legalName', e.target.value)} placeholder="Legal entity name"
+                                        readOnly={rec.registrationType !== 'Unregistered'} />
                                 </div>
                                 <div>
                                     <label className={labelCls}>Trade Name</label>
-                                    <input className={inputCls} value={rec.tradeName || ''}
-                                        onChange={e => updateGstField(rec.id, 'tradeName', e.target.value)} placeholder="Trade / brand name" />
+                                    <input className={inputCls + (rec.registrationType !== 'Unregistered' ? ' bg-gray-100 cursor-not-allowed' : '')} value={rec.tradeName || ''}
+                                        onChange={e => updateGstField(rec.id, 'tradeName', e.target.value)} placeholder="Trade / brand name"
+                                        readOnly={rec.registrationType !== 'Unregistered'} />
                                 </div>
                             </div>
                             {/* Places of Business */}
@@ -876,47 +990,176 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Places of Business</span>
                                     <button type="button" onClick={() => addPob(rec.id)}
-                                        className="text-xs text-indigo-600 font-semibold border border-indigo-200 rounded px-2 py-1 hover:bg-indigo-50">
-                                        + Add Branch
+                                        className="text-xs text-indigo-600 font-bold border border-indigo-200 rounded px-3 py-1.5 hover:bg-indigo-50 uppercase tracking-wider">
+                                        {rec.placesOfBusiness.length === 0 ? '+ PRINCIPLE PLACE OF BUSINESS' : '+ ADD BRANCH'}
                                     </button>
                                 </div>
                                 {rec.placesOfBusiness.length === 0 && (
-                                    <p className="text-xs text-gray-400 italic">No branches added yet.</p>
+                                    <p className="p-4 bg-gray-50 border border-slate-200 rounded text-sm text-gray-500 text-center">
+                                        {rec.registrationType === 'Unregistered' ?
+                                            'Add a branch manually to continue.' :
+                                            'No places of business found. Fetch via GSTIN or add manually.'
+                                        }
+                                    </p>
                                 )}
                                 {rec.placesOfBusiness.map((pob, pi) => (
-                                    <div key={pob.id} className="border border-gray-100 rounded-[4px] p-3 mb-2 bg-gray-50/50">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="text-xs font-semibold text-gray-600">Branch {pi + 1}</span>
-                                            <button type="button" onClick={() => removePob(rec.id, pob.id)}
-                                                className="text-xs text-red-500 hover:text-red-700 font-semibold">Remove</button>
+                                    <div key={pob.id} className="border border-gray-200 rounded p-3 bg-white mb-3">
+                                        {/* POB Accordion Header */}
+                                        <div className="flex justify-between items-center cursor-pointer" onClick={() => togglePobExpand(rec.id, pob.id)}>
+                                            <div className="flex items-center gap-2">
+                                                <svg className={`w-4 h-4 text-gray-500 transition-transform ${pob.isExpanded ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                                <span className="font-semibold text-sm text-gray-700">
+                                                    {pob.referenceName || `Branch ${pi + 1}`} {[pob.addressLine1, pob.addressLine2, pob.addressLine3].filter(Boolean).join(', ') && ` - ${[pob.addressLine1, pob.addressLine2, pob.addressLine3].filter(Boolean).join(', ')}`}
+                                                </span>
+                                            </div>
+                                            <button type="button" onClick={(e) => { e.stopPropagation(); removePob(rec.id, pob.id); }}
+                                                className="text-xs text-red-500 hover:text-red-700 font-semibold uppercase tracking-wider">
+                                                REMOVE
+                                            </button>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <label className={labelCls}>Reference Name</label>
-                                                <input className={inputCls} value={pob.referenceName}
-                                                    onChange={e => updatePob(rec.id, pob.id, 'referenceName', e.target.value)} placeholder="e.g. Main Branch" />
+
+                                        {/* POB Fields */}
+                                        {pob.isExpanded && (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-100">
+                                                <div>
+                                                    <label className={labelCls}>Reference Name</label>
+                                                    <input className={inputCls} value={pob.referenceName}
+                                                        onChange={e => updatePob(rec.id, pob.id, 'referenceName', e.target.value)} placeholder="e.g. Main Branch" />
+                                                </div>
+                                                <div className="col-span-1 md:col-span-2">
+                                                    <label className={labelCls}>Address Line 1</label>
+                                                    <input className={inputCls} value={pob.addressLine1 || ''}
+                                                        onChange={e => updatePob(rec.id, pob.id, 'addressLine1', e.target.value)} placeholder="Enter address line 1" />
+                                                </div>
+                                                <div className="col-span-1 md:col-span-2">
+                                                    <label className={labelCls}>Address Line 2</label>
+                                                    <input className={inputCls} value={pob.addressLine2 || ''}
+                                                        onChange={e => updatePob(rec.id, pob.id, 'addressLine2', e.target.value)} placeholder="Enter address line 2" />
+                                                </div>
+                                                <div className="col-span-1 md:col-span-2">
+                                                    <label className={labelCls}>Address Line 3</label>
+                                                    <input className={inputCls} value={pob.addressLine3 || ''}
+                                                        onChange={e => updatePob(rec.id, pob.id, 'addressLine3', e.target.value)} placeholder="Enter address line 3" />
+                                                </div>
+                                                <div>
+                                                    <label className={labelCls}>Country</label>
+                                                    <select
+                                                        className={inputCls + ' bg-white'}
+                                                        value={Country.getAllCountries().find(c => c.name === pob.country)?.isoCode || ''}
+                                                        onChange={(e) => {
+                                                            const countryCode = e.target.value;
+                                                            const countryInfo = Country.getCountryByCode(countryCode);
+                                                            updatePob(rec.id, pob.id, 'country', countryInfo?.name || '');
+                                                            updatePob(rec.id, pob.id, 'state', '');
+                                                            updatePob(rec.id, pob.id, 'city', '');
+                                                        }}
+                                                    >
+                                                        <option value="">Select Country</option>
+                                                        {Country.getAllCountries().map((country) => (
+                                                            <option key={country.isoCode} value={country.isoCode}>
+                                                                {country.name}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className={labelCls}>State</label>
+                                                    <select
+                                                        className={inputCls + ' bg-white'}
+                                                        value={(() => {
+                                                            const countryCode = Country.getAllCountries().find(c => c.name === pob.country)?.isoCode;
+                                                            if (!countryCode) return '';
+                                                            return State.getStatesOfCountry(countryCode).find(s => s.name === pob.state)?.isoCode || '';
+                                                        })()}
+                                                        onChange={(e) => {
+                                                            const countryCode = Country.getAllCountries().find(c => c.name === pob.country)?.isoCode;
+                                                            const stateCode = e.target.value;
+                                                            if (countryCode) {
+                                                                const stateInfo = State.getStatesOfCountry(countryCode).find(s => s.isoCode === stateCode);
+                                                                updatePob(rec.id, pob.id, 'state', stateInfo?.name || '');
+                                                                updatePob(rec.id, pob.id, 'city', '');
+                                                            }
+                                                        }}
+                                                        disabled={!pob.country}
+                                                    >
+                                                        <option value="">Select State</option>
+                                                        {(() => {
+                                                            const countryCode = Country.getAllCountries().find(c => c.name === pob.country)?.isoCode;
+                                                            return countryCode ? State.getStatesOfCountry(countryCode).map((state) => (
+                                                                <option key={state.isoCode} value={state.isoCode}>
+                                                                    {state.name}
+                                                                </option>
+                                                            )) : [];
+                                                        })()}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className={labelCls}>City</label>
+                                                    {(() => {
+                                                        const countryCode = Country.getAllCountries().find(c => c.name === pob.country)?.isoCode;
+                                                        const stateCode = countryCode ? State.getStatesOfCountry(countryCode).find(s => s.name === pob.state)?.isoCode : null;
+                                                        const cities = (countryCode && stateCode) ? City.getCitiesOfState(countryCode, stateCode) : [];
+
+                                                        return cities.length > 0 ? (
+                                                            <select
+                                                                className={inputCls + ' bg-white'}
+                                                                value={pob.city || ''}
+                                                                onChange={(e) => updatePob(rec.id, pob.id, 'city', e.target.value)}
+                                                            >
+                                                                <option value="">Select City</option>
+                                                                {cities.map((city) => (
+                                                                    <option key={city.name} value={city.name}>
+                                                                        {city.name}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        ) : (
+                                                            <input
+                                                                type="text"
+                                                                value={pob.city || ''}
+                                                                onChange={(e) => updatePob(rec.id, pob.id, 'city', e.target.value)}
+                                                                className={inputCls}
+                                                                placeholder="Enter city"
+                                                            />
+                                                        );
+                                                    })()}
+                                                </div>
+                                                <div>
+                                                    <label className={labelCls}>Pincode</label>
+                                                    <input
+                                                        type="text"
+                                                        value={pob.pincode || ''}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                                                            updatePob(rec.id, pob.id, 'pincode', val);
+                                                        }}
+                                                        className={inputCls}
+                                                        placeholder="6-digit pincode"
+                                                        maxLength={6}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className={labelCls}>Branch Contact Person</label>
+                                                    <input className={inputCls} value={pob.contactPerson}
+                                                        onChange={e => updatePob(rec.id, pob.id, 'contactPerson', e.target.value)} placeholder="Contact person" />
+                                                </div>
+                                                <div>
+                                                    <label className={labelCls}>Branch Email Address</label>
+                                                    <input className={inputCls} type="text" value={pob.email}
+                                                        onChange={e => updatePob(rec.id, pob.id, 'email', e.target.value)} placeholder="branch@example.com" />
+                                                </div>
+                                                <div className="col-span-1 md:col-span-2">
+                                                    <label className={labelCls}>Branch Contact No</label>
+                                                    <input className={inputCls} value={pob.contactNumber}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value.replace(/\D/g, '');
+                                                            updatePob(rec.id, pob.id, 'contactNumber', val);
+                                                        }} placeholder="Numeric only" />
+                                                </div>
                                             </div>
-                                            <div>
-                                                <label className={labelCls}>Address</label>
-                                                <input className={inputCls} value={pob.address}
-                                                    onChange={e => updatePob(rec.id, pob.id, 'address', e.target.value)} placeholder="Branch address" />
-                                            </div>
-                                            <div>
-                                                <label className={labelCls}>Contact Person</label>
-                                                <input className={inputCls} value={pob.contactPerson}
-                                                    onChange={e => updatePob(rec.id, pob.id, 'contactPerson', e.target.value)} placeholder="Contact person" />
-                                            </div>
-                                            <div>
-                                                <label className={labelCls}>Email</label>
-                                                <input className={inputCls} type="email" value={pob.email}
-                                                    onChange={e => updatePob(rec.id, pob.id, 'email', e.target.value)} placeholder="email@example.com" />
-                                            </div>
-                                            <div className="col-span-2">
-                                                <label className={labelCls}>Contact Number</label>
-                                                <input className={inputCls} value={pob.contactNumber}
-                                                    onChange={e => updatePob(rec.id, pob.id, 'contactNumber', e.target.value)} placeholder="Phone number" />
-                                            </div>
-                                        </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -1288,20 +1531,19 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                             className="px-5 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-[4px] hover:bg-gray-100 transition-colors">
                             Cancel
                         </button>
-                        {currentTabIdx < TABS.length - 1 ? (
+                        <button
+                            type="button"
+                            onClick={handleFinish}
+                            disabled={isSaving}
+                            className="px-8 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed rounded-[4px] transition-colors flex items-center gap-2 min-w-[140px] justify-center shadow-md">
+                            {isSaving ? (
+                                <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> Saving…</>
+                            ) : 'SAVE VENDOR'}
+                        </button>
+                        {currentTabIdx < TABS.length - 1 && (
                             <button type="button" onClick={() => setActiveTab(TABS[currentTabIdx + 1].id)}
                                 className="px-8 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-[4px] transition-colors flex items-center justify-center min-w-[120px]">
                                 Next →
-                            </button>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={handleFinish}
-                                disabled={isSaving}
-                                className="px-8 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed rounded-[4px] transition-colors flex items-center gap-2 min-w-[140px] justify-center shadow-md">
-                                {isSaving ? (
-                                    <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> Saving…</>
-                                ) : 'SAVE VENDOR'}
                             </button>
                         )}
                     </div>

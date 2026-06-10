@@ -275,7 +275,59 @@ class InventoryItemValidationService:
             computed_score = 0.0
             computed_strategy = "CREATE_ITEM"
             computed_match_level = "New"
-            
+
+            # ── MANUAL MATCH BYPASS ──────────────────────────────────────────────────
+            # If a user has manually linked this item to an inventory master record,
+            # preserve their choice unconditionally. Vendor mapping is NOT required.
+            if item.get("match_source") == "MANUAL_MATCH" and item.get("inventory_item_id"):
+                manual_inv_id = item["inventory_item_id"]
+                manual_name = item.get("matched_item_name") or item.get("canonical_name") or ocr_name_raw
+                try:
+                    manual_db_item = InventoryItem.objects.filter(id=int(manual_inv_id), tenant_id=tenant_id).first()
+                except Exception:
+                    manual_db_item = None
+                if manual_db_item:
+                    logger.info(
+                        f"[MANUAL_MATCH_PRESERVED] item='{ocr_name_raw}' → "
+                        f"inventory_item_id={manual_inv_id} name='{manual_db_item.item_name}'"
+                    )
+                    item_dto = {
+                        "line_index": item.get("line_index", idx),
+                        "item_name": ocr_name_raw or "—",
+                        "item_code": item.get("item_code") or item.get("itemCode") or "",
+                        "description": item.get("description") or ocr_name_raw or "",
+                        "hsn_code": item.get("hsn_code") or item.get("hsn_sac") or item.get("hsnSac") or "",
+                        "qty": item.get("qty") or item.get("quantity") or 0.0,
+                        "uom": item.get("uom") or "nos",
+                        "rate": item.get("rate") or item.get("itemRate") or 0.0,
+                        "cgst_rate": item.get("cgst_rate") or item.get("cgst") or 0.0,
+                        "sgst_rate": item.get("sgst_rate") or item.get("sgst") or 0.0,
+                        "igst_rate": item.get("igst_rate") or item.get("igst") or 0.0,
+                        "cess_rate": item.get("cess_rate") or item.get("cess") or 0.0,
+                        "computed_gst_rate": item.get("computed_gst_rate") or item.get("gst_rate") or 0.0,
+                        "taxable_value": item.get("taxable_value") or item.get("taxableValue") or item.get("amount") or 0.0,
+                        "item_status": "ALREADY EXIST",
+                        "inventory_item_id": manual_db_item.id,
+                        "inventory_match_level": "MANUAL_MATCH",
+                        "canonical_name": manual_db_item.item_name,
+                        "matched_item_name": manual_db_item.item_name,
+                        "match_source": "MANUAL_MATCH",
+                        "inventory_match_confidence": 100.0,
+                        "inventory_match_strategy": "MANUAL_MATCH",
+                        "normalized_item_name": ocr_name_norm,
+                    }
+                    for k, v in item.items():
+                        if k not in item_dto:
+                            item_dto[k] = v
+                    items_dto.append(item_dto)
+                    continue  # Skip waterfall for this item
+                else:
+                    logger.warning(
+                        f"[MANUAL_MATCH_ITEM_MISSING] inventory_item_id={manual_inv_id} "
+                        f"not found in tenant={tenant_id}. Falling back to waterfall."
+                    )
+            # ── END MANUAL MATCH BYPASS ──────────────────────────────────────────────
+
             # --- LEVEL 1: PO History Match ---
             hist_best_match = None
             hist_best_score = 0.0

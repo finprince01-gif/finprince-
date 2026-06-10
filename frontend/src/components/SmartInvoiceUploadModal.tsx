@@ -16,6 +16,7 @@ import { getXLSX } from '../utils/xlsx';
 import { showError, showSuccess, showInfo } from '../utils/toast';
 import CreateNewVendorFullModal from './CreateNewVendorFullModal';
 import { CreateNewInventoryItemModal } from './CreateNewInventoryItemModal';
+import { MatchExistingItemModal } from './MatchExistingItemModal';
 import Icon from './Icon';
 import { getVoucherSchema, VOUCHER_SCHEMAS, getVoucherFlatHeaders, type VoucherSchema } from '../configs/schemaConfig';
 
@@ -815,8 +816,8 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         const supplier = sections.supplier_details || row.extracted_data || {};
         const rawItems = sections.items || row.extracted_data?.items || row.extracted_data?.line_items || [];
         const supplier_items = rawItems.map((it: any) => ({
-            supplierItemCode: String(it['Item Code'] || it['item_code'] || it['Part No'] || ''),
-            supplierItemName: String(it['Item Name'] || it['item_name'] || it['Description'] || it['description'] || it['Item'] || ''),
+            supplierItemCode: String(it['item_code'] || it['itemCode'] || it['supplierItemCode'] || it['product_code'] || it['productCode'] || it['code'] || ''),
+            supplierItemName: String(it['item_name'] || it['itemName'] || it['supplierItemName'] || it['product_name'] || it['productName'] || it['description'] || it['name'] || ''),
             hsnSac: String(it['HSN/SAC'] || it['hsn_sac'] || it['HSN Code'] || it['hsnSac'] || '')
         }));
 
@@ -837,8 +838,10 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     };
 
     const [isCreateItemModalOpen, setIsCreateItemModalOpen] = useState(false);
+    const [isMatchItemModalOpen, setIsMatchItemModalOpen] = useState(false);
     const [extractedItemData, setExtractedItemData] = useState<any>(null);
     const [itemResolvingRow, setItemResolvingRow] = useState<ScanResult | null>(null);
+    const [matchingLineIndex, setMatchingLineIndex] = useState<number>(0);
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
     const toggleExpandRow = (rowId: string) => {
@@ -851,6 +854,31 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             }
             return next;
         });
+    };
+
+    const openMatchItemModal = (row: ScanResult, item: any, lineIdx: number = 0) => {
+        console.info('[FORENSIC][INVOICE_SCANNER_ITEM_LIFECYCLE] MATCH_ITEM_BUTTON_CLICK', item);
+        setItemResolvingRow(row);
+        setMatchingLineIndex(lineIdx);
+        
+        const prefData = {
+            item_code: item.item_code || '',
+            item_name: item.item_name || '',
+            hsn_code: item.hsn_code || '',
+            description: item.description || '',
+            gst_rate: item.gst_rate ?? '0.00',
+            rate: item.rate ?? '0.00',
+            uom: item.uom || 'nos',
+            cgst_rate: item.cgst_rate ?? 0.0,
+            sgst_rate: item.sgst_rate ?? 0.0,
+            igst_rate: item.igst_rate ?? 0.0,
+            cess_rate: item.cess_rate ?? 0.0,
+            computed_gst_rate: item.computed_gst_rate ?? 0.0,
+            taxable_value: item.taxable_value ?? 0.0,
+        };
+        
+        setExtractedItemData(prefData);
+        setIsMatchItemModalOpen(true);
     };
 
     const openCreateItemModal = (row: ScanResult, item: any) => {
@@ -2384,6 +2412,30 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 />
             )}
 
+            {isMatchItemModalOpen && itemResolvingRow && (
+                <MatchExistingItemModal
+                    stagingId={itemResolvingRow.id}
+                    lineIndex={matchingLineIndex}
+                    extractedItem={extractedItemData}
+                    onClose={() => {
+                        setIsMatchItemModalOpen(false);
+                        setItemResolvingRow(null);
+                    }}
+                    onItemMatched={(updatedRow?: any) => {
+                        setIsMatchItemModalOpen(false);
+                        if (updatedRow && itemResolvingRow) {
+                            // Directly update the row in scan results without full revalidation
+                            setScanResults(prev =>
+                                prev.map(r => String(r.id) === String(itemResolvingRow.id) ? { ...r, ...updatedRow } : r)
+                            );
+                        } else if (itemResolvingRow) {
+                            handleRevalidateRow(itemResolvingRow);
+                        }
+                        setItemResolvingRow(null);
+                    }}
+                />
+            )}
+
             {/* Edit — handled by parent via onEditRow (opens canonical Purchase Voucher form) */}
 
             {/* Details Side Panel */}
@@ -2965,15 +3017,81 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                                         </svg>
                                                                     </button>
-                                                                    <button onClick={() => handleRescan(row)} className="p-1 hover:bg-violet-100 rounded text-violet-600" title="Rescan (AI re-extraction)">
-                                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                                                        </svg>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-gray-300">—</span>
+                                                            )}
+                                                        </td>
+                                                        {/* Voucher Status */}
+                                                        <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
+                                                            {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
+                                                                <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
+                                                                    <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
+                                                                </span>
+                                                            ) : row.validationStatus === "VOUCHER_CREATED" ? (
+                                                                <span className="bg-emerald-600 text-white px-2 py-1 rounded">✅ Saved</span>
+                                                            ) : (row.validationStatus === "DUPLICATE" || row.validationStatus === "DUPLICATE_IN_BATCH" || row.validationStatus === "DUPLICATE_INVOICE") ? (
+                                                                <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">Already Exist</span>
+                                                            ) : (effectiveVendorId || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_TO_SAVE', 'PENDING_PURCHASE'].includes(row.validationStatus)) ? (
+                                                                <span className="bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 rounded">Need to Save</span>
+                                                            ) : (['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'GSTIN_CONFLICT', 'CREATE_VENDOR'].includes(row.validationStatus)) ? (
+                                                                <span className="bg-orange-100 text-orange-700 border border-orange-200 px-2 py-1 rounded">Create Vendor First</span>
+                                                            ) : row.validationStatus === "EXTRACTION_FAILED" ? (
+                                                                <span className="bg-red-100 text-red-700 border border-red-200 px-2 py-1 rounded">Failed</span>
+                                                            ) : (
+                                                                <span className="bg-amber-50 text-amber-600 border border-amber-200 px-2 py-1 rounded">Pending</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-2 py-3 text-center">
+                                                            <div
+                                                                className="flex items-center justify-center gap-1"
+                                                                style={{
+                                                                    opacity: (['PENDING', 'processing', 'PROCESSING', 'SCANNING', 'EXTRACTING', 'scanning', 'resolving', 'validating'].includes(row.validationStatus)) ? 0.3 : 1,
+                                                                    pointerEvents: (['PENDING', 'processing', 'PROCESSING', 'SCANNING', 'EXTRACTING', 'scanning', 'resolving', 'validating'].includes(row.validationStatus)) ? 'none' : 'auto'
+                                                                }}
+                                                            >
+                                                                {!hasEffectiveMatch && ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND'].includes(row.validationStatus) && (
+                                                                    <button onClick={(e) => {
+                                                                        console.log('[DIAGNOSTIC][CREATE_VENDOR] button onClick fired');
+                                                                        openCreateVendorModal(row);
+                                                                    }} className="px-2 py-1 bg-orange-500 text-white rounded text-[10px] font-bold hover:bg-orange-600 uppercase border-2 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]">
+                                                                        CREATE VENDOR
                                                                     </button>
-                                                                    <button onClick={() => handleRemove(row.file_hash)} className="p-1 hover:bg-red-100 rounded text-red-600" title="Remove Invoice">
-                                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                                        </svg>
+                                                                )}
+                                                                {!['PENDING', 'VOUCHER_CREATED'].includes(row.validationStatus) && (
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            setScanResults(prev => prev.map(r => r.file_hash === row.file_hash ? { ...r, validationStatus: 'PENDING' } : r));
+                                                                            try {
+                                                                                const result: any = await httpClient.patch(`/api/ocr-staging/${row.file_hash}/`, { extracted_data: row.extracted_data });
+                                                                                setScanResults(prev => prev.map(r => {
+                                                                                    if (r.file_hash !== row.file_hash) return r;
+                                                                                    let newStatus: ValidationStatus = 'VENDOR_MISSING';
+                                                                                    const s = result.status || '';
+                                                                                    if (s === 'READY' || s === 'found' || s === 'FOUND') newStatus = 'READY';
+                                                                                    else if (s === 'DUPLICATE' || s === 'duplicate') newStatus = 'DUPLICATE';
+                                                                                    else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found' || s === 'CREATE_VENDOR') newStatus = 'VENDOR_MISSING';
+                                                                                    else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') newStatus = 'GSTIN_CONFLICT';
+                                                                                    const updated = {
+                                                                                        ...r,
+                                                                                        validationStatus: newStatus,
+                                                                                        vendor_id: result.vendor_id ?? r.vendor_id,
+                                                                                        vendor_name: result.vendor_name || r.vendor_name,
+                                                                                        vendor_status: ((result.vendor_id ?? r.vendor_id) ? 'EXISTS' : (result.vendor_status || 'NEW')) as VendorStatus,
+                                                                                        item_status: result.item_status ?? r.item_status,
+                                                                                        missing_items: result.missing_items ?? r.missing_items ?? [],
+                                                                                        items: result.items ?? r.items,
+                                                                                    };
+                                                                                    if (newStatus === 'VENDOR_MISSING') setTimeout(() => openCreateVendorModal(updated), 150);
+                                                                                    return updated;
+                                                                                }));
+                                                                                fetchResumeCounts();
+                                                                            } catch { fetchStagedInvoices(); }
+                                                                        }}
+                                                                        className="p-1 hover:bg-indigo-100 rounded text-indigo-400 hover:text-indigo-700 transition-colors"
+                                                                        title="Revalidate — re-run full vendor, item and voucher validation"
+                                                                    >
+                                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                                                     </button>
                                                                 </div>
                                                             </td>
@@ -3061,19 +3179,22 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
                                                                                         <td className="px-3 py-2 text-center">
 
-                                                                                            {item.item_status === 'CREATE ITEM' ? (
-
+                                                                                        {item.item_status === 'CREATE ITEM' ? (
+                                                                                            <div className="flex items-center justify-center gap-1.5">
                                                                                                 <button
-
                                                                                                     onClick={() => openCreateItemModal(row, item)}
-
                                                                                                     className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white border border-amber-600 px-3 py-1 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-sm"
-
                                                                                                 >
-
                                                                                                     Create Item
-
                                                                                                 </button>
+                                                                                                <button
+                                                                                                    onClick={() => openMatchItemModal(row, item, item.line_index ?? itemIdx)}
+                                                                                                    className="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white border border-indigo-700 px-3 py-1 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-sm flex items-center gap-1"
+                                                                                                >
+                                                                                                    <Icon name="link" className="w-3 h-3" />
+                                                                                                    Match Existing
+                                                                                                </button>
+                                                                                            </div>
 
                                                                                             ) : (
 

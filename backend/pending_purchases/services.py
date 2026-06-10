@@ -102,6 +102,13 @@ def evaluate_pending_purchase(record, vendor_status, voucher_status, item_status
             f"record_id={record.id}"
         )
 
+        dynamic_status = 'RESOLVED' if (
+            record.validation_status in ('VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE')
+            or voucher_status in ('VOUCHER_STATUS_EXISTING', 'VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE')
+            or is_duplicate
+            or not is_pending
+        ) else 'PENDING'
+
         # ── UPSERT: prevent duplicate queue entries on revalidation ──
         obj, created = PendingPurchase.objects.update_or_create(
             source_scan_row_id=record.id,
@@ -130,7 +137,7 @@ def evaluate_pending_purchase(record, vendor_status, voucher_status, item_status
                 'vendor_status': vendor_status,
                 'voucher_status': voucher_status,
                 'item_status': item_status,
-                'pending_purchase_status': 'PENDING',
+                'pending_purchase_status': dynamic_status,
                 'extraction_payload': record.extracted_data,
                 'review_payload': ui_row or {},
             }
