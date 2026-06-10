@@ -216,10 +216,10 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
 
         if supply_inr_data is not None and 'items' in supply_inr_data:
             for item in supply_inr_data['items']:
-                total_taxable += float(item.get('taxableValue', 0))
-                total_cgst += float(item.get('cgst', 0))
-                total_sgst += float(item.get('sgst', 0))
-                total_igst += float(item.get('igst', 0))
+                total_taxable += float(item.get('taxableValue') or item.get('taxable_value') or item.get('amount') or 0)
+                total_cgst += float(item.get('cgst') or item.get('cgst_amount') or 0)
+                total_sgst += float(item.get('sgst') or item.get('sgst_amount') or 0)
+                total_igst += float(item.get('igst') or item.get('igst_amount') or 0)
 
         # Use update_or_create so repeated saves don't stack Voucher rows
         logger.info("[CHILD_INSERT_START] table='voucher'")
@@ -440,6 +440,19 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         adv_val = Decimal(str(due_data.get('advance_paid', 0) if due_data else 0))
         purchase_total_gross = net_val + adv_val
 
+        # Calculate tax totals from supply_inr_data if available
+        total_taxable = 0.0
+        total_cgst = 0.0
+        total_sgst = 0.0
+        total_igst = 0.0
+
+        if supply_inr_data is not None and 'items' in supply_inr_data:
+            for item in supply_inr_data['items']:
+                total_taxable += float(item.get('taxableValue') or item.get('taxable_value') or item.get('amount') or 0)
+                total_cgst += float(item.get('cgst') or item.get('cgst_amount') or 0)
+                total_sgst += float(item.get('sgst') or item.get('sgst_amount') or 0)
+                total_igst += float(item.get('igst') or item.get('igst_amount') or 0)
+
         # ── Resolve the generic Voucher record for this supplier instance ──────
         # VoucherPurchaseSupplierDetails has no voucher_id column, so we look up
         # by reference_id which is set during create() to link the two tables.
@@ -462,21 +475,30 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 'total': purchase_total_gross,
                 'invoice_no': instance.supplier_invoice_no,
                 'source': 'purchase_voucher',
+                'is_inter_state': instance.input_type == 'Interstate',
+                'total_taxable_amount': total_taxable,
+                'total_cgst': total_cgst,
+                'total_sgst': total_sgst,
+                'total_igst': total_igst,
             }
         )
         voucher_id = voucher_obj.id  # This is the real, stable ID for journal entries
 
         # Update or Create Nested Relations
         if supply_foreign_data is not None:
+            _valid_foreign_fields = {'purchase_order_no', 'purchase_ledger', 'exchange_rate', 'description'}
+            _filtered_foreign = {k: v for k, v in supply_foreign_data.items() if k in _valid_foreign_fields}
             VoucherPurchaseSupplyForeignDetails.objects.update_or_create(
                 supplier_details=instance,
-                defaults={**supply_foreign_data, 'tenant_id': tenant_id},
+                defaults={**_filtered_foreign, 'tenant_id': tenant_id},
             )
 
         if supply_inr_data is not None:
+            _valid_inr_fields = {'purchase_order_no', 'purchase_ledger', 'description'}
+            _filtered_inr = {k: v for k, v in supply_inr_data.items() if k in _valid_inr_fields}
             VoucherPurchaseSupplyINRDetails.objects.update_or_create(
                 supplier_details=instance,
-                defaults={**supply_inr_data, 'tenant_id': tenant_id},
+                defaults={**_filtered_inr, 'tenant_id': tenant_id},
             )
 
         if due_data is not None:
@@ -551,26 +573,26 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 # In normalized frontend, 'qty' and 'itemRate' are standard
                 q = item.get('qty') or item.get('quantity') or 0
                 r = item.get('itemRate') or item.get('rate') or 0
-                tx_val = item.get('taxableValue') or item.get('amount') or 0
-                inv_val = item.get('invoiceValue') or item.get('amount') or 0
+                tx_val = item.get('taxableValue') or item.get('taxable_value') or item.get('amount') or 0
+                inv_val = item.get('invoiceValue') or item.get('invoice_value') or item.get('amount') or 0
                 
                 logger.info("[CHILD_INSERT_START] table='voucher_purchase_item_details'")
                 try:
                     VoucherPurchaseItem.objects.create(
                         supplier_details=supplier_instance,
                         tenant_id=tenant_id,
-                        item_code=item.get('itemCode', item.get('item_code', '')),
-                        item_name=item.get('itemName', item.get('item_name', '')),
-                        hsn_sac=item.get('hsnSac', item.get('hsn_sac', '')),
+                        item_code=item.get('itemCode') or item.get('item_code') or '',
+                        item_name=item.get('itemName') or item.get('item_name') or '',
+                        hsn_sac=item.get('hsnSac') or item.get('hsn_sac') or '',
                         quantity=Decimal(str(q)),
                         uom=item.get('uom', ''),
                         rate=Decimal(str(r)),
                         taxable_value=Decimal(str(tx_val)),
-                        igst_amount=Decimal(str(item.get('igst', 0))),
-                        cgst_amount=Decimal(str(item.get('cgst', 0))),
-                        sgst_amount=Decimal(str(item.get('sgst', 0))),
-                        cess_amount=Decimal(str(item.get('cess', 0))),
-                        gst_rate=Decimal(str(item.get('gstRate', item.get('gst_rate', 0)))),
+                        igst_amount=Decimal(str(item.get('igst') or item.get('igst_amount') or 0)),
+                        cgst_amount=Decimal(str(item.get('cgst') or item.get('cgst_amount') or 0)),
+                        sgst_amount=Decimal(str(item.get('sgst') or item.get('sgst_amount') or 0)),
+                        cess_amount=Decimal(str(item.get('cess') or item.get('cess_amount') or 0)),
+                        gst_rate=Decimal(str(item.get('gstRate') or item.get('gst_rate') or 0)),
                         invoice_value=Decimal(str(inv_val)).quantize(Decimal('0.00'), rounding=ROUND_HALF_UP),
                         currency=cur,
                         exchange_rate=ex_rate

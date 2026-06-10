@@ -147,8 +147,16 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
   }, [availableReports, reportType]);
 
   const [selectedLedger, setSelectedLedger] = useState<string>('all');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  const [startDate, setStartDate] = useState<string>(() => sessionStorage.getItem('reports_startDate') || '');
+  const [endDate, setEndDate] = useState<string>(() => sessionStorage.getItem('reports_endDate') || '');
+
+  useEffect(() => {
+    sessionStorage.setItem('reports_startDate', startDate);
+  }, [startDate]);
+
+  useEffect(() => {
+    sessionStorage.setItem('reports_endDate', endDate);
+  }, [endDate]);
   // Drill-down: null = summary view (all ledgers list), string = detail view for that ledger
   const [drillDownLedger, setDrillDownLedger] = useState<string | null>(navParams?.drillDownLedger || null);
 
@@ -341,13 +349,13 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       setLedgerViewMode('ledger');
       setLedgerFilters({ date: '', dateFrom: '', dateTo: '', particulars: '', voucherNo: '', voucherType: '', debit: '', credit: '', runningBalance: '' });
       const ledgerName = drillDownLedger.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
-      apiService.getJournalEntriesReport(ledgerName, startDate, endDate)
+      apiService.getJournalEntriesReport(ledgerName, undefined, undefined)
         .then(data => { setDrillDownData(Array.isArray(data) ? data : []); setIsDrillDownLoading(false); })
         .catch(() => { setIsDrillDownLoading(false); setDrillDownData([]); });
     } else {
       setDrillDownData([]);
     }
-  }, [drillDownLedger, startDate, endDate]);
+  }, [drillDownLedger]);
 
   // Download mappings for each report type
   const downloadMappings: { [key in ReportType]: { endpoint: string; filename: string } } = {
@@ -367,8 +375,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     try {
       // Construct Query Params
       const params = new URLSearchParams();
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
+      if (startDate && reportType !== 'LedgerReport') params.append('startDate', startDate);
+      if (endDate && reportType !== 'LedgerReport') params.append('endDate', endDate);
       if (reportType === 'LedgerReport' && selectedLedger && selectedLedger !== 'all') {
         // Extract actual name if it has prefix
         const cleanName = selectedLedger.includes(':') ? selectedLedger.split(':')[1] : selectedLedger;
@@ -1201,7 +1209,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           case 'Contra':
             return filteredLedgers.includes(v.fromAccount) || filteredLedgers.includes(v.toAccount);
           case 'Journal':
-            return v.entries && Array.isArray(v.entries) && v.entries.some(e => e && filteredLedgers.includes(e.ledger));
+            return v.entries && Array.isArray(v.entries) && v.entries.some((e: any) => e && (filteredLedgers.includes(e.ledger) || filteredLedgers.includes(e.ledger_name) || filteredLedgers.includes(e.account)));
           case 'Debit Note':
           case 'Credit Note':
             // Debit Note / Credit Note involve the party (vendor/customer)
@@ -1212,7 +1220,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       });
     }
 
-    if ((reportType === 'DayBook' || reportType === 'LedgerReport') && (startDate || endDate)) {
+    if ((reportType === 'DayBook') && (startDate || endDate)) {
       filtered = filtered.filter(v => {
         const vDate = new Date(v.date);
         const start = startDate ? new Date(startDate) : null;
@@ -1265,11 +1273,11 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       }
 
       // Apply date filters if set
-      if (startDate) {
+      if (startDate && reportType !== 'LedgerReport') {
         const s = new Date(startDate);
         targetEntries = targetEntries.filter(e => new Date(e.date || e.transaction_date) >= s);
       }
-      if (endDate) {
+      if (endDate && reportType !== 'LedgerReport') {
         const e = new Date(endDate);
         targetEntries = targetEntries.filter(e => new Date(e.date || e.transaction_date) <= e);
       }
@@ -1557,7 +1565,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       entries.forEach(e => {
         // Date filtering
         const vDate = e.transaction_date || e.date;
-        if (vDate) {
+        if (vDate && reportType !== 'LedgerReport') {
           const d = new Date(vDate);
           if (startDate && d < new Date(startDate)) return;
           if (endDate && d > new Date(endDate)) return;
@@ -1961,6 +1969,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           <tr>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Voucher Type</th>
+            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Reference No</th>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Party</th>
             <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
             <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
@@ -1983,6 +1992,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
               >
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(v.date).toLocaleDateString()}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{v.type}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-indigo-600">{(v as any).ref_no || (v as any).voucher_number || (v as any).invoice_no || '-'}</td>
                 <td 
                   className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 group-hover:text-indigo-600 group-hover:font-semibold transition-colors flex items-center gap-1 cursor-pointer"
                   onClick={(e) => {
@@ -2794,7 +2804,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                         // Refresh drill-down data to reflect changes
                         if (drillDownLedger) {
                           const ledgerName = drillDownLedger.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
-                          apiService.getJournalEntriesReport(ledgerName, startDate, endDate)
+                          apiService.getJournalEntriesReport(ledgerName, undefined, undefined)
                             .then(data => setDrillDownData(Array.isArray(data) ? data : []))
                             .catch(() => { });
                         }
@@ -3911,7 +3921,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                           // Refresh reports drilldown
                           if (drillDownLedger) {
                             const name = drillDownLedger.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
-                            apiService.getJournalEntriesReport(name, startDate, endDate)
+                            apiService.getJournalEntriesReport(name, undefined, undefined)
                               .then(res => setDrillDownData(Array.isArray(res) ? res : []))
                               .catch(() => { });
                           }
@@ -4401,34 +4411,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                   </select>
                 </div>
               )}
-              <div className="min-w-[200px]">
-                <label htmlFor="ledgerStartDate" className="label-text">Start Date</label>
-                <input
-                  type="date"
-                  id="ledgerStartDate"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="erp-input"
-                />
-              </div>
-              <div className="min-w-[200px]">
-                <label htmlFor="ledgerEndDate" className="label-text">End Date</label>
-                <input
-                  type="date"
-                  id="ledgerEndDate"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="erp-input"
-                />
-              </div>
-              {(startDate || endDate) && (
-                <button
-                  onClick={() => { setStartDate(''); setEndDate(''); }}
-                  className="erp-button-secondary"
-                >
-                  Clear
-                </button>
-              )}
+
             </div>
 
             <div className="flex justify-end mb-4">

@@ -79,10 +79,10 @@ class HttpClient {
                 const isMasterAPI = endpoint.startsWith('/api/master/');
                 const isMasterPath = window.location.pathname.startsWith('/master');
                 const useMasterAuth = isMasterAPI || isMasterPath;
-                
+
                 // Prioritize domain-specific access tokens
                 const token = useMasterAuth ? getMasterAccessToken() : getCompanyAccessToken();
-                
+
                 if (token && !isAnonymousEndpoint(endpoint)) {
                     config.headers.Authorization = `Bearer ${token}`;
                 }
@@ -135,7 +135,7 @@ class HttpClient {
                         const newAccess = await this.performRefresh(useMasterAuth);
                         this.isRefreshing = false;
                         this.processQueue(null, newAccess);
-                        
+
                         originalRequest.headers.Authorization = `Bearer ${newAccess}`;
                         return this.client(originalRequest);
                     } catch (refreshError) {

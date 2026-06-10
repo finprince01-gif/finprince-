@@ -2231,7 +2231,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             // Propagate to main container state to enable immediate visibility on dashboards and reports
             if (onAddVouchers) {
                 onAddVouchers([{
-                    id: response?.id?.toString() || Date.now().toString(),
+                    id: (prefilledData as any)?._rawEntry?.id?.toString() || editingVoucherId?.toString() || response?.id?.toString() || Date.now().toString(),
                     type: 'Sales',
                     date: date,
                     party: customerName,
@@ -2319,7 +2319,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             // Propagate to main container state to enable immediate visibility on dashboards and reports
             if (onAddVouchers) {
                 onAddVouchers([{
-                    id: response?.id?.toString() || Date.now().toString(),
+                    id: (prefilledData as any)?._rawEntry?.id?.toString() || editingVoucherId?.toString() || response?.id?.toString() || Date.now().toString(),
                     type: 'Sales',
                     date: date,
                     party: customerName,
@@ -2793,12 +2793,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         const invoiceValue = sums.taxableValue + finalIgst + finalCgst + finalSgst + finalCess;
 
         return {
-            taxableValue: sums.taxableValue,
-            igst: finalIgst,
-            cgst: finalCgst,
-            sgst: finalSgst,
-            cess: finalCess,
-            invoiceValue
+            taxableValue: Number(sums.taxableValue.toFixed(2)),
+            igst: Number(finalIgst.toFixed(2)),
+            cgst: Number(finalCgst.toFixed(2)),
+            sgst: Number(finalSgst.toFixed(2)),
+            cess: Number(finalCess.toFixed(2)),
+            invoiceValue: Number(invoiceValue.toFixed(2))
         };
     };
 

@@ -40,10 +40,12 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_tenant_id(self, request):
-        """Extract tenant_id from the authenticated user"""
-        user = request.user
-        if hasattr(user, 'tenant_id'):
-            return str(user.branch_id)
+        """Extract tenant_id from the authenticated user or header"""
+        from core.tenant import get_tenant_from_request
+        from django.core.exceptions import PermissionDenied
+        tenant_id = get_tenant_from_request(request)
+        if tenant_id:
+            return tenant_id
         raise PermissionDenied("User has no associated tenant")
     
     def get_queryset(self):
@@ -54,6 +56,24 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
             if qs is None:
                 return models.QuerySet().none()
                 
+            # Map model class name to voucher_type keyword
+            model_class_to_type = {
+                'MasterVoucherSales': 'sales',
+                'MasterVoucherCreditNote': 'creditnote',
+                'MasterVoucherReceipts': 'receipts',
+                'MasterVoucherPurchases': 'purchase',
+                'MasterVoucherDebitNote': 'debitnote',
+                'MasterVoucherPayments': 'payments',
+                'MasterVoucherExpenses': 'expenses',
+                'MasterVoucherJournal': 'journal',
+                'MasterVoucherContra': 'contra',
+            }
+            model_name = qs.model.__name__
+            v_type = model_class_to_type.get(model_name)
+            if v_type:
+                from .database import ensure_default_vouchers
+                ensure_default_vouchers(tenant_id, v_type)
+
             queryset = qs.filter(tenant_id=tenant_id)
             if self.action == 'list':
                 return queryset.filter(is_active=True)
@@ -98,8 +118,8 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
         # Mapping from Master model to Transaction model
         model_map = {
             'MasterVoucherSales': ('accounting.VoucherSalesInvoiceDetails', 'sales_invoice_no'),
-            'MasterVoucherCreditNote': ('accounting.VoucherCreditNoteSupplierDetails', 'credit_note_no'),
-            'MasterVoucherPurchases': ('accounting.VoucherPurchaseDetails', 'purchase_invoice_no'),
+            'MasterVoucherCreditNote': ('accounting.VoucherCreditNoteInvoiceDetails', 'credit_note_no'),
+            'MasterVoucherPurchases': ('accounting.VoucherPurchaseSupplierDetails', 'purchase_voucher_no'),
             'MasterVoucherDebitNote': ('accounting.VoucherDebitNoteSupplierDetails', 'debit_note_no'),
             'MasterVoucherReceipts': ('accounting.Transaction', 'voucher_number'),
             'MasterVoucherPayments': ('accounting.Transaction', 'voucher_number'),

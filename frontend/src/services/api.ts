@@ -466,11 +466,41 @@ class ApiService {
      * @param customerName - Customer name to filter by
      */
     async getCustomerSalesInvoices(customerName: string, branch?: string) {
-        let url = `/api/vouchers/sales/?customer_name=${encodeURIComponent(customerName)}`;
+        // Query BOTH models — old SalesVoucher model and new VoucherSalesInvoiceDetails model
+        // because the Sales Voucher form saves to the new model (/api/voucher-sales-new/)
+        let oldUrl = `/api/vouchers/sales/?customer_name=${encodeURIComponent(customerName)}`;
+        let newUrl = `/api/voucher-sales-new/?customer_name=${encodeURIComponent(customerName)}&show_all=true`;
         if (branch) {
-            url += `&branch=${encodeURIComponent(branch)}`;
+            oldUrl += `&branch=${encodeURIComponent(branch)}`;
+            newUrl += `&branch=${encodeURIComponent(branch)}`;
         }
-        return httpClient.get<any[]>(url);
+
+        // Fetch from both endpoints in parallel
+        const [oldResults, newResults] = await Promise.allSettled([
+            httpClient.get<any[]>(oldUrl),
+            httpClient.get<any[]>(newUrl),
+        ]);
+
+        const fromOld: any[] = (oldResults.status === 'fulfilled' && Array.isArray(oldResults.value)) ? oldResults.value : [];
+        const fromNew: any[] = (newResults.status === 'fulfilled' && Array.isArray(newResults.value)) ? newResults.value : [];
+
+        // Normalise new results to have a voucher_no field like old results
+        const normalisedNew = fromNew.map(inv => ({
+            ...inv,
+            voucher_no: inv.voucher_no || inv.sales_invoice_no || inv.voucher_number,
+        }));
+
+        // Merge and deduplicate by voucher_no
+        const seenNos = new Set<string>();
+        const merged: any[] = [];
+        for (const inv of [...fromOld, ...normalisedNew]) {
+            const no = inv.voucher_no || inv.sales_invoice_no || inv.voucher_number;
+            if (no && !seenNos.has(no)) {
+                seenNos.add(no);
+                merged.push(inv);
+            }
+        }
+        return merged;
     }
 
     /**
@@ -624,19 +654,56 @@ class ApiService {
         const normalizedSource = source?.toLowerCase() || '';
 
         try {
-            if (normalizedSource === 'sales_invoice') {
-                response = await httpClient.get<any>(`/api/invoices/${id}/`, undefined, options);
+            if (normalizedSource === 'sales_invoice' || normalizedSource === 'sales') {
+                try {
+                    response = await httpClient.get<any>(`/api/invoices/${id}/`, undefined, { ...options, skipErrorNotification: true } as any);
+                } catch (e) {
+                    const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, { ...options, skipErrorNotification: true } as any);
+                    if (generic && generic.reference_id) {
+                        response = await httpClient.get<any>(`/api/invoices/${generic.reference_id}/`, undefined, options);
+                    } else {
+                        response = generic;
+                    }
+                }
                 response.type = response.type || 'Sales';
-            } else if (normalizedSource === 'purchase_voucher') {
-                response = await httpClient.get<any>(`/api/vouchers/purchase/${id}/?show_all=true`, undefined, options);
+                fetchedAsDetail = true;
+            } else if (normalizedSource === 'purchase_voucher' || normalizedSource === 'purchase') {
+                try {
+                    response = await httpClient.get<any>(`/api/vouchers/purchase/${id}/?show_all=true`, undefined, { ...options, skipErrorNotification: true } as any);
+                } catch (e) {
+                    const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, { ...options, skipErrorNotification: true } as any);
+                    if (generic && generic.reference_id) {
+                        response = await httpClient.get<any>(`/api/vouchers/purchase/${generic.reference_id}/?show_all=true`, undefined, options);
+                    } else {
+                        response = generic;
+                    }
+                }
                 response.type = response.type || 'Purchase';
+                fetchedAsDetail = true;
             } else if (normalizedSource === 'expense_voucher' || normalizedSource === 'expense' || normalizedSource === 'expenses') {
-                // Go directly to type-specific endpoint — avoids returning a wrong voucher from generic table
-                response = await httpClient.get<any>(`/api/vouchers/expenses/${id}/`, undefined, options);
+                try {
+                    response = await httpClient.get<any>(`/api/vouchers/expenses/${id}/`, undefined, { ...options, skipErrorNotification: true } as any);
+                } catch (e) {
+                    const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, { ...options, skipErrorNotification: true } as any);
+                    if (generic && generic.reference_id) {
+                        response = await httpClient.get<any>(`/api/vouchers/expenses/${generic.reference_id}/`, undefined, options);
+                    } else {
+                        response = generic;
+                    }
+                }
                 response.type = 'Expenses';
                 fetchedAsDetail = true;
             } else if (normalizedSource === 'contra_voucher' || normalizedSource === 'contra') {
-                response = await httpClient.get<any>(`/api/vouchers/contra/${id}/`, undefined, options);
+                try {
+                    response = await httpClient.get<any>(`/api/vouchers/contra/${id}/`, undefined, { ...options, skipErrorNotification: true } as any);
+                } catch (e) {
+                    const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, { ...options, skipErrorNotification: true } as any);
+                    if (generic && generic.reference_id) {
+                        response = await httpClient.get<any>(`/api/vouchers/contra/${generic.reference_id}/`, undefined, options);
+                    } else {
+                        response = generic;
+                    }
+                }
                 response.type = 'Contra';
                 fetchedAsDetail = true;
             } else if (normalizedSource === 'journal_voucher' || normalizedSource === 'journal') {
@@ -645,9 +712,9 @@ class ApiService {
                 fetchedAsDetail = true;
             } else if (normalizedSource === 'payment' || normalizedSource === 'payment_voucher') {
                 try {
-                    response = await httpClient.get<any>(`/api/vouchers/payment/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                    response = await httpClient.get<any>(`/api/vouchers/payment/${id}/`, undefined, ({ ...options, skipErrorNotification: true } as any));
                 } catch (e) {
-                    const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                    const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, ({ ...options, skipErrorNotification: true } as any));
                     if (generic && generic.reference_id) {
                         response = await httpClient.get<any>(`/api/vouchers/payment/${generic.reference_id}/`, undefined, options);
                     } else {
@@ -658,9 +725,9 @@ class ApiService {
                 fetchedAsDetail = true;
             } else if (normalizedSource === 'receipt' || normalizedSource === 'receipt_voucher') {
                 try {
-                    response = await httpClient.get<any>(`/api/vouchers/receipts/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                    response = await httpClient.get<any>(`/api/vouchers/receipts/${id}/`, undefined, ({ ...options, skipErrorNotification: true } as any));
                 } catch (e) {
-                    const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                    const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, ({ ...options, skipErrorNotification: true } as any));
                     if (generic && generic.reference_id) {
                         response = await httpClient.get<any>(`/api/vouchers/receipts/${generic.reference_id}/`, undefined, options);
                     } else {
@@ -697,9 +764,9 @@ class ApiService {
             if (e?.response?.status === 404) {
                 if (normalizedSource === 'receipt' || normalizedSource === 'receipt_voucher') {
                     try {
-                        response = await httpClient.get<any>(`/api/vouchers/receipts/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                        response = await httpClient.get<any>(`/api/vouchers/receipts/${id}/`, undefined, ({ ...options, skipErrorNotification: true } as any));
                     } catch (e) {
-                        const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                        const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, ({ ...options, skipErrorNotification: true } as any));
                         if (generic && generic.reference_id) {
                             response = await httpClient.get<any>(`/api/vouchers/receipts/${generic.reference_id}/`, undefined, options);
                         } else {
@@ -710,9 +777,9 @@ class ApiService {
                     fetchedAsDetail = true;
                 } else if (normalizedSource === 'payment' || normalizedSource === 'payment_voucher') {
                     try {
-                        response = await httpClient.get<any>(`/api/vouchers/payment/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                        response = await httpClient.get<any>(`/api/vouchers/payment/${id}/`, undefined, ({ ...options, skipErrorNotification: true } as any));
                     } catch (e) {
-                        const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                        const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, ({ ...options, skipErrorNotification: true } as any));
                         if (generic && generic.reference_id) {
                             response = await httpClient.get<any>(`/api/vouchers/payment/${generic.reference_id}/`, undefined, options);
                         } else {
@@ -729,8 +796,17 @@ class ApiService {
                     response = await httpClient.get<any>(`/api/vouchers/contra/${id}/`, undefined, options);
                     response.type = 'Contra';
                     fetchedAsDetail = true;
-                } else if (normalizedSource === 'journal') {
-                    response = await httpClient.get<any>(`/api/vouchers/journal/${id}/`, undefined, options);
+                } else if (normalizedSource === 'journal_voucher' || normalizedSource === 'journal') {
+                    try {
+                        response = await httpClient.get<any>(`/api/vouchers/journal/${id}/`, undefined, { ...options, skipErrorNotification: true } as any);
+                    } catch (e) {
+                        const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, { ...options, skipErrorNotification: true } as any);
+                        if (generic && generic.reference_id) {
+                            response = await httpClient.get<any>(`/api/vouchers/journal/${generic.reference_id}/`, undefined, options);
+                        } else {
+                            response = generic;
+                        }
+                    }
                     response.type = 'Journal';
                     fetchedAsDetail = true;
                 } else if (normalizedSource === 'credit note' || normalizedSource === 'credit_note') {
@@ -789,17 +865,28 @@ class ApiService {
             const detail = response;
             if (base.type === 'Receipt' || base.type === 'Payment') {
                 const isReceipt = base.type === 'Receipt';
+                const partyVal = detail.party || detail.customer || detail.pay_to_name?.name || detail.pay_to_name || base.party || '';
+                const accountVal = isReceipt
+                    ? (detail.receive_in?.name || detail.receive_in || detail.account || base.account || '')
+                    : (detail.pay_from?.name || detail.pay_from || detail.pay_from_name || base.account || '');
                 return {
                     ...base,
                     voucher_type: detail.voucher_type || base.voucher_type || detail.type || '',
-                    receive_in: isReceipt ? (detail.receive_in?.name || detail.receive_in || detail.account || base.account || '') : '',
-                    account: isReceipt ? (detail.receive_in?.name || detail.receive_in || detail.account || base.account || '') : (detail.pay_from?.name || detail.pay_from || detail.pay_from_name || base.account || ''),
-                    paid_from: !isReceipt ? (detail.pay_from?.name || detail.pay_from || detail.pay_from_name || base.account || '') : '',
-                    party: detail.party || detail.customer || detail.pay_to_name?.name || detail.pay_to_name || base.party || '',
+                    receive_in: isReceipt ? accountVal : '',
+                    account: accountVal,
+                    paid_from: !isReceipt ? accountVal : '',
+                    party: partyVal,
+                    sellerName: partyVal, // Required for ReceiptVoucher.tsx
+                    payTo: partyVal,      // Required for PaymentVoucherSingle.tsx
+                    payFrom: accountVal,  // Required for PaymentVoucherSingle.tsx
                     ref_no: detail.ref_no || base.ref_no || '',
                     narration: detail.narration || base.narration || '',
                     voucher_number: detail.voucher_number || base.voucher_number || '',
                     items: detail.items || [],
+                    invoiceDate: detail.date || base.date || '',
+                    invoiceNumber: detail.voucher_number || base.voucher_number || '',
+                    totalAmount: detail.total_amount || detail.amount || base.amount || 0,
+                    reference_number: detail.ref_no || base.ref_no || '',
                 };
             }
             if (['Contra', 'Journal', 'Expenses', 'Expense', 'Credit Note', 'Debit Note'].includes(base.type)) {
@@ -842,7 +929,10 @@ class ApiService {
         const referenceId = response.reference_id;
         const actualSource = response.source || source || '';
 
-        if (referenceId) {
+        // If we already fetched the detailed object directly, use it instead of fetching again
+        const hasDetailData = fetchedAsDetail && (base.type === 'Sales' || base.type === 'Purchase');
+
+        if (referenceId || hasDetailData) {
             try {
                 let detailEndpoint = '';
 
@@ -876,8 +966,8 @@ class ApiService {
                     detailEndpoint = `/api/vouchers/debit-note/${referenceId}/`;
                 }
 
-                if (detailEndpoint) {
-                    const detail = await httpClient.get<any>(detailEndpoint, undefined, options);
+                if (detailEndpoint || hasDetailData) {
+                    const detail = hasDetailData ? response : await httpClient.get<any>(detailEndpoint, undefined, options);
 
                     // ── Early return for Receipt / Payment ────────────────────────────
                     // These models don't have line items or addresses — just patch the

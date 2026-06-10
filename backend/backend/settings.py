@@ -4,9 +4,8 @@ from pathlib import Path
 from dotenv import load_dotenv  # type: ignore[import]
 from datetime import timedelta
 
-load_dotenv(override=True)
-
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env', override=True)
 
 # SECURITY: No fallback - fail fast if secret is missing
 SECRET_KEY = os.getenv('DJANGO_SECRET')

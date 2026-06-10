@@ -221,6 +221,8 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         total_p_provided = validated_data.pop('total_amount', None)
         amount_provided = validated_data.pop('amount', None) 
         v_num_provided = validated_data.pop('voucher_number', None)
+        if v_num_provided == 'Manual Input':
+            v_num_provided = None
         v_date_provided = validated_data.pop('date', timezone.now().date())
         v_narr_provided = validated_data.pop('narration', '')
         v_ref_no_provided = validated_data.pop('ref_no', '')
@@ -307,11 +309,20 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
             # Calculate sum of allocated items
             sum_items = sum(_safe_decimal(i.get('received_amount', i.get('amount', 0))) for i in items_data)
             
-            # If total_amount > sum of items, allocate the remainder as an advance
+            # Check if there are already explicit advance items in items_data.
+            # If yes, the items loop below will create AdvanceAllocation records for them,
+            # so we MUST NOT create an additional one here (that would be a duplicate).
+            has_advance_items = any(
+                str(i.get('reference_type', '')).upper() == 'ADVANCE' 
+                for i in items_data
+            )
+            
+            # If total_amount > sum of items AND no explicit advance items provided,
+            # allocate the remainder as an advance
             remainder_adv = Decimal('0.00')
             if not items_data:
                 remainder_adv = final_total
-            else:
+            elif not has_advance_items:
                 remainder_adv = max(Decimal('0.00'), final_total - sum_items)
 
             if remainder_adv > 0:

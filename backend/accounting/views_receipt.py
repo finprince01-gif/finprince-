@@ -158,20 +158,20 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
                 narration=data.get('narration', ''),
                 ref_no=data.get('ref_no', ''),
                 posting_note=data.get('posting_note', ''),
-                pay_from_ledger=receive_in_ledger,
-                pay_to_ledger=receive_from_ledger,
-                ledger_id_val=pt_l or pf_l,
-                party_customer_id=pt_c or pf_c,
-                party_vendor_id=pt_v or pf_v,
-                receive_in_ledger_id_val=pf_l,
-                receive_from_ledger_id_val=pt_l
+                pay_from_ledger=receive_from_ledger,
+                pay_to_ledger=receive_in_ledger,
+                ledger_id_val=pf_l or pt_l,
+                party_customer_id=pf_c or pt_c,
+                party_vendor_id=pf_v or pt_v,
+                receive_in_ledger_id_val=pt_l,
+                receive_from_ledger_id_val=pf_l
             )
             
             # Create AdvanceAllocation since entire amount is unallocated
             AdvanceAllocation.objects.create(
                 tenant_id=tenant_id,
                 transaction=instance,
-                type='receipt_single',
+                type='receipt_single_amount_only',
                 reference_id='ADVANCE',
                 reference_number=v_num,
                 reference_type='ADVANCE',
@@ -222,22 +222,8 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
                     customer_id=pt_c, vendor_id=pt_v
                 )
 
-            # Mark this Receipt as an advance so it appears in Allocation views
-            AdvanceAllocation.objects.create(
-                tenant_id=tenant_id,
-                transaction=instance,
-                type='receipt',
-                reference_id='ADVANCE',
-                reference_number=v_num,
-                reference_type='ADVANCE',
-                pay_from_ledger=receive_from_ledger,
-                pay_to_ledger=receive_in_ledger,
-                allocated_amount=entered_amount,
-                amount=entered_amount,
-                original_amount=entered_amount,
-                is_advance=True,
-                advance_ref_no=v_num
-            )
+            # NOTE: AdvanceAllocation was already created above (type='receipt_single') with full
+            # ledger/party details. Do NOT create a second duplicate here.
 
             # Create a legacy Voucher record required for DayBook visibility
             from accounting.models import Voucher
@@ -246,7 +232,7 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
             Voucher.objects.create(
                 tenant_id=tenant_id,
                 reference_id=instance.id,
-                type='receipt',
+                type='Receipt',
                 voucher_number=v_num,
                 date=date_str,
                 party=party_name,

@@ -51,7 +51,7 @@ export const LedgerQuestions: React.FC<LedgerQuestionsProps> = ({
             setQuestions(fetchedQuestions);
             setAnswers({}); // Reset answers when questions change
 
-            
+
         } catch (err: any) {
             setError(err.message || 'Failed to fetch questions');
             console.error('Error fetching questions:');
@@ -293,7 +293,7 @@ export const LedgerQuestions: React.FC<LedgerQuestionsProps> = ({
                 ))}
             </div>
 
-            <style jsx="true">{`
+            <style>{`
         .ledger-questions {
           margin-top: 1.5rem;
           padding: 1.5rem;

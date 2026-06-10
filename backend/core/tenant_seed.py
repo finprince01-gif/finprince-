@@ -1,6 +1,6 @@
-
 import logging
 from django.core.management import call_command
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -12,18 +12,18 @@ def seed_tenant_data(tenant_id):
     logger.info(f"🌱 Starting data seeding for tenant {tenant_id}")
     
     try:
-        # TODO: Call specific seed functions or management commands here
-        # For example:
-        # call_command('seed_voucher_configurations', tenant_id=tenant_id)
+        # 1. Seed default ledger groups
+        from registration.database import seed_default_ledger_groups
+        seed_default_ledger_groups(tenant_id)
+        logger.info(f"✅ Seeded default ledger groups for tenant {tenant_id}")
         
-        # Currently just a placeholder to prevent import errors and crashes
-        # Call the seeder from registration.database
-        # from registration.database import seed_default_ledger_groups
-        # seed_default_ledger_groups(tenant_id)
-        pass
+        # 2. Seed default voucher configurations
+        from masters.database import ensure_default_vouchers
+        ensure_default_vouchers(tenant_id)
+        logger.info(f"✅ Seeded default voucher configurations for tenant {tenant_id}")
         
     except Exception as e:
-        logger.error(f"❌ Error seeding data for tenant {tenant_id}: {e}")
+        logger.error(f"❌ Error seeding data for tenant {tenant_id}: {e}", exc_info=True)
         # Note: We catch the error so registration doesn't fail just because seeding failed
         # But in production you might want to handle this more strictly
     

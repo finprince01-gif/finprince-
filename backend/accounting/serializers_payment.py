@@ -51,6 +51,7 @@ class PaymentVoucherItemSerializer(SafeModelSerializerMixin, serializers.ModelSe
     # Legacy field mappings
     amount = serializers.DecimalField(source='amount_applied', max_digits=25, decimal_places=2, required=False)
     amount_applied = serializers.DecimalField(max_digits=25, decimal_places=2, required=False)
+    is_advance = serializers.BooleanField(required=False)
 
     def to_internal_value(self, data):
         # Normalize reference_type to uppercase for choice validation (INVOICE -> INVOICE)
@@ -68,13 +69,12 @@ class PaymentVoucherItemSerializer(SafeModelSerializerMixin, serializers.ModelSe
             'reference_number', 'ref_no', 'pending_amount', 'balance_after', 'invoice_date',
             'transaction_details', 'pay_to_ledger', 'pay_to_ledger_name',
             'type', 'id_ref', 'vendor_name', 'customer_name',
-            'advance_ref_no', 'allocations', 'narration', 'posting_note'
+            'advance_ref_no', 'is_advance', 'allocations', 'narration', 'posting_note'
 
         ]
         extra_kwargs = {
             'pay_to_ledger': {'required': False, 'allow_null': True},
             'reference_type': {'required': False},
-            'advance_ref_no': {'write_only': True, 'required': False},
             'balance_after': {'max_digits': 25, 'decimal_places': 2},
         }
 
@@ -380,6 +380,8 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         top_adv_amt = _safe_decimal(validated_data.pop('advance_amount', 0))
         pay_from_raw = validated_data.pop('pay_from', None)
         v_num_provided = validated_data.pop('voucher_number', None)
+        if v_num_provided == 'Manual Input':
+            v_num_provided = None
         v_date_provided = validated_data.pop('date', timezone.now().date())
         v_total_provided = validated_data.pop('total_amount', None)
         v_amt_provided = validated_data.pop('amount', None)
