@@ -2006,7 +2006,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         time.sleep(0.05)
         if not acquire_redis_lock(canonical_lock_name, expiry_s=120):
             logger.warning(f"[DISTRIBUTED_LOCK_REJECTED] canonical lock held for hash={canonical_invoice_hash} in validation/finalization on retry - returning current status")
-            return {"status": record.validation_status or "PROCESSING"}
+            return {"status": "LOCK_HELD", "message": "Record is currently being processed."}
 
     if not acquire_redis_lock(lock_name, expiry_s=120):
         logger.warning(f"[DISTRIBUTED_LOCK_REJECTED] validation_lock rejected for record={record.id} - sleeping 50ms and retrying...")
@@ -2014,7 +2014,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         if not acquire_redis_lock(lock_name, expiry_s=120):
             logger.warning(f"[DISTRIBUTED_LOCK_REJECTED] validation_lock rejected for record={record.id} on retry - returning current status")
             release_redis_lock(canonical_lock_name)
-            return {"status": record.validation_status or "PROCESSING"}
+            return {"status": "LOCK_HELD", "message": "Record is currently being processed."}
 
     try:
         try:
@@ -2460,8 +2460,10 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 pass
 
         # Sync vendor name from master if found
-        if vendor:
-             vendor_name = vendor.vendor_name
+        # NOTE: keep the user-edited vendor_name from extracted_data for the ui_row
+        # (so PendingPurchase shows what the user entered, not just the master name).
+        # The master_vendor_name is used only for internal validation logic.
+        master_vendor_name = vendor.vendor_name if vendor else None
 
         # Validation has been performed earlier in validate_and_process_entry
         pass
@@ -2479,10 +2481,14 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         vendor_status_enum = ValidationEnums.VENDOR_STATUS_EXISTING if vendor else ValidationEnums.VENDOR_STATUS_CREATE
         voucher_status_enum = ValidationEnums.VOUCHER_STATUS_EXISTING if is_duplicate else ValidationEnums.VOUCHER_STATUS_NEW
         item_status_enum = ValidationEnums.ITEM_STATUS_EXISTING if inv_val["item_status"] == "ALREADY EXIST" else ValidationEnums.ITEM_STATUS_CREATE
+        # Use the user-edited vendor_name from extracted_data for ui_row so that
+        # PendingPurchase.vendor_name reflects the manually edited value, not the
+        # master vendor name that may differ (e.g. short form vs full form).
+        _ed_vendor_name = (record.extracted_data or {}).get('vendor_name') or vendor_name
         ui_row = {
             'invoice_no': invoice_no,
             'invoice_date': (canonical.get('invoice_date') or supplier.get('invoice_date') or supply.get('invoice_date') or ''),
-            'vendor_name': vendor_name,
+            'vendor_name': _ed_vendor_name,
             'vendor_gstin': gstin,
             'total_amount': (canonical.get('total_amount') or canonical.get('grand_total') or due.get('total_amount') or None),
         }

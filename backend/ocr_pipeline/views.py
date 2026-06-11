@@ -1010,6 +1010,17 @@ class CleanOCRStagingView(views.APIView):
                     if not db_record and row.get('id'):
                         db_record = InvoiceTempOCR.objects.filter(id=row.get('id')).first()
 
+                    # [EDIT PERSISTENCE FIX] If still not found, check if a DB record
+                    # for this session has an extracted_data.invoice_no that matches.
+                    # This handles the case where the user edited the invoice_no field,
+                    # so supplier_invoice_no in DB no longer matches the snapshot's old value.
+                    if not db_record and inv_no:
+                        for candidate in InvoiceTempOCR.objects.filter(upload_session_id=session_id):
+                            ed = candidate.extracted_data or {}
+                            if str(ed.get('invoice_no', '')).strip().lower() == str(inv_no).strip().lower():
+                                db_record = candidate
+                                break
+
                     if db_record:
                         if not getattr(db_record, 'tenant_id', None) and tenant_id:
                             db_record.tenant_id = tenant_id
@@ -1222,6 +1233,8 @@ class CleanOCRStagingView(views.APIView):
             # If the record in the DB is terminal, we temporarily unblock it to allow re-validation on patch.
             db_status = record.status
             db_processed = record.processed
+            # Capture old supplier_invoice_no BEFORE we overwrite it (needed for snapshot row matching)
+            old_supplier_invoice_no = record.supplier_invoice_no
             
             # We temporarily reset processed to False in the DB using update()
             # so that validate_and_process actually runs the validation logic
@@ -1255,6 +1268,72 @@ class CleanOCRStagingView(views.APIView):
             # Run the authoritative pipeline validation
             from .pipeline import validate_and_process
             v_res = validate_and_process(record)
+            
+            # --- FORCE UPDATE FINALIZED SNAPSHOT ---
+            # session_invoices uses FinalizedSnapshot for performance. We must keep it in sync
+            # so the Purchase Upload Review grid shows the patched values.
+            try:
+                from .models import FinalizedSnapshot
+                snapshots = FinalizedSnapshot.objects.filter(session_id=record.upload_session_id)
+                for snap in snapshots:
+                    # FETCH from S3 if necessary using the view's helper
+                    snap_data = self._get_snapshot_data(snap) if hasattr(self, '_get_snapshot_data') else (snap.snapshot_json or {})
+                    if not snap_data:
+                        continue
+                        
+                    rows = snap_data.get('data', [])
+                    updated_any = False
+                    new_vendor_name = record.extracted_data.get('vendor_name') or sections.get('supplier_details', {}).get('vendor_name') or updated_data.get('vendor_name')
+                    new_invoice_no = record.extracted_data.get('invoice_no') or record.supplier_invoice_no or sections.get('supplier_details', {}).get('supplier_invoice_no') or updated_data.get('invoice_no')
+                    for r_idx, r_dict in enumerate(rows):
+                        # Match by id/file_hash (primary) OR by old invoice_no (fallback for assembled
+                        # records where the snapshot row has id=None and file_hash=None)
+                        matches_id = r_dict.get('id') == record.id or r_dict.get('file_hash') == record.file_hash
+                        matches_inv = (
+                            old_supplier_invoice_no and
+                            r_dict.get('invoice_no') and
+                            str(r_dict.get('invoice_no')).strip().lower() == str(old_supplier_invoice_no).strip().lower()
+                        )
+                        if matches_id or matches_inv:
+                            r_dict['vendor_name'] = new_vendor_name or r_dict.get('vendor_name')
+                            r_dict['invoice_no'] = new_invoice_no or r_dict.get('invoice_no')
+                            r_dict['gstin'] = record.gstin or r_dict.get('gstin')
+                            r_dict['branch'] = record.branch or r_dict.get('branch')
+                            r_dict['total_amount'] = updated_data.get('total_amount') or r_dict.get('total_amount')
+                            # Also stamp the record id/file_hash onto the snapshot row so future
+                            # lookups can match by id even if they were None originally
+                            if r_dict.get('id') is None and record.id:
+                                r_dict['id'] = record.id
+                            if r_dict.get('file_hash') is None and record.file_hash:
+                                r_dict['file_hash'] = record.file_hash
+                            updated_any = True
+                            
+                    if updated_any:
+                        # Write back to S3 if s3_key exists
+                        if snap.s3_key:
+                            from core.storage import StorageService
+                            import json
+                            import gzip
+                            try:
+                                json_bytes = json.dumps(snap_data).encode('utf-8')
+                                if snap.s3_key.endswith('.gz'):
+                                    json_bytes = gzip.compress(json_bytes)
+                                StorageService().upload_file(file_bytes=json_bytes, key=snap.s3_key, content_type='application/json')
+                            except Exception as s3_err:
+                                import logging
+                                logging.getLogger(__name__).warning(f"[S3_SYNC_ERR] {s3_err}")
+                        else:
+                            # Fallback to DB
+                            snap.snapshot_json = snap_data
+                            snap.save(update_fields=['snapshot_json'])
+            except Exception as e:
+                import traceback
+                import logging
+                logging.getLogger(__name__).warning(f"[SNAPSHOT_SYNC_FAILED] {e}\n{traceback.format_exc()}")
+            
+            
+            if isinstance(v_res, dict) and v_res.get("status") == "LOCK_HELD":
+                return Response({'error': 'Record is currently being processed by another background task. Please try again in a few seconds.'}, status=409)
             
             # Restore terminal status in the DB if it was terminal before
             if db_processed:

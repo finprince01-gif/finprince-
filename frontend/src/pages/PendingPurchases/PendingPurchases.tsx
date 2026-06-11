@@ -208,7 +208,10 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
         item_status: purchase.item_status || '',
         processed: false,
       };
-      setEditingRow({ pp: purchase, stagingRow: scanResult });
+      
+      if (onNavigate) {
+        onNavigate('Vouchers', { editOcrRow: scanResult, returnTo: 'Pending Purchases' });
+      }
     } catch (error: any) {
       showError(error?.response?.data?.error || 'Failed to load staging record for editing');
     }
@@ -370,23 +373,7 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
         />
       )}
 
-      {/* Edit Invoice Modal — SAME component as Purchase Upload Review */}
-      {editingRow && (
-        <EditInvoiceModal
-          row={editingRow.stagingRow}
-          voucherType="Purchase"
-          onClose={() => setEditingRow(null)}
-          onSave={async (_updatedData, _reval) => {
-            const rowToRevalidate = editingRow.pendingPurchase;
-            setEditingRow(null);
-            if (rowToRevalidate) {
-                await revalidatePurchase(rowToRevalidate);
-            } else {
-                await fetchPurchases();
-            }
-          }}
-        />
-      )}
+
 
       {/* ── Bulk Finalize Confirmation Modal ── */}
       {showBulkConfirm && (
@@ -589,11 +576,29 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
                           <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{purchase.vendor_gstin || '—'}</td>
 
                           {/* Branch */}
-                          <td className="px-3 py-3 text-[11px] text-gray-600 font-medium">{purchase.branch_id || '—'}</td>
+                          <td className="px-3 py-3 text-[11px] text-gray-600 font-medium">
+                            {(() => {
+                              const ext = purchase.extraction_payload || {};
+                              const extBranch = ext.branch || ext.sections?.supplier_details?.branch || ext.header?.branch;
+                              const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(purchase.branch_id || '');
+                              if (isUuid && extBranch) return extBranch;
+                              return purchase.branch_id && !isUuid ? purchase.branch_id : (extBranch || '—');
+                            })()}
+                          </td>
 
                           {/* Amount */}
                           <td className="px-3 py-3 text-right font-black text-gray-900 text-[11px]">
-                            ₹{purchase.amount ? Number(purchase.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                            ₹{(() => {
+                              const ext = purchase.extraction_payload || {};
+                              const header = ext.header || {};
+                              let amt = purchase.amount;
+                              if (!amt || Number(amt) === 0) {
+                                amt = header.total_amount || header.invoice_total || ext.total_amount || ext.invoice_total || 0;
+                              }
+                              // Strip commas if it's a formatted string from extraction
+                              if (typeof amt === 'string') amt = parseFloat(amt.replace(/[^\d.-]/g, '')) || 0;
+                              return Number(amt).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                            })()}
                           </td>
 
                           {/* Vendor Status */}

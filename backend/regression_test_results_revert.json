@@ -1,0 +1,212 @@
+{
+  "IMG_20260319_0014.pdf": [
+    {
+      "id": 1007042,
+      "invoice_no": "035",
+      "vendor_name": "Balamurugan Fabricators",
+      "gstin": "33AKWPP4092M1Z8",
+      "address": "2/11, S.V. Nagar, Edayarpalayam - Vadavalli Road, P.N Pudur (Post), Coimbatore - 641 041",
+      "taxable": 43000.0,
+      "cgst": 3870.0,
+      "sgst": 3870.0,
+      "igst": 0.0,
+      "total": 50740.0,
+      "vendor_status": "ALREADY_EXIST",
+      "voucher_status": "NEED_TO_SAVE",
+      "warnings": [
+        "irn_missing",
+        "ack_no_missing"
+      ]
+    },
+    {
+      "id": 1007045,
+      "invoice_no": "037",
+      "vendor_name": "Balamurugan Fabricators",
+      "gstin": "33AKWPP4092M1Z8",
+      "address": "2211, S.V. Nagar, Edayarpalayam - Vadavalli Road, P.N Pudur (Post), Coimbatore - 641 041",
+      "taxable": 11000.0,
+      "cgst": 990.0,
+      "sgst": 990.0,
+      "igst": 0.0,
+      "total": 12980.0,
+      "vendor_status": "ALREADY_EXIST",
+      "voucher_status": "ALREADY_EXIST",
+      "warnings": [
+        "irn_missing",
+        "ack_no_missing"
+      ]
+    },
+    {
+      "id": 1007046,
+      "invoice_no": "029",
+      "vendor_name": "BNIF Balamurugan Fabricators",
+      "gstin": "33AKWPP4092M1Z8",
+      "address": "2/211, S.V. Nagal Edayarpalayam - Vadavalli Road, P.N Pudur (Post), Coimbatore - 641 041",
+      "taxable": 38500.0,
+      "cgst": 3465.0,
+      "sgst": 3465.0,
+      "igst": 4.0,
+      "total": 45430.0,
+      "vendor_status": "ALREADY_EXIST",
+      "voucher_status": "NEED_TO_SAVE",
+      "warnings": [
+        "irn_missing",
+        "ack_no_missing"
+      ]
+    },
+    {
+      "id": 1007047,
+      "invoice_no": "041",
+      "vendor_name": "Balamurugan Fabricatnns",
+      "gstin": "33AKWPP4092MIZ8",
+      "address": "221'1, S.V. Nagar, Edayarpalayam - Vadavalli Road, P.N Pudur (Post), Coimbatore - 641 041",
+      "taxable": 22800.0,
+      "cgst": 2052.0,
+      "sgst": 2052.0,
+      "igst": 0.0,
+      "total": 26900.0,
+      "vendor_status": "CREATE_VENDOR",
+      "voucher_status": "WAIT",
+      "warnings": [
+        "irn_missing",
+        "ack_no_missing"
+      ]
+    },
+    {
+      "id": 1007048,
+      "invoice_no": "S 060",
+      "vendor_name": "MARUTHI ENGINEERING SERVICES",
+      "gstin": "33ABAPV2380D1ZY",
+      "address": "23/126 B, Easwaran Kovil Street, Perianaickenpalayam, Coimbatore - 641 020.",
+      "taxable": 825000.0,
+      "cgst": 74250.0,
+      "sgst": 74250.0,
+      "igst": 0.0,
+      "total": 973500.0,
+      "vendor_status": "ALREADY_EXIST",
+      "voucher_status": "ALREADY_EXIST",
+      "warnings": [
+        "irn_missing",
+        "ack_no_missing"
+      ]
+    }
+  ],
+  "IMG_20260319_0001.pdf": [
+    {
+      "id": 1007043,
+      "invoice_no": null,
+      "vendor_name": null,
+      "gstin": null,
+      "address": null,
+      "taxable": null,
+      "cgst": null,
+      "sgst": null,
+      "igst": null,
+      "total": null,
+      "vendor_status": "CREATE_VENDOR",
+      "voucher_status": "SCANNING",
+      "warnings": null
+    }
+  ],
+  "IMG_20260406_0001_Part1.pdf": [
+    {
+      "id": 1007044,
+      "invoice_no": "329",
+      "vendor_name": "OMKAR TEKNO PACKS",
+      "gstin": "33CPUPG6938Q1ZV",
+      "address": "116 B / 1, K.N.G.Pudur, G.N.Mills Post, Subramaniampalayam Road, Coimbatore - 641029.",
+      "taxable": 1092.5,
+      "cgst": 98.33,
+      "sgst": 98.33,
+      "igst": 0.0,
+      "total": 1290.0,
+      "vendor_status": "ALREADY_EXIST",
+      "voucher_status": "ALREADY_EXIST",
+      "warnings": [
+        "irn_missing",
+        "ack_no_missing"
+      ]
+    },
+    {
+      "id": 1007049,
+      "invoice_no": "208",
+      "vendor_name": "OMKAR TEKNO PACKS",
+      "gstin": "33CPUPG6938Q1ZV",
+      "address": "116 B / 1, K.N.G.Pudur, G.N.Mills Post, Subramaniampalayam Road, Coimbatore -641029.",
+      "taxable": 1242.0,
+      "cgst": 74.52,
+      "sgst": 74.52,
+      "igst": 0.0,
+      "total": 1392.0,
+      "vendor_status": "ALREADY_EXIST",
+      "voucher_status": "ALREADY_EXIST",
+      "warnings": [
+        "irn_missing",
+        "ack_no_missing"
+      ]
+    },
+    {
+      "id": 1007050,
+      "invoice_no": "196",
+      "vendor_name": "OMKAR TEKNO PACKS",
+      "gstin": "33CPUPG5938Q1ZV",
+      "address": "116 B / 1,K.N.G-Pudur, G'N'Mills Post' Subramaniampalayam Road' Coimbatore -641029'",
+      "taxable": 3700.0,
+      "cgst": 222.0,
+      "sgst": 222.0,
+      "igst": 0.0,
+      "total": 4144.0,
+      "vendor_status": "ALREADY_EXIST",
+      "voucher_status": "ALREADY_EXIST",
+      "warnings": [
+        "irn_missing",
+        "ack_no_missing"
+      ]
+    },
+    {
+      "id": 1007051,
+      "invoice_no": "TWCBE2526/0499",
+      "vendor_name": "Tri-Wall Pak Pvt Ltd-Coimbatore",
+      "gstin": "33AABCT412AL3ZB",
+      "address": "Accuturn Machiners pwt. Ltd. 13 A, Thudiyalur - Kanuvai Road Appanaickenpalayam, K.Vadamadurai pO Coimbatore, TN-641O17",
+      "taxable": 39996.0,
+      "cgst": 999.9,
+      "sgst": 999.9,
+      "igst": 0.0,
+      "total": 41996.0,
+      "vendor_status": "CREATE_VENDOR",
+      "voucher_status": "WAIT",
+      "warnings": []
+    },
+    {
+      "id": 1007052,
+      "invoice_no": "TWCBE2526i0497",
+      "vendor_name": "Tri-Wall Pak Pvt Ltd-Coimbatore",
+      "gstin": "33AABCT4128LZB",
+      "address": "Accuturn Machiners Pvt. Ltd. 4/14.4/15 VKV NanjaPPa Gounder LaYout SaravanamPatti Coimbatore 641o35 GSTIN/UlN : 33ABACA5 71AR1ZD State Name : Tamil Nadu, Code : 33",
+      "taxable": 39996.0,
+      "cgst": 999.9,
+      "sgst": 999.9,
+      "igst": 0.0,
+      "total": 41996.0,
+      "vendor_status": "CREATE_VENDOR",
+      "voucher_status": "WAIT",
+      "warnings": []
+    },
+    {
+      "id": 1007053,
+      "invoice_no": "TWCBE2526/0436",
+      "vendor_name": "Tri-Wall Pak Pvt Ltd-Coimbatore",
+      "gstin": "33AABCT4128L3Z8",
+      "address": "Accuturn Machiners Pvt. Ltd 4/14, 4/15 VKV Nanjappa Gounder Layout SaravanamPatti Coimbatore 641O35",
+      "taxable": 19998.0,
+      "cgst": 1199.88,
+      "sgst": 1199.88,
+      "igst": 0.0,
+      "total": 22398.0,
+      "vendor_status": "CREATE_VENDOR",
+      "voucher_status": "WAIT",
+      "warnings": []
+    }
+  ]
+}

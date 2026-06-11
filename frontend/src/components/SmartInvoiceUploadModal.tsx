@@ -335,6 +335,7 @@ export const EditInvoiceModal: React.FC<{
     const [data, setData] = useState<any>(null); // HARD RESET FRONTEND STATE
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [activeTab, setActiveTab] = useState<string>('');
 
     useEffect(() => {
         const fetchFreshData = async () => {
@@ -556,65 +557,92 @@ export const EditInvoiceModal: React.FC<{
                     </div>
                 )}
 
-                <div className="flex-1 overflow-y-auto p-6 space-y-10">
-                    {/* Dynamic Header Sections */}
-                    {Object.entries(dynamicSchema.sections || {})
-                        .filter(([name]) => name !== 'items')
-                        .map(([sectionName, fields]: any) => {
-                            const sectionTitles: Record<string, string> = {
-                                supplier_details: "Supplier Details",
-                                supply_details: "Supply Details",
-                                due_details: "Due Details",
-                                transit_details: "Transit Details"
-                            };
-                            const title = sectionTitles[sectionName] || sectionName.replace(/_/g, ' ').toUpperCase();
-                            const sectionData = sections[sectionName] || {};
+                <div className="flex-1 overflow-y-auto bg-gray-50/50">
+                    {/* Tabs Navigation */}
+                    <div className="flex border-b border-gray-200 bg-white overflow-x-auto">
+                        {Object.keys(dynamicSchema.sections || {})
+                            .filter(name => name !== 'items')
+                            .map((sectionName) => {
+                                const sectionTitles: Record<string, string> = {
+                                    supplier_details: "Supplier Details",
+                                    supply_details: "Supply Details",
+                                    due_details: "Due Details",
+                                    transit_details: "Transit Details"
+                                };
+                                const title = sectionTitles[sectionName] || sectionName.replace(/_/g, ' ').toUpperCase();
+                                const isActive = activeTab === sectionName || (!activeTab && sectionName === Object.keys(dynamicSchema.sections || {}).filter(n => n !== 'items')[0]);
+                                
+                                return (
+                                    <button
+                                        key={sectionName}
+                                        onClick={() => setActiveTab(sectionName)}
+                                        className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${isActive
+                                            ? 'border-indigo-600 text-indigo-600'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        {title}
+                                    </button>
+                                );
+                            })}
+                    </div>
 
-                            return (
-                                <div key={sectionName} className="space-y-4">
-                                    <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-4 border-b border-indigo-50 pb-2">{title}</h4>
-                                    <div className="grid grid-cols-3 gap-6">
-                                        {fields.map((field: any) => {
-                                            const nk = field.name;
-                                            const kLabel = field.label;
-                                            const isMandatory = field.mandatory;
+                    <div className="p-6 space-y-6">
+                        {/* Active Tab Content */}
+                        <div className="p-6 bg-white rounded-[4px] border border-gray-200 min-h-[200px]">
+                            {Object.entries(dynamicSchema.sections || {})
+                                .filter(([name]) => name !== 'items')
+                                .map(([sectionName, fields]: any) => {
+                                    const isActive = activeTab === sectionName || (!activeTab && sectionName === Object.keys(dynamicSchema.sections || {}).filter(n => n !== 'items')[0]);
+                                    if (!isActive) return null;
 
-                                            let v = sectionData[nk];
-                                            let displayVal = "";
-                                            if (v !== null && v !== undefined) {
-                                                displayVal = typeof v === 'object' ? JSON.stringify(v) : String(v);
-                                            }
+                                    const sectionData = sections[sectionName] || {};
 
-                                            if (field.type === 'date' && displayVal) {
-                                                const parts = displayVal.split(/[-\/]/);
-                                                if (parts.length === 3) {
-                                                    // if DD-MM-YYYY
-                                                    if (parts[0].length === 2 && parts[2].length === 4) {
-                                                        displayVal = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                                    return (
+                                        <div key={sectionName} className="space-y-6 animate-in fade-in duration-200">
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                                {fields.map((field: any) => {
+                                                    const nk = field.name;
+                                                    const kLabel = field.label;
+                                                    const isMandatory = field.mandatory;
+
+                                                    let v = sectionData[nk];
+                                                    let displayVal = "";
+                                                    if (v !== null && v !== undefined) {
+                                                        displayVal = typeof v === 'object' ? JSON.stringify(v) : String(v);
                                                     }
-                                                }
-                                            }
 
-                                            return (
-                                                <div key={nk} className="space-y-1.5">
-                                                    <label className="text-[10px] uppercase font-bold text-gray-400 flex items-center gap-1">
-                                                        {kLabel}
-                                                        {isMandatory && <span className="text-red-500 font-extrabold">*</span>}
-                                                    </label>
-                                                    <input
-                                                        type={field.type === 'number' ? 'text' : field.type}
-                                                        value={displayVal}
-                                                        onChange={e => handleFieldChange(sectionName, nk, e.target.value)}
-                                                        placeholder={`Enter ${kLabel.toLowerCase()}...`}
-                                                        className={`w-full border rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none hover:border-indigo-300 transition-all shadow-sm ${isMandatory && !displayVal ? 'border-amber-300 bg-amber-50/20' : 'border-gray-200'}`}
-                                                    />
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                                    if (field.type === 'date' && displayVal) {
+                                                        const parts = displayVal.split(/[-\/]/);
+                                                        if (parts.length === 3) {
+                                                            // if DD-MM-YYYY
+                                                            if (parts[0].length === 2 && parts[2].length === 4) {
+                                                                displayVal = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                                                            }
+                                                        }
+                                                    }
+
+                                                    return (
+                                                        <div key={nk} className="space-y-1">
+                                                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                                                                {kLabel}
+                                                                {isMandatory && <span className="text-red-500">*</span>}
+                                                            </label>
+                                                            <input
+                                                                type={field.type === 'number' ? 'text' : field.type}
+                                                                value={displayVal}
+                                                                onChange={e => handleFieldChange(sectionName, nk, e.target.value)}
+                                                                placeholder={`Enter ${kLabel.toLowerCase()}...`}
+                                                                className={`w-full border rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-indigo-500 outline-none transition-all ${isMandatory && !displayVal ? 'border-amber-300 bg-amber-50/20' : 'border-gray-300'}`}
+                                                            />
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                        </div>
 
                     {/* Dynamic Line Items Section */}
                     {dynamicSchema.sections?.items && (
@@ -655,6 +683,7 @@ export const EditInvoiceModal: React.FC<{
                             </div>
                         </div>
                     )}
+                    </div>
                 </div>
                 <div className="p-4 border-t bg-gray-50 flex justify-end gap-3">
                     <button onClick={onClose} className="px-6 py-2 text-sm font-bold text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-100">Cancel</button>

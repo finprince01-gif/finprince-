@@ -45,6 +45,7 @@ interface VouchersPageProps {
   permissions: string[];
   viewVoucherData?: any;
   clearViewVoucherData?: () => void;
+  navParams?: any;
 }
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
@@ -85,7 +86,7 @@ const findRate = (map: Record<string, number>, sectionStr: string): number => {
   return 0;
 };
 
-const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockItems, onAddVouchers, prefilledData, clearPrefilledData, onInvoiceUpload, companyDetails, onNavigate, permissions = [], viewVoucherData, clearViewVoucherData }) => {
+const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockItems, onAddVouchers, prefilledData, clearPrefilledData, onInvoiceUpload, companyDetails, onNavigate, permissions = [], viewVoucherData, clearViewVoucherData, navParams }) => {
 
   const { hasTabAccess, isSuperuser } = usePermissions();
 
@@ -519,7 +520,88 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     setLocalPrefilledData(null);
   }, [clearPrefilledData]);
 
+  const handleEditOcrRow = useCallback((row: any) => {
+    setIsBulkUploadOpen(false);
+    setActiveOcrFileHash(row.file_hash);
+    setActiveOcrFileName(row.file_name);
+    const resolvedSessionId = row.uploadSessionId || useOcrWorkflowStore.getState().uploadSessionId || null;
+    setActiveOcrSessionId(resolvedSessionId);
 
+    const data = row.extracted_data || {};
+    const invoice = data.invoice || data.header || data;
+    const items = data.items || data.line_items || [];
+
+    const prefilled: ExtractedInvoiceData = {
+      invoiceNumber: row.invoice_number || row.invoice_no || invoice.invoice_no || invoice.invoice_number || '',
+      sellerName: row.vendor_name || invoice.vendor_name || '',
+      invoiceDate: row.invoice_date || invoice.invoice_date || '',
+      gstin: row.vendor_gstin || row.gstin || invoice.vendor_gstin || invoice.gstin || '',
+      subtotal: Number(row.total_taxable_value || invoice.total_taxable_value || invoice.taxable_value || 0),
+      cgstAmount: Number(row.total_cgst || invoice.total_cgst || 0),
+      sgstAmount: Number(row.total_sgst || invoice.total_sgst || 0),
+      igstAmount: Number(row.total_igst || invoice.total_igst || 0),
+      totalAmount: Number(row.total_amount || invoice.total_amount || invoice.invoice_total || 0),
+
+      placeOfSupply: row.place_of_supply || invoice.place_of_supply || '',
+      branch: row.branch || invoice.branch || '',
+      billFrom: row.bill_from || invoice.bill_from || '',
+      billTo: row.bill_to || invoice.bill_to || invoice.billing_address || '',
+
+      dispatchFrom: row.dispatchFrom || row.dispatch_from || invoice.dispatchFrom || invoice.dispatch_from || '',
+      modeOfTransport: row.modeOfTransport || row.mode_of_transport || invoice.modeOfTransport || invoice.mode_of_transport || '',
+      dispatchDate: row.dispatchDate || row.dispatch_date || invoice.dispatchDate || invoice.dispatch_date || '',
+      dispatchTime: row.dispatchTime || row.dispatch_time || invoice.dispatchTime || invoice.dispatch_time || '',
+      transporterId: row.transporterId || row.transporter_id || invoice.transporterId || invoice.transporter_id || '',
+      transporterName: row.transporterName || row.transporter_name || invoice.transporterName || invoice.transporter_name || '',
+      vehicleNo: row.vehicleNo || row.vehicle_no || invoice.vehicleNo || invoice.vehicle_no || '',
+      lrGrConsignment: row.lrGrConsignment || row.lr_gr_consignment || invoice.lrGrConsignment || invoice.lr_gr_consignment || '',
+
+      tdsIncomeTax: String(data.sections?.due_details?.tds_it || invoice.sections?.due_details?.tds_it || data.tds_it || row.tds_it || invoice.tds_it || '0.00'),
+      advanceAmount: String(data.sections?.due_details?.advance_paid || invoice.sections?.due_details?.advance_paid || data.advance_amount || row.advance_amount || invoice.advance_amount || '0.00'),
+      postingNote: data.sections?.due_details?.posting_note || invoice.sections?.due_details?.posting_note || data.posting_note || row.posting_note || invoice.posting_note || '',
+
+      lineItems: items.map((it: any) => {
+        const qty = Number(it.qty || it.quantity || 1);
+        const rate = Number(it.rate || it.item_rate || it['Item Rate'] || 0);
+        const taxableValue = Number(it.taxable_value || it.taxableValue || it.taxable || it.total_amount || it.amount || (qty * rate));
+        const cgst = Number(it.cgst_amount !== undefined ? it.cgst_amount : (it.cgst !== undefined ? it.cgst : 0));
+        const sgst = Number(it.sgst_amount !== undefined ? it.sgst_amount : (it.sgst !== undefined ? it.sgst : 0));
+        const igst = Number(it.igst_amount !== undefined ? it.igst_amount : (it.igst !== undefined ? it.igst : 0));
+        const cess = Number(it.cess_amount !== undefined ? it.cess_amount : (it.cess !== undefined ? it.cess : 0));
+
+        const rawInvVal = Number(it.invoice_value !== undefined ? it.invoice_value : (it.invoiceValue !== undefined ? it.invoiceValue : 0));
+        const invoiceValue = rawInvVal > 0 ? rawInvVal : (taxableValue + cgst + sgst + igst + cess);
+
+        return {
+          itemDescription: it.description || it['Item Name'] || it.Description || '',
+          hsnCode: it.hsn_sac || it.hsn || '',
+          quantity: qty,
+          rate: rate,
+          amount: taxableValue,
+          cgst,
+          sgst,
+          igst,
+          cess,
+          taxableValue,
+          invoiceValue
+        };
+      })
+    };
+
+    setVoucherType('Purchase');
+    setLocalPrefilledData(prefilled);
+  }, [setIsBulkUploadOpen, setActiveOcrFileHash, setActiveOcrFileName, setActiveOcrSessionId, setLocalPrefilledData, setVoucherType]);
+
+  const [returnToPage, setReturnToPage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (navParams?.editOcrRow) {
+      handleEditOcrRow(navParams.editOcrRow);
+      if (navParams?.returnTo) {
+        setReturnToPage(navParams.returnTo);
+      }
+    }
+  }, [navParams, handleEditOcrRow]);
 
   const handleLimitReached = () => {
     setIsUpgradeModalOpen(true);
@@ -11984,6 +12066,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       setActiveOcrFileHash(null);
       setActiveOcrFileName(null);
       setLocalPrefilledData(null);
+
+      if (returnToPage && onNavigate) {
+         onNavigate(returnToPage as Page);
+         setReturnToPage(null);
+         return;
+      }
+
       // Restore the OCR workflow step to 'review' so the modal re-opens to the scan list
       // (not the upload step). The session ID is already in activeOcrSessionId.
       if (activeOcrSessionId) {
@@ -13194,77 +13283,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 useOcrWorkflowStore.getState().clearWorkflow();
                 refetch(); // Refresh usage
               }}
-              onEditRow={(row: any) => {
-                setIsBulkUploadOpen(false);
-                setActiveOcrFileHash(row.file_hash);
-                setActiveOcrFileName(row.file_name);
-                // Prefer session ID from the row; fall back to the Zustand store (already set during this session)
-                const resolvedSessionId = row.uploadSessionId || useOcrWorkflowStore.getState().uploadSessionId || null;
-                setActiveOcrSessionId(resolvedSessionId);
-
-                const data = row.extracted_data || {};
-                const invoice = data.invoice || data.header || data;
-                const items = data.items || data.line_items || [];
-
-                const prefilled: ExtractedInvoiceData = {
-                  invoiceNumber: row.invoice_number || row.invoice_no || invoice.invoice_no || invoice.invoice_number || '',
-                  sellerName: row.vendor_name || invoice.vendor_name || '',
-                  invoiceDate: row.invoice_date || invoice.invoice_date || '',
-                  gstin: row.vendor_gstin || row.gstin || invoice.vendor_gstin || invoice.gstin || '',
-                  subtotal: Number(row.total_taxable_value || invoice.total_taxable_value || invoice.taxable_value || 0),
-                  cgstAmount: Number(row.total_cgst || invoice.total_cgst || 0),
-                  sgstAmount: Number(row.total_sgst || invoice.total_sgst || 0),
-                  igstAmount: Number(row.total_igst || invoice.total_igst || 0),
-                  totalAmount: Number(row.total_amount || invoice.total_amount || invoice.invoice_total || 0),
-
-                  placeOfSupply: row.place_of_supply || invoice.place_of_supply || '',
-                  branch: row.branch || invoice.branch || '',
-                  billFrom: row.bill_from || invoice.bill_from || '',
-                  billTo: row.bill_to || invoice.bill_to || invoice.billing_address || '',
-
-                  dispatchFrom: row.dispatchFrom || row.dispatch_from || invoice.dispatchFrom || invoice.dispatch_from || '',
-                  modeOfTransport: row.modeOfTransport || row.mode_of_transport || invoice.modeOfTransport || invoice.mode_of_transport || '',
-                  dispatchDate: row.dispatchDate || row.dispatch_date || invoice.dispatchDate || invoice.dispatch_date || '',
-                  dispatchTime: row.dispatchTime || row.dispatch_time || invoice.dispatchTime || invoice.dispatch_time || '',
-                  transporterId: row.transporterId || row.transporter_id || invoice.transporterId || invoice.transporter_id || '',
-                  transporterName: row.transporterName || row.transporter_name || invoice.transporterName || invoice.transporter_name || '',
-                  vehicleNo: row.vehicleNo || row.vehicle_no || invoice.vehicleNo || invoice.vehicle_no || '',
-                  lrGrConsignment: row.lrGrConsignment || row.lr_gr_consignment || invoice.lrGrConsignment || invoice.lr_gr_consignment || '',
-
-                  tdsIncomeTax: String(data.sections?.due_details?.tds_it || invoice.sections?.due_details?.tds_it || data.tds_it || row.tds_it || invoice.tds_it || '0.00'),
-                  advanceAmount: String(data.sections?.due_details?.advance_paid || invoice.sections?.due_details?.advance_paid || data.advance_amount || row.advance_amount || invoice.advance_amount || '0.00'),
-                  postingNote: data.sections?.due_details?.posting_note || invoice.sections?.due_details?.posting_note || data.posting_note || row.posting_note || invoice.posting_note || '',
-
-                  lineItems: items.map((it: any) => {
-                    const qty = Number(it.qty || it.quantity || 1);
-                    const rate = Number(it.rate || it.item_rate || it['Item Rate'] || 0);
-                    const taxableValue = Number(it.taxable_value || it.taxableValue || it.taxable || it.total_amount || it.amount || (qty * rate));
-                    const cgst = Number(it.cgst_amount !== undefined ? it.cgst_amount : (it.cgst !== undefined ? it.cgst : 0));
-                    const sgst = Number(it.sgst_amount !== undefined ? it.sgst_amount : (it.sgst !== undefined ? it.sgst : 0));
-                    const igst = Number(it.igst_amount !== undefined ? it.igst_amount : (it.igst !== undefined ? it.igst : 0));
-                    const cess = Number(it.cess_amount !== undefined ? it.cess_amount : (it.cess !== undefined ? it.cess : 0));
-
-                    const rawInvVal = Number(it.invoice_value !== undefined ? it.invoice_value : (it.invoiceValue !== undefined ? it.invoiceValue : 0));
-                    const invoiceValue = rawInvVal > 0 ? rawInvVal : (taxableValue + cgst + sgst + igst + cess);
-
-                    return {
-                      itemDescription: it.description || it['Item Name'] || it.Description || '',
-                      hsnCode: it.hsn_sac || it.hsn || '',
-                      quantity: qty,
-                      rate: rate,
-                      amount: taxableValue,
-                      cgst,
-                      sgst,
-                      igst,
-                      cess,
-                      taxableValue,
-                      invoiceValue
-                    };
-                  })
-                };
-
-                setLocalPrefilledData(prefilled);
-              }}
+              onEditRow={handleEditOcrRow}
               onFinalized={(summary) => {
                 const created = summary.created ?? 0;
                 const skipped = summary.skipped ?? 0;
