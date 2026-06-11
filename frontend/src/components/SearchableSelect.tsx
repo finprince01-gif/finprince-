@@ -64,8 +64,12 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                 portalRef.current && !portalRef.current.contains(target)
             ) {
                 setIsOpen(false);
-                const selected = normalizedOptions.find(o => o.value === value);
-                setSearchValue(selected ? selected.label : value);
+                // If the user was typing, commit whatever they typed instead of reverting.
+                // This preserves free-text edits (e.g. manually correcting a vendor name)
+                // when they click away without selecting from the dropdown list.
+                if (isTyping && searchValue !== value) {
+                    onChange(searchValue);
+                }
                 setIsTyping(false);
             }
         };
@@ -89,7 +93,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
             window.removeEventListener('scroll', handleScroll, true);
             window.removeEventListener('resize', () => setIsOpen(false));
         };
-    }, [isOpen, value, normalizedOptions]);
+    }, [isOpen, value, normalizedOptions, isTyping, searchValue, onChange]);
 
     const filteredOptions = isTyping
         ? normalizedOptions.filter(opt =>

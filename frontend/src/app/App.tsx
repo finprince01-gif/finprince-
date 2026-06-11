@@ -1,4 +1,4 @@
-/**
+   /**
  * ============================================================================
  * MAIN APPLICATION COMPONENT (App.tsx)
  * ============================================================================
@@ -324,12 +324,17 @@ const App: React.FC = () => {
    * Called when user clicks on sidebar menu items
    */
   const [reportsNavParams, setReportsNavParams] = useState<any>(null);
+  const [vouchersNavParams, setVouchersNavParams] = useState<any>(null);
 
   const handleNavigate = (page: Page, params?: any) => {
-    if (page === 'Vouchers' && params?.viewVoucher) {
-      setViewVoucherData(params.viewVoucher);
-    } else if (page !== 'Vouchers') {
+    if (page === 'Vouchers') {
+      if (params?.viewVoucher) {
+        setViewVoucherData(params.viewVoucher);
+      }
+      setVouchersNavParams(params);
+    } else {
       setViewVoucherData(null);
+      setVouchersNavParams(null);
     }
     if (page === 'Reports') {
       setReportsNavParams(params);
@@ -1318,6 +1323,7 @@ const App: React.FC = () => {
       />;
       case 'Inventory': return <InventoryPage />;
       case 'Vouchers': return <VouchersPage
+        navParams={vouchersNavParams}
         vouchers={vouchers}
         ledgers={ledgers}
         stockItems={stockItems}

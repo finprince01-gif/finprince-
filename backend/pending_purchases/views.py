@@ -20,6 +20,42 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
     serializer_class = PendingPurchaseSerializer
     permission_classes = [IsAuthenticated]
 
+    def _sync_related_rows(self, pp):
+        """
+        Surgical fix: Automatically revalidate other pending purchases from the same vendor 
+        to prevent stale CREATE_VENDOR / CREATE_ITEM statuses when master records are created.
+        """
+        try:
+            from django.db.models import Q
+            from ocr_pipeline.models import InvoiceTempOCR
+            from ocr_pipeline.pipeline import validate_and_process
+
+            related_qs = PendingPurchase.objects.filter(
+                company_id=pp.company_id,
+                pending_purchase_status='PENDING'
+            ).exclude(id=pp.id)
+
+            if pp.vendor_gstin:
+                related_qs = related_qs.filter(Q(vendor_gstin=pp.vendor_gstin) | Q(vendor_name=pp.vendor_name))
+            elif pp.vendor_name:
+                related_qs = related_qs.filter(vendor_name=pp.vendor_name)
+            else:
+                return
+
+            for related_pp in related_qs:
+                staging = InvoiceTempOCR.objects.filter(id=related_pp.source_scan_row_id).first()
+                if staging:
+                    InvoiceTempOCR.objects.filter(id=related_pp.source_scan_row_id).update(
+                        processed=False,
+                        validation_status='PENDING',
+                        status='FINALIZED'
+                    )
+                    staging.refresh_from_db()
+                    validate_and_process(staging, auto_save=True)
+                    logger.info(f"[SYNC_RELATED_ROW] id={related_pp.id} auto-synced due to trigger_id={pp.id}")
+        except Exception as e:
+            logger.error(f"[SYNC_RELATED_ROWS_ERROR] trigger_id={pp.id} error={e}")
+
     def get_queryset(self):
         tenant_id = getattr(self.request.user, 'branch_id', None)
         if not tenant_id:
@@ -110,6 +146,9 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
             # Pass auto_save=True so that if the pending purchase is fully resolved,
             # it automatically proceeds to create the Voucher.
             result = validate_and_process(staging, auto_save=True)
+            
+            if isinstance(result, dict) and result.get("status") == "LOCK_HELD":
+                return Response({'error': 'Record is currently being processed by another background task. Please try again in a few seconds.'}, status=409)
 
             logger.info(
                 f"[PENDING_REVALIDATE_RESULT] id={pp.id} result={result} "
@@ -118,6 +157,8 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
 
             pp.refresh_from_db()
             logger.critical(f"[QUEUE_SYNCHRONIZED] id={pp.id} vendor_status={pp.vendor_status} item_status={pp.item_status} voucher_status={pp.voucher_status}")
+
+            self._sync_related_rows(pp)
 
             return Response({
                 'status': result.get('status') if isinstance(result, dict) else str(result),
@@ -159,6 +200,8 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
                 staging.refresh_from_db()
                 validate_and_process(staging, auto_save=False)
                 pp.refresh_from_db()
+                
+                self._sync_related_rows(pp)
 
             return result
         except Exception as e:
@@ -201,6 +244,9 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
 
                 from ocr_pipeline.pipeline import validate_and_process
                 result = validate_and_process(staging, auto_save=True)
+                
+                if isinstance(result, dict) and result.get("status") == "LOCK_HELD":
+                    return Response({'error': 'Record is currently being processed by another background task. Please try again in a few seconds.'}, status=409)
 
                 logger.info(f"[PENDING_PIPELINE_RESULT] staging_id={staging.id} result={result}")
 
