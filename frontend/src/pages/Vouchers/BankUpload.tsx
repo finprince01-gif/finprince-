@@ -637,10 +637,10 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50/50 border-b border-slate-200">
-                      <th className="text-left p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date</th>
-                      <th className="text-left p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Narration</th>
+                      <th className="text-left p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest" style={{ minWidth: 140 }}>Date</th>
+                      <th className="text-left p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest" style={{ minWidth: 250 }}>Narration</th>
                       <th className="text-left p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest" style={{ minWidth: 130 }}>Ref No</th>
-                      <th className="text-right p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Amount</th>
+                      <th className="text-right p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest" style={{ minWidth: 120 }}>Amount</th>
                       <th className="text-left p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest" style={{ minWidth: 240 }}>Party / Ledger</th>
                       <th className="text-left p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest" style={{ minWidth: 160 }}>Voucher Type</th>
                       <th className="text-left p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest" style={{ minWidth: 120 }}>Voucher No</th>
@@ -664,16 +664,58 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
                                 ? 'bg-slate-50'
                                 : 'hover:bg-slate-50/50'
                         }`}>
-                          <td className="p-4 text-slate-500 font-bold whitespace-nowrap">{row.date?.split('-').reverse().join('-')}</td>
-                          <td className="p-4 max-w-[400px]"><div className="text-slate-800 text-xs font-medium leading-relaxed">{row.narration}</div></td>
+                          <td className="p-3">
+                            <input
+                              type="date"
+                              value={row.date || ''}
+                              onChange={async e => {
+                                const val = e.target.value;
+                                try {
+                                  const updated = await httpClient.patch<StagingRow>(`/api/bank-upload/rows/${row.id}/`, { date: val || null });
+                                  setAllRows(prev => prev.map(r => r.id === row.id ? updated : r));
+                                } catch (err) {
+                                  console.error('Failed to update date:', err);
+                                }
+                              }}
+                              disabled={row.status === 'posted' || row.status === 'duplicate'}
+                              className={`w-full px-2 py-1.5 rounded-lg text-xs font-semibold border transition-all focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+                                row.date
+                                  ? 'bg-slate-50 border-slate-200 text-slate-700 font-bold'
+                                  : 'bg-red-50 border-red-200 text-red-700'
+                              } ${(row.status === 'posted' || row.status === 'duplicate') ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            />
+                          </td>
+                          <td className="p-3">
+                            <input
+                              type="text"
+                              value={row.narration || ''}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setAllRows(prev => prev.map(r => r.id === row.id ? { ...r, narration: val } : r));
+                              }}
+                              onBlur={async () => {
+                                try {
+                                  const updated = await httpClient.patch<StagingRow>(`/api/bank-upload/rows/${row.id}/`, { narration: row.narration });
+                                  setAllRows(prev => prev.map(r => r.id === row.id ? updated : r));
+                                } catch (err) {
+                                  console.error('Failed to update narration:', err);
+                                }
+                              }}
+                              disabled={row.status === 'posted' || row.status === 'duplicate'}
+                              className="w-full px-2 py-1.5 rounded-lg text-xs border bg-slate-50 border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60 disabled:cursor-not-allowed"
+                            />
+                          </td>
                           <td className="p-3">
                             <input
                               type="text"
                               value={row.ref_no || ''}
-                              onChange={async e => {
+                              onChange={e => {
                                 const val = e.target.value;
+                                setAllRows(prev => prev.map(r => r.id === row.id ? { ...r, ref_no: val } : r));
+                              }}
+                              onBlur={async () => {
                                 try {
-                                  const updated = await httpClient.patch<StagingRow>(`/api/bank-upload/rows/${row.id}/`, { ref_no: val });
+                                  const updated = await httpClient.patch<StagingRow>(`/api/bank-upload/rows/${row.id}/`, { ref_no: row.ref_no });
                                   setAllRows(prev => prev.map(r => r.id === row.id ? updated : r));
                                 } catch (err) {
                                   console.error('Failed to update ref_no:', err);
@@ -688,9 +730,30 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
                               } ${(row.status === 'posted' || row.status === 'duplicate') ? 'opacity-60 cursor-not-allowed' : ''}`}
                             />
                           </td>
-                          <td className="p-4 text-right">
-                            <div className={`text-sm font-black ${row.inferred_type === 'payment' ? 'text-orange-600' : 'text-emerald-600'}`}>
-                              ₹{parseFloat(row.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          <td className="p-3">
+                            <div className="relative flex items-center">
+                              <span className="absolute left-2.5 text-xs font-bold text-slate-400">₹</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={row.amount || ''}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setAllRows(prev => prev.map(r => r.id === row.id ? { ...r, amount: val } : r));
+                                }}
+                                onBlur={async () => {
+                                  try {
+                                    const updated = await httpClient.patch<StagingRow>(`/api/bank-upload/rows/${row.id}/`, { amount: row.amount });
+                                    setAllRows(prev => prev.map(r => r.id === row.id ? updated : r));
+                                  } catch (err) {
+                                    console.error('Failed to update amount:', err);
+                                  }
+                                }}
+                                disabled={row.status === 'posted' || row.status === 'duplicate'}
+                                className={`w-full pl-6 pr-2 py-1.5 rounded-lg text-xs font-black text-right border transition-all focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+                                  row.inferred_type === 'payment' ? 'text-orange-600 bg-orange-50/30 border-orange-200' : 'text-emerald-600 bg-emerald-50/30 border-emerald-200'
+                                } ${(row.status === 'posted' || row.status === 'duplicate') ? 'opacity-60 cursor-not-allowed' : ''}`}
+                              />
                             </div>
                           </td>
                           <td className="p-4">
@@ -754,6 +817,14 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
                               onChange={e => {
                                 const val = e.target.value;
                                 setAllRows(prev => prev.map(r => r.id === row.id ? { ...r, posting_note: val } : r));
+                              }}
+                              onBlur={async () => {
+                                try {
+                                  const updated = await httpClient.patch<StagingRow>(`/api/bank-upload/rows/${row.id}/`, { posting_note: row.posting_note || '' });
+                                  setAllRows(prev => prev.map(r => r.id === row.id ? updated : r));
+                                } catch (err) {
+                                  console.error('Failed to update posting_note:', err);
+                                }
                               }}
                               placeholder="Add note..."
                               disabled={row.status === 'posted' || row.status === 'duplicate'}
