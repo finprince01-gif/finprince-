@@ -6194,13 +6194,15 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
 
 // Customer Ledger View Component
 interface CustomerLedgerViewProps {
-    customer: { id: string; name: string; is_also_vendor?: boolean; ledger_id?: string; credit_period?: string; };
+    customer: { id: string, name: string, ledger_id?: string, is_also_vendor?: boolean, credit_period?: string };
     onBack: () => void;
     onNavigate?: (page: string) => void;
     setPrefilledVoucherData?: (data: any) => void;
+    categoryName: string;
+    onBackToDashboard: () => void;
 }
 
-function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherData }: CustomerLedgerViewProps) {
+function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherData, categoryName, onBackToDashboard }: CustomerLedgerViewProps) {
     const [dateFilter, setDateFilter] = useState<{ start: string; end: string }>({ start: '', end: '' });
     const [postFromFilter, setPostFromFilter] = useState<TransactionType | ''>('');
     const [ledgerFilter, setLedgerFilter] = useState('');
@@ -6221,7 +6223,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
     const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
     const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState(false);
     const [selectedAdvanceRow, setSelectedAdvanceRow] = useState<any>(null);
-
 
     const toggleFilter = (filterName: string) => setActiveFilter(prev => prev === filterName ? null : filterName);
     const handleAdvanceClick = (row: any) => {
@@ -6281,11 +6282,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                     referenceNo: inv.sales_invoice_no,
                     ledger: 'Sales',
                     status: (() => {
-                        // NOTE: payment_balance defaults to 0 in DB, so we CANNOT use it to detect 'Received'.
-                        // The processedEntries refBalances logic will upgrade status to 'Received'/'Partially Received'
-                        // based on actual receipt transactions with matching referenceNo.
-                        // Here we only set the due-date status.
-                        // Any voucher showing in the ledger should show its aging status if it's a Sales invoice
                         return diffDays > creditPeriod ? 'Due' : (diffDays === creditPeriod ? 'Due Today' : 'Not Due');
                     })() as SalesStatus,
                     debit: parseFloat(inv.payment_details?.payment_invoice_value || 0),
@@ -6430,25 +6426,21 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
     };
 
     useEffect(() => {
-
         fetchLedgerData();
     }, [customer.id, customer.ledger_id, customer.name, customer.credit_period]);
 
     const handleProceedAllocation = async (selectedAdvance: any, invoiceRef: string) => {
         try {
-            // Determine the backend ID (T- is for CustomerTransaction)
             const rawId = selectedAdvance.id;
             const isTransaction = String(rawId).startsWith('T-');
             const transId = isTransaction ? rawId.replace('T-', '') : rawId;
 
-            // Update the transaction's reference_number to match the invoice reference
             await httpClient.patch(`/api/customerportal/transactions/${transId}/`, {
                 reference_number: invoiceRef,
                 payment_status: 'Utilized'
             });
 
             showSuccess(`Successfully allocated ${selectedAdvance.voucherNo} to ${invoiceRef}`);
-            // Refresh the entire ledger data to reflect changes
             fetchLedgerData();
         } catch (error: any) {
             console.error("Allocation failed:", error);
@@ -6457,7 +6449,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
     };
 
     const processedEntries = useMemo(() => {
-        // Deduplicate ledgerEntries for display & balance calculations (excluding referenceNo)
         const seen = new Set<string>();
         const localDedupeKey = (entry: LedgerEntry) => [
             entry.postFrom,
@@ -6467,8 +6458,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
             Number(entry.credit || 0).toFixed(2)
         ].join('|');
 
-        // Sort by ID descending so that newer/allocated entries are processed first and kept,
-        // while the older general 'ADVANCE' entries are discarded from the displayed ledger.
         const sortedForDedupe = [...ledgerEntries].sort((a, b) => {
             const idA = parseInt(a.id.toString().replace('T-', '').replace('L-', '')) || 0;
             const idB = parseInt(b.id.toString().replace('T-', '').replace('L-', '')) || 0;
@@ -6484,7 +6473,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
             }
         });
 
-        // 1. Build Reference Balance Map to determine real-time status
         const refBalances: Record<string, { total: number, paid: number }> = {};
         dedupedEntries.forEach(entry => {
             const ref = entry.referenceNo?.trim()?.toLowerCase();
@@ -6502,21 +6490,18 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
         return [...dedupedEntries].sort((a, b) => {
             const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
             if (dateDiff !== 0) return dateDiff;
-            // Fallback for same date: compare IDs (handling 'T-' and 'L-' prefixes)
             const idA = parseInt(a.id.toString().replace('T-', '').replace('L-', '')) || 0;
             const idB = parseInt(b.id.toString().replace('T-', '').replace('L-', '')) || 0;
             return idA - idB;
         }).map(entry => {
             balance += (entry.debit || 0) - (entry.credit || 0);
 
-            // 2. Update status for Sales/Debit Note based on global reference balance
             let updatedStatus = entry.status;
             if (['Sales', 'Debit Note', 'invoice', 'debit_note'].includes((entry.postFrom as string).toLowerCase()) || entry.postFrom === 'Sales' || entry.postFrom === 'Debit Note') {
                 const ref = entry.referenceNo?.trim()?.toLowerCase();
                 if (ref && refBalances[ref]) {
                     const { total, paid } = refBalances[ref];
 
-                    // Use a small epsilon for float comparison
                     const totalRounded = Math.round((total || 0) * 100);
                     const paidRounded = Math.round((paid || 0) * 100);
 
@@ -6532,10 +6517,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                     } else if (paidRounded > 0) {
                         updatedStatus = 'Partially Received';
                     } else if (diffDays > cp) {
-                        // After credit period
                         updatedStatus = 'Due';
                     } else {
-                        // Within credit period
                         updatedStatus = 'Not Due';
                     }
                 }
@@ -6554,15 +6537,12 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
 
     const monthLedgerData: MonthLedgerEntry[] = useMemo(() => {
         const monthsMap: Record<string, { debit: number; credit: number }> = {};
-
-        // Determine the relevant financial year
-        // If data exists, use the latest entry as reference, else current year
         const latestDate = processedEntries.length > 0
             ? new Date(processedEntries[processedEntries.length - 1].date)
             : new Date();
 
         let startYear = latestDate.getFullYear();
-        if (latestDate.getMonth() < 3) { // If Jan-Mar, start year of FY is previous year
+        if (latestDate.getMonth() < 3) {
             startYear -= 1;
         }
 
@@ -6571,7 +6551,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
             'October', 'November', 'December', 'January', 'February', 'March'
         ];
 
-        // Pre-populate all 12 months of the Financial Year
         const monthsToDisplay: string[] = [];
         monthsOrder.forEach((m, idx) => {
             const yr = idx < 9 ? startYear : startYear + 1;
@@ -6580,20 +6559,17 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
             monthsMap[key] = { debit: 0, credit: 0 };
         });
 
-        // Add actual data
         processedEntries.forEach(entry => {
             const mKey = new Date(entry.date).toLocaleString('default', { month: 'long', year: 'numeric' });
             if (monthsMap[mKey]) {
                 monthsMap[mKey].debit += entry.debit;
                 monthsMap[mKey].credit += entry.credit;
             } else {
-                // If entry is outside our pre-populated FY, add it anyway
                 monthsMap[mKey] = { debit: entry.debit, credit: entry.credit };
                 monthsToDisplay.push(mKey);
             }
         });
 
-        // Sort unique months chronologically
         const sortedDisplay = Array.from(new Set(monthsToDisplay)).sort((a, b) => {
             return new Date(a).getTime() - new Date(b).getTime();
         });
@@ -6655,13 +6631,11 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
             'Advance': 'bg-indigo-100 text-indigo-800',
             'Partially Advanced': 'bg-indigo-50 text-indigo-700',
             'Partially Utilized': 'bg-yellow-100 text-yellow-800'
-
         };
         return colors[status] || 'bg-gray-100 text-gray-800';
     };
 
     const postFromOptions: TransactionType[] = ['Sales', 'Receipt', 'Purchase', 'Payment', 'Debit Note', 'Credit Note', 'Journal'];
-    const statusOptions = ['Not Due', 'Due', 'Due Today', 'Partially Received', 'Received', 'Utilized', 'Not Utilized', 'Advance', 'Partially Advanced', 'Partially Utilized'];
 
     interface AdvanceAllocationModalProps {
         isOpen: boolean;
@@ -6679,17 +6653,13 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
 
         const [selectedAdvance, setSelectedAdvance] = useState<any>(null);
 
-        // Find exclusively pure unutilized or generic advance receipts for this customer (omitting those already allocated or with custom advance references)
         const advances = (ledgerEntries || []).filter(e =>
             e.postFrom === 'Receipt' &&
-            // Must be an advance/unutilized type
             (e.status === 'Not Utilized' || e.status === 'Partially Utilized' || e.status === 'Advance' || e.status === 'Partially Advanced' || e.is_advance) &&
-            // AND must NOT have an invoice reference yet
             (!e.originalInv?.reference_number ||
                 ['ADVANCE', '', '-', 'N/A'].includes(e.originalInv.reference_number.toUpperCase().trim())
             )
         ).map(e => {
-            // Calculate remaining balance by finding all other allocation entries for the same voucher No
             const allocations = (ledgerEntries || []).filter(item => 
                 item.postFrom === 'Receipt' &&
                 item.voucherNo === e.voucherNo &&
@@ -6708,7 +6678,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
         return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
                 <div className="bg-white w-[800px] max-w-[90vw] rounded-lg shadow-2xl overflow-hidden border border-gray-200 animate-in fade-in zoom-in duration-200">
-
                     <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center">
                         <div className="flex items-center gap-2">
                             <Receipt className="w-5 h-5 text-indigo-100" />
@@ -6720,7 +6689,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                     </div>
                     <div className="p-6">
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-
                             <div className="bg-gray-50 p-3 rounded border border-gray-100">
                                 <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Invoice Ref</label>
                                 <div className="text-sm font-bold text-gray-900">{row.refNo}</div>
@@ -6736,7 +6704,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                             <div className="bg-gray-50 p-3 rounded border border-gray-100">
                                 <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Pending</label>
                                 <div className="text-sm font-bold text-red-600">₹{row.pendingBalance?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-
                             </div>
                         </div>
 
@@ -6761,10 +6728,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                 <tr
                                                     key={idx}
                                                     onClick={() => setSelectedAdvance(adv)}
-                                                    className={`hover:bg-gray-50 cursor-pointer transition-colors ${selectedAdvance?.id === adv.id
-                                                        ? 'bg-indigo-50/50'
-                                                        : ''
-                                                        }`}
+                                                    className={`hover:bg-gray-50 cursor-pointer transition-colors ${selectedAdvance?.id === adv.id ? 'bg-indigo-50/50' : ''}`}
                                                 >
                                                     <td className="px-4 py-3">
                                                         <input
@@ -6776,9 +6740,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3 font-medium text-gray-900">{adv.voucherNo}</td>
-                                                    <td className="px-4 py-3 text-gray-500">
-                                                        {adv.date.split('-').reverse().join('-')}
-                                                    </td>
+                                                    <td className="px-4 py-3 text-gray-500">{adv.date.split('-').reverse().join('-')}</td>
                                                     <td className="px-4 py-3 text-right text-gray-900 font-bold">
                                                         ₹{adv.remainingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                     </td>
@@ -6792,12 +6754,10 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                             <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-200">
                                 <Search className="w-10 h-10 text-gray-300 mx-auto mb-3" />
                                 <p className="text-sm text-gray-500 font-medium">No unutilized advance receipts available for this customer.</p>
-                                <p className="text-[10px] text-gray-400 mt-1">Unallocated advance receipts will appear here.</p>
                             </div>
                         )}
                         <div className="mt-8 flex gap-3">
                             <button
-
                                 onClick={onClose}
                                 className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded hover:bg-gray-200 transition-colors uppercase tracking-widest text-[10px]"
                             >
@@ -6831,10 +6791,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                         }
                                         onClose();
                                     }}
-                                    className={`flex-1 py-3 font-bold rounded transition-colors uppercase tracking-widest text-[10px] shadow-lg ${selectedAdvance
-                                        ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
-                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
-                                        }`}
+                                    className={`flex-1 py-3 font-bold rounded transition-colors uppercase tracking-widest text-[10px] shadow-lg ${selectedAdvance ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200' : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'}`}
                                 >
                                     Proceed Allocation
                                 </button>
@@ -6847,18 +6804,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
     };
 
     const AllocationLedgerView: React.FC = () => {
-
-        /**
-         * Group ledgerEntries by their reference relationships.
-         * Logic:
-         * 1. Sources: Only 'Sales', 'Debit Note' entries.
-         * 2. Items: 'Receipt', 'Credit Note', 'Journal'.
-         * 3. Match: item.referenceNo === source.referenceNo
-         */
         const allocationRows = useMemo(() => {
             if (!ledgerEntries || ledgerEntries.length === 0) return [];
-
-            // Group entries by referenceNo strictly to find linked vouchers
             const groups: Record<string, any[]> = {};
             ledgerEntries.forEach(entry => {
                 const ref = entry.referenceNo?.trim() || '-';
@@ -6873,25 +6820,19 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
             });
 
             const rows: any[] = [];
-
-            // Process groups and sort by source date
             const sortedGroupRefs = Object.keys(groups).sort((aRef, bRef) => {
                 const firstA = groups[aRef][0];
                 const firstB = groups[bRef][0];
                 const dDiff = new Date(firstA?.date || 0).getTime() - new Date(firstB?.date || 0).getTime();
                 if (dDiff !== 0) return dDiff;
-                // Within same date, maintain chronological order via ID
                 return parseInt(firstA?.id?.toString().replace('t-', '') || '0') - parseInt(firstB?.id?.toString().replace('t-', '') || '0');
             });
 
             sortedGroupRefs.forEach(ref => {
                 const entries = groups[ref];
-
-                // If it's a standalone group
                 if (ref.startsWith('standalone-')) {
                     const entry = entries[0];
                     if (entry.postFrom !== 'Sales') return;
-
                     const amt = (entry.debit || 0) - (entry.credit || 0);
                     rows.push({
                         date: entry.date,
@@ -6909,7 +6850,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                     return;
                 }
 
-                // For linked groups
                 const sources = entries.filter(e => ['Sales'].includes(e.postFrom))
                     .sort((a, b) => {
                         const d = new Date(a.date).getTime() - new Date(b.date).getTime();
@@ -6924,7 +6864,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                         return d !== 0 ? d : parseInt(a.id.replace('t-', '')) - parseInt(b.id.replace('t-', ''));
                     });
 
-                // Combine all sources in the group for one span
                 const totalSourceAmt = sources.reduce((sum, s) => sum + ((s.debit || 0) - (s.credit || 0)), 0);
                 const firstSource = sources[0];
 
@@ -6973,14 +6912,12 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                     });
                 }
             });
-
             return rows;
         }, [ledgerEntries]);
 
         return (
-            <div className="bg-white border border-slate-200 rounded-[4px] overflow-hidden shadow-none">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-200">
+            <div className="overflow-x-auto">
+                    <table className="erp-table min-w-full">
                         <thead className="bg-[#F8F9FA] border-b border-slate-200">
                             <tr className="border-b border-slate-200">
                                 <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Date</th>
@@ -6992,8 +6929,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                         Voucher Applied
                                     </div>
                                 </th>
-                                <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Status</th>
-                                <th rowSpan={2} className="px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-widest">Actions</th>
+                                <th rowSpan={2} className="px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Status</th>
+                                <th rowSpan={2} className="px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-widest">Action</th>
                             </tr>
                             <tr>
                                 <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Date</th>
@@ -7007,45 +6944,41 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                 <tr key={idx} className="hover:bg-slate-50 transition-colors">
                                     {row.isFirstInSource && (
                                         <>
-                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-medium text-slate-600 border-r border-slate-100 align-top">{formatDate(row.date)}</td>
-                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 align-top">
-                                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${row.postedFrom === 'Sales'
-                                                    ? 'bg-blue-50 text-blue-600 border-blue-100'
-                                                    : 'bg-amber-50 text-amber-600 border-amber-100'
-                                                    }`}>
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-medium text-slate-600 border-r border-slate-100 align-top whitespace-nowrap">{formatDate(row.date)}</td>
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 align-top whitespace-nowrap">
+                                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.postedFrom === 'Sales' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
                                                     {row.postedFrom}
                                                 </span>
                                             </td>
-                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-bold text-indigo-600 border-r border-slate-100 align-top">{row.refNo}</td>
-                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-right font-medium text-slate-900 border-r border-slate-100 align-top">
-                                                ₹{row.netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-bold text-indigo-600 border-r border-slate-100 align-top whitespace-nowrap">{row.refNo}</td>
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-right font-medium text-slate-900 border-r border-slate-100 align-top whitespace-nowrap">
+                                                {row.netAmount !== '-' ? `₹${row.netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                             </td>
                                         </>
                                     )}
-                                    <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">{row.appliedDate !== '-' ? formatDate(row.appliedDate) : '-'}</td>
-                                    <td className="px-6 py-4 text-sm font-medium text-slate-700 border-r border-slate-100">{row.appliedRefNo}</td>
-                                    <td className="px-6 py-4 text-sm text-right font-bold text-emerald-600 border-r border-slate-100">
+                                    <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 whitespace-nowrap">{row.appliedDate !== '-' ? formatDate(row.appliedDate) : '-'}</td>
+                                    <td className="px-6 py-4 text-sm font-medium text-slate-700 border-r border-slate-100 whitespace-nowrap">{row.appliedRefNo && String(row.appliedRefNo).startsWith('ALC-') ? String(row.appliedRefNo).split('-').slice(2).join('-') : row.appliedRefNo}</td>
+                                    <td className="px-6 py-4 text-sm text-right font-bold text-emerald-600 border-r border-slate-100 whitespace-nowrap">
                                         {row.appliedAmount !== '-' ? `₹${row.appliedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-right font-bold text-slate-900 border-r border-slate-100">
-                                        ₹{row.pendingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    <td className="px-6 py-4 text-sm text-right font-bold text-slate-900 border-r border-slate-100 whitespace-nowrap">
+                                        {row.pendingBalance !== '-' ? `₹${row.pendingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                     </td>
                                     {row.isFirstInSource && (
                                         <>
-                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-center border-r border-slate-100 align-top">
-                                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold border uppercase tracking-tighter shadow-sm ${row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'received' || row.status?.toLowerCase() === 'utilized' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-center border-r border-slate-100 align-top whitespace-nowrap">
+                                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'received' || row.status?.toLowerCase() === 'utilized' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
                                                     row.status?.toLowerCase() === 'partially paid' || row.status?.toLowerCase() === 'partially received' || row.status?.toLowerCase() === 'partially due' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
                                                         row.status?.toLowerCase() === 'due' || row.status?.toLowerCase() === 'due today' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
-                                                            'bg-indigo-50 text-indigo-600 border border-indigo-100'
-                                                    }`}>
+                                                            'bg-indigo-50 text-indigo-600 border border-indigo-100'}`}>
                                                     {row.status}
                                                 </span>
                                             </td>
-                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-center align-top">
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 whitespace-nowrap text-center align-top">
                                                 {(row.status?.toLowerCase() === 'partially received' || row.status?.toLowerCase() === 'due') && (
                                                     <button
                                                         onClick={() => handleAdvanceClick(row)}
-                                                        className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-bold rounded shadow-sm hover:bg-indigo-700 transition-colors uppercase tracking-widest flex items-center gap-1 mx-auto"
+                                                        className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-black rounded-[4px] hover:bg-indigo-700 transition-colors uppercase tracking-widest"
                                                     >
                                                         Reference
                                                     </button>
@@ -7082,7 +7015,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                         </tfoot>
                     </table>
                 </div>
-            </div>
         );
     };
 
@@ -7095,8 +7027,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
         const totalCredit = filteredMonthData.reduce((sum, item) => sum + item.credit, 0);
 
         return (
-            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden shadow-none border border-slate-200">
-                <div className="overflow-x-auto">
+            <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-[#F8F9FA]">
                             <tr>
@@ -7113,7 +7044,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                     onClick={() => handleMonthClick(entry.month)}
                                     className="hover:bg-indigo-50 transition-colors group cursor-pointer"
                                 >
-                                    <td className="px-6 py-5 whitespace-nowrap text-sm font-bold text-gray-700 group-hover:text-indigo-600">{entry.month}</td>
+                                    <td className="px-6 py-5 whitespace-nowrap text-sm font-bold text-gray-700 group-hover:text-indigo-600">{entry.month.split(' ')[0]}</td>
                                     <td className="px-6 py-5 whitespace-nowrap text-sm text-right text-gray-600 font-medium">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                     <td className="px-6 py-5 whitespace-nowrap text-sm text-right text-gray-600 font-medium">₹{entry.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                     <td className="px-6 py-5 whitespace-nowrap text-sm text-right font-bold text-gray-900">
@@ -7124,11 +7055,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                     </td>
                                 </tr>
                             ))}
-                            {filteredMonthData.length === 0 && (
-                                <tr>
-                                    <td colSpan={4} className="px-6 py-8 text-center text-gray-500 text-sm">No matching months found</td>
-                                </tr>
-                            )}
                         </tbody>
                         <tfoot className="bg-[#F8F9FA]">
                             <tr>
@@ -7140,6 +7066,454 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                         </tfoot>
                     </table>
                 </div>
+        );
+    };
+
+    const JournalLedgerView: React.FC = () => {
+        const totalDebit = filteredData.reduce((sum, entry) => sum + entry.debit, 0);
+        const totalCredit = filteredData.reduce((sum, entry) => sum + entry.credit, 0);
+
+        return (
+            <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-[#F8F9FA]">
+                        <tr>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Date</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100 min-w-[350px]">Transaction Particulars</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Type</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Vch No.</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Status</th>
+                            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Debit (₹)</th>
+                            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Credit (₹)</th>
+                            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Running Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredData.map((entry) => (
+                            <React.Fragment key={entry.id}>
+                                {/* Main Transaction Row */}
+                                <tr className="hover:bg-indigo-50/30 transition-colors border-b border-gray-100 cursor-pointer" onClick={() => handleRowClick(entry.id)}>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-50">
+                                        {entry.date.split('-').reverse().join('-')}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 border-r border-gray-50">
+                                        {entry.postFrom === 'Sales' || entry.postFrom === 'Receipt' || entry.postFrom === 'Payment' ? '(as per details)' : (entry.referenceNo || entry.ledger)}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 uppercase border-r border-gray-50">
+                                        {entry.postFrom}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-50">
+                                        {entry.referenceNo || '-'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-50">
+                                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>
+                                            {entry.status}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-indigo-600 border-r border-gray-50">
+                                        {entry.debit !== 0 ? formatCurrency(entry.debit) : '-'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-400 font-bold border-r border-gray-50">
+                                        {entry.credit !== 0 ? formatCurrency(entry.credit) : '-'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                                        {entry.runningBalance === 0 ? '-' : (
+                                            <span>
+                                                {formatCurrency(Math.abs(entry.runningBalance))}
+                                                <span className="ml-1 text-gray-500 text-xs font-normal">{entry.runningBalance >= 0 ? 'Dr' : 'Cr'}</span>
+                                            </span>
+                                        )}
+                                    </td>
+                                </tr>
+
+                                {/* Breakdown Rows */}
+                                {entry.postFrom === 'Sales' && (() => {
+                                    const paymentDetails = entry.originalInv?.payment_details;
+                                    const taxable = parseFloat(paymentDetails?.payment_taxable_value || 0);
+                                    const cgst = parseFloat(paymentDetails?.payment_cgst || 0);
+                                    const sgst = parseFloat(paymentDetails?.payment_sgst || 0);
+                                    const igst = parseFloat(paymentDetails?.payment_igst || 0);
+                                    const cess = parseFloat(paymentDetails?.payment_cess || 0) + parseFloat(paymentDetails?.payment_state_cess || 0);
+                                    const tdsIt = parseFloat(paymentDetails?.payment_tds_income_tax || 0);
+                                    const tdsGst = parseFloat(paymentDetails?.payment_tds_gst || 0);
+                                    const netReceivable = parseFloat(paymentDetails?.payment_invoice_value || 0) - tdsIt - tdsGst;
+
+                                    return (
+                                        <>
+                                            {/* DEBITS */}
+                                            {netReceivable > 0 && (
+                                                <tr className="bg-white">
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                        <div className="flex justify-between items-center w-full">
+                                                            <span>{customer.name} A/c</span>
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-gray-900 font-bold ml-4">₹{netReceivable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                <span className="text-gray-500 text-[10px] font-normal">Dr</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                                </tr>
+                                            )}
+                                            {[
+                                                { val: tdsIt, label: 'TDS Receivable (IT)' },
+                                                { val: tdsGst, label: 'TDS Receivable (GST)' }
+                                            ].map((tds, tIdx) => {
+                                                if (tds.val <= 0) return null;
+                                                return (
+                                                    <tr key={tIdx} className="bg-white">
+                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                        <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                            <div className="flex justify-between items-center w-full">
+                                                                <span>{tds.label}</span>
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-gray-900 font-bold ml-4">₹{tds.val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                    <span className="text-gray-500 text-[10px] font-normal">Dr</span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                                    </tr>
+                                                );
+                                            })}
+
+                                            {/* CREDITS */}
+                                            {taxable > 0 && (
+                                                <tr className="bg-white">
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                        <div className="flex justify-between items-center w-full">
+                                                            <span>Sales Ledger</span>
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-gray-900 font-bold ml-4">₹{taxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                <span className="text-gray-500 text-[10px] font-normal">Cr</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                                </tr>
+                                            )}
+                                            {[
+                                                { val: cgst, label: 'Output CGST Ledger' },
+                                                { val: sgst, label: 'Output SGST Ledger' },
+                                                { val: igst, label: 'Output IGST Ledger' },
+                                                { val: cess, label: 'Output Cess Ledger' }
+                                            ].map((gst, gIdx) => {
+                                                if (gst.val <= 0) return null;
+                                                const taxPerc = taxable > 0 ? parseFloat((gst.val / taxable * 100).toFixed(2)) : 0;
+                                                const labelWithPerc = taxPerc > 0 ? `${gst.label} @ ${taxPerc}%` : gst.label;
+                                                return (
+                                                    <tr key={gIdx} className="bg-white">
+                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                        <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                            <div className="flex justify-between items-center w-full">
+                                                                <span>{labelWithPerc}</span>
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-gray-900 font-bold ml-4">₹{gst.val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                    <span className="text-gray-500 text-[10px] font-normal">Cr</span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </>
+                                    );
+                                })()}
+
+                                {entry.postFrom === 'Receipt' && (
+                                    <>
+                                        {/* DEBIT: Bank/Cash A/c */}
+                                        <tr className="bg-white">
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                <div className="flex justify-between items-center w-full">
+                                                    <span>{entry.originalInv?.payment_mode || entry.originalInv?.receipt_mode || 'Bank/Cash A/c'}</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-gray-900 font-bold ml-4">₹{(entry.credit || entry.debit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                        <span className="text-gray-500 text-[10px] font-normal">Dr</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                        </tr>
+                                        {/* CREDIT: Customer A/c */}
+                                        <tr className="bg-white">
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                <div className="flex justify-between items-center w-full">
+                                                    <span>{customer.name} A/c</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-gray-900 font-bold ml-4">₹{(entry.credit || entry.debit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                        <span className="text-gray-500 text-[10px] font-normal">Cr</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                        </tr>
+                                    </>
+                                )}
+
+                                {entry.postFrom === 'Payment' && (
+                                    <>
+                                        {/* DEBIT: Customer A/c */}
+                                        <tr className="bg-white">
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                <div className="flex justify-between items-center w-full">
+                                                    <span>{customer.name} A/c</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-gray-900 font-bold ml-4">₹{(entry.debit || entry.credit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                        <span className="text-gray-500 text-[10px] font-normal">Dr</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                        </tr>
+                                        {/* CREDIT: Bank/Cash A/c */}
+                                        <tr className="bg-white">
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                <div className="flex justify-between items-center w-full">
+                                                    <span>{entry.originalInv?.payment_mode || entry.originalInv?.pay_from_name || 'Bank/Cash A/c'}</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-gray-900 font-bold ml-4">₹{(entry.debit || entry.credit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                        <span className="text-gray-500 text-[10px] font-normal">Cr</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                        </tr>
+                                    </>
+                                )}
+
+                                {entry.postFrom === 'Credit Note' && (
+                                    <>
+                                        {/* DEBIT: Sales Return Ledger */}
+                                        <tr className="bg-white">
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                <div className="flex justify-between items-center w-full">
+                                                    <span>Sales Return / Discount Ledger</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-gray-900 font-bold ml-4">₹{(entry.credit || entry.debit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                        <span className="text-gray-500 text-[10px] font-normal">Dr</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                        </tr>
+                                        {/* CREDIT: Customer A/c */}
+                                        <tr className="bg-white">
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                <div className="flex justify-between items-center w-full">
+                                                    <span>{customer.name} A/c</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-gray-900 font-bold ml-4">₹{(entry.credit || entry.debit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                        <span className="text-gray-500 text-[10px] font-normal">Cr</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                        </tr>
+                                    </>
+                                )}
+
+                                {entry.postFrom === 'Debit Note' && (
+                                    <>
+                                        {/* DEBIT: Customer A/c */}
+                                        <tr className="bg-white">
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                <div className="flex justify-between items-center w-full">
+                                                    <span>{customer.name} A/c</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-gray-900 font-bold ml-4">₹{(entry.debit || entry.credit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                        <span className="text-gray-500 text-[10px] font-normal">Dr</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                        </tr>
+                                        {/* CREDIT: Sales / Other Income Ledger */}
+                                        <tr className="bg-white">
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                <div className="flex justify-between items-center w-full">
+                                                    <span>Sales / Income Ledger</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-gray-900 font-bold ml-4">₹{(entry.debit || entry.credit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                        <span className="text-gray-500 text-[10px] font-normal">Cr</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                            <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                        </tr>
+                                    </>
+                                )}
+
+                                {entry.postFrom === 'Journal' && (
+                                    <>
+                                        {entry.debit > 0 ? (
+                                            <>
+                                                {/* DEBIT: Customer A/c */}
+                                                <tr className="bg-white">
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                        <div className="flex justify-between items-center w-full">
+                                                            <span>{customer.name} A/c</span>
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-gray-900 font-bold ml-4">₹{parseFloat(entry.debit.toString()).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                <span className="text-gray-500 text-[10px] font-normal">Dr</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                                </tr>
+                                                {/* CREDIT: Suspense/Adjustment Ledger */}
+                                                <tr className="bg-white">
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                        <div className="flex justify-between items-center w-full">
+                                                            <span>Suspense / Adjustment Ledger</span>
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-gray-900 font-bold ml-4">₹{parseFloat(entry.debit.toString()).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                <span className="text-gray-500 text-[10px] font-normal">Cr</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                                </tr>
+                                            </>
+                                        ) : entry.credit > 0 ? (
+                                            <>
+                                                {/* DEBIT: Suspense/Adjustment Ledger */}
+                                                <tr className="bg-white">
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                        <div className="flex justify-between items-center w-full">
+                                                            <span>Suspense / Adjustment Ledger</span>
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-gray-900 font-bold ml-4">₹{parseFloat(entry.credit.toString()).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                <span className="text-gray-500 text-[10px] font-normal">Dr</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                                </tr>
+                                                {/* CREDIT: Customer A/c */}
+                                                <tr className="bg-white">
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                        <div className="flex justify-between items-center w-full">
+                                                            <span>{customer.name} A/c</span>
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-gray-900 font-bold ml-4">₹{parseFloat(entry.credit.toString()).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                <span className="text-gray-500 text-[10px] font-normal">Cr</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                    <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                                </tr>
+                                            </>
+                                        ) : null}
+                                    </>
+                                )}
+                            </React.Fragment>
+                        ))}
+                    </tbody>
+                    <tfoot className="bg-[#F8F9FA] font-semibold">
+                        <tr>
+                            <td colSpan={5} className="px-6 py-4 text-sm text-right text-gray-700 uppercase font-bold">TOTALS:</td>
+                            <td className="px-6 py-4 text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalDebit)}</td>
+                            <td className="px-6 py-4 text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalCredit)}</td>
+                            <td className="px-6 py-4 text-sm text-right text-gray-900 font-bold border-l border-gray-200"></td>
+                        </tr>
+                    </tfoot>
+                </table>
             </div>
         );
     };
@@ -7154,567 +7528,189 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 />
             ) : (
                 <>
-                    <div className="flex justify-between items-center mb-6">
-                        <button onClick={onBack} className="flex items-center text-gray-600 hover:text-gray-900 transition-colors">
-                            <ChevronLeft className="w-5 h-5 mr-1" />
-                            <span className="text-lg font-medium">{customer.name}</span>
-                        </button>
-                        <div className="flex gap-3">
-                            {viewMode === 'month-wise' && (
-                                <div className="relative month-dropdown-container">
-                                    <button
-                                        onClick={() => setShowMonthDropdown(!showMonthDropdown)}
-                                        className="pl-3 pr-8 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48 bg-white cursor-pointer text-left"
-                                    >
-                                        {monthFilter.length === 0 ? 'Select Month' : `${monthFilter.length} month(s) selected`}
-                                    </button>
-                                    <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none" />
-
-                                    {showMonthDropdown && (
-                                        <div className="absolute z-50 top-full mt-1 w-48 bg-white border border-gray-300 rounded-[4px] shadow-lg max-h-64 overflow-y-auto">
-                                            <div className="p-2">
-                                                <label className="flex items-center px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={monthFilter.length === monthLedgerData.length}
-                                                        onChange={(e) => {
-                                                            if (e.target.checked) {
-                                                                setMonthFilter(monthLedgerData.map(m => m.month));
-                                                            } else {
-                                                                setMonthFilter([]);
-                                                            }
-                                                        }}
-                                                        className="mr-2 rounded text-indigo-600 focus:ring-indigo-500"
-                                                    />
-                                                    <span className="text-sm font-medium">Select All</span>
-                                                </label>
-                                                <div className="border-t border-gray-200 my-1"></div>
-                                                {monthLedgerData.map((entry, index) => (
-                                                    <label key={index} className="flex items-center px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={monthFilter.includes(entry.month)}
-                                                            onChange={(e) => {
-                                                                if (e.target.checked) {
-                                                                    setMonthFilter([...monthFilter, entry.month]);
-                                                                } else {
-                                                                    setMonthFilter(monthFilter.filter(m => m !== entry.month));
-                                                                }
-                                                            }}
-                                                            className="mr-2 rounded text-indigo-600 focus:ring-indigo-500"
-                                                        />
-                                                        <span className="text-sm">{entry.month}</span>
-                                                    </label>
-                                                ))}
-                                            </div>
-                                        </div>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={onBackToDashboard}
+                                className="p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                                title="Back to Dashboard"
+                            >
+                                <ChevronLeft className="w-5 h-5 text-gray-600" />
+                            </button>
+                            <div>
+                                <div className="flex items-center space-x-2 text-xs text-gray-400 mb-1 uppercase tracking-widest font-semibold">
+                                    <span>Sales</span>
+                                    <span className="text-gray-300">/</span>
+                                    <span className="text-indigo-500 font-bold">{categoryName}</span>
+                                    {customer && (
+                                        <>
+                                            <span className="text-gray-300">/</span>
+                                            <span className="text-indigo-600 font-bold">{customer.name}</span>
+                                        </>
                                     )}
                                 </div>
-                            )}
-
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={() => setIsJournalView(!isJournalView)}
-                                    className="px-4 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm flex items-center gap-2"
-                                >
-                                    {isJournalView ? (
-                                        <>
-                                            <ArrowLeft className="w-4 h-4 text-indigo-500" />
-                                            <span>SHOW SUMMARY</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <FileText className="w-4 h-4 text-indigo-500" />
-                                            <span>JOURNAL VIEW</span>
-                                        </>
-                                    )}
-                                </button>
-                                <button
-                                    onClick={() => setViewMode(viewMode === 'allocation' ? 'invoice-wise' : 'allocation')}
-                                    className={`px-4 py-2 text-xs font-semibold rounded-lg border transition-all shadow-sm ${viewMode === 'allocation'
-                                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
-                                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
-                                        }`}
-                                >
-                                    ALLOCATION VIEW
-                                </button>
-                                <button
-                                    onClick={() => setShowNetOffModal(true)}
-                                    className="px-4 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm uppercase px-5"
-                                >
-                                    NET-OFF
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        if (selectedMonthView) {
-                                            setDateFilter({ start: '', end: '' });
-                                            setSelectedMonthView(null);
-                                            setViewMode('invoice-wise');
-                                        } else {
-                                            setViewMode(viewMode === 'invoice-wise' ? 'month-wise' : 'invoice-wise');
-                                        }
-                                    }}
-                                    className="px-4 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm flex items-center gap-2"
-                                >
-                                    {selectedMonthView ? (
-                                        <>
-                                            <ArrowLeft className="w-4 h-4 text-indigo-500" />
-                                            <span>BACK</span>
-                                        </>
-                                    ) : (
-                                        viewMode === 'invoice-wise' ? (
-                                            <>
-                                                <Calendar className="w-4 h-4 text-indigo-500" />
-                                                <span>MONTH VIEW</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Receipt className="w-4 h-4 text-indigo-500" />
-                                                <span>INVOICE VIEW</span>
-                                            </>
-                                        )
-                                    )}
-                                </button>
+                                <h3 className="text-xl font-bold text-gray-900">{categoryName}</h3>
                             </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={onBackToDashboard}
+                                className="px-4 py-2 border border-slate-200 rounded-[4px] text-sm font-semibold text-gray-600 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 uppercase tracking-wider"
+                            >
+                                Dashboard
+                            </button>
                         </div>
                     </div>
 
-                    {viewMode === 'month-wise' ? (
-                        <MonthLedgerView />
-                    ) : viewMode === 'allocation' ? (
-                        <AllocationLedgerView />
+                    {isLoading ? (
+                        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl shadow-sm border border-gray-100">
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4"></div>
+                            <p className="text-gray-500">Loading ledger entries...</p>
+                        </div>
+                    ) : error ? (
+                        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl shadow-sm border border-red-100">
+                            <div className="bg-red-50 p-4 rounded-full mb-4">
+                                <X className="w-8 h-8 text-red-500" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">Failed to Load Ledger</h3>
+                            <p className="text-gray-500 mb-6 max-w-md text-center">{error}</p>
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                            >
+                                Retry Connection
+                            </button>
+                        </div>
                     ) : (
-                        isLoading ? (
-                            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl shadow-sm border border-gray-100">
-                                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4"></div>
-                                <p className="text-gray-500">Loading ledger entries...</p>
-                            </div>
-                        ) : error ? (
-                            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl shadow-sm border border-red-100">
-                                <div className="bg-red-50 p-4 rounded-full mb-4">
-                                    <X className="w-8 h-8 text-red-500" />
+                        <div className="erp-card border border-slate-200 overflow-hidden p-0">
+                            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
+                                <h3 className="section-title">
+                                    {viewMode === 'allocation' ? `${customer.name} - Allocation View` : viewMode === 'invoice-wise' && isJournalView ? `${customer.name} - Journal View` : customer.name}
+                                </h3>
+                                <div className="flex items-center gap-2">
+                                    {viewMode === 'month-wise' && (
+                                        <div className="relative month-dropdown-container">
+                                            <button
+                                                onClick={() => setShowMonthDropdown(!showMonthDropdown)}
+                                                className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors flex items-center justify-between min-w-[150px]"
+                                            >
+                                                <span>{monthFilter.length > 0 ? `${monthFilter.length} Selected` : 'Select Month'}</span>
+                                                <ChevronDown className="w-4 h-4 ml-2" />
+                                            </button>
+                                            {showMonthDropdown && (
+                                                <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-300 rounded-[4px] shadow-lg max-h-64 overflow-y-auto z-50">
+                                                    <div className="p-2">
+                                                        <label className="flex items-center px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                                                            <input type="checkbox" checked={monthFilter.length === monthLedgerData.length} onChange={(e) => { if (e.target.checked) { setMonthFilter(monthLedgerData.map(m => m.month)); } else { setMonthFilter([]); } }} className="mr-2 rounded text-indigo-600 focus:ring-indigo-500" />
+                                                            <span className="text-sm font-medium">Select All</span>
+                                                        </label>
+                                                        <div className="border-t border-gray-200 my-1"></div>
+                                                        {monthLedgerData.map((entry, index) => (
+                                                            <label key={index} className="flex items-center px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                                                                <input type="checkbox" checked={monthFilter.includes(entry.month)} onChange={(e) => { if (e.target.checked) { setMonthFilter([...monthFilter, entry.month]); } else { setMonthFilter(monthFilter.filter(m => m !== entry.month)); } }} className="mr-2 rounded text-indigo-600 focus:ring-indigo-500" />
+                                                                <span className="text-sm">{entry.month.split(' ')[0]}</span>
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    {viewMode === 'invoice-wise' && !isJournalView && (
+                                        <>
+                                            <button onClick={() => setShowNetOffModal(true)} className="px-4 py-2 bg-indigo-600 text-white border border-transparent rounded-[4px] text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors uppercase tracking-wider">NET-OFF</button>
+                                            <button onClick={() => setViewMode('allocation')} className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors uppercase tracking-wider">Allocation View</button>
+                                            <button onClick={() => setIsJournalView(true)} className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors uppercase tracking-wider">Journal View</button>
+                                            <button onClick={() => setViewMode('month-wise')} className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors uppercase tracking-wider">Month View</button>
+                                        </>
+                                    )}
+                                    {viewMode === 'invoice-wise' && isJournalView && (
+                                        <>
+                                            <button onClick={() => setViewMode('allocation')} className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors uppercase tracking-wider">Allocation View</button>
+                                            <button onClick={() => setViewMode('month-wise')} className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors uppercase tracking-wider">Month View</button>
+                                            <button onClick={() => setIsJournalView(false)} className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors uppercase tracking-wider">Bill-wise View</button>
+                                        </>
+                                    )}
+                                    {viewMode === 'month-wise' && (
+                                        <>
+                                            <button onClick={() => setViewMode('allocation')} className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors uppercase tracking-wider">Allocation View</button>
+                                            <button onClick={() => { setViewMode('invoice-wise'); setIsJournalView(true); }} className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors uppercase tracking-wider">Journal View</button>
+                                            <button onClick={() => { setViewMode('invoice-wise'); setIsJournalView(false); }} className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors uppercase tracking-wider">Bill-wise View</button>
+                                        </>
+                                    )}
+                                    {viewMode === 'allocation' && (
+                                        <>
+                                            <button onClick={() => { setViewMode('invoice-wise'); setIsJournalView(true); }} className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors uppercase tracking-wider">Journal View</button>
+                                            <button onClick={() => setViewMode('month-wise')} className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors uppercase tracking-wider">Month View</button>
+                                            <button onClick={() => { setViewMode('invoice-wise'); setIsJournalView(false); }} className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors uppercase tracking-wider">Bill-wise View</button>
+                                        </>
+                                    )}
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Failed to Load Ledger</h3>
-                                <p className="text-gray-500 mb-6 max-w-md text-center">{error}</p>
-                                <button
-                                    onClick={() => window.location.reload()}
-                                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                                >
-                                    Retry Connection
-                                </button>
                             </div>
-                        ) : (
-                            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
+                            {viewMode === 'month-wise' ? (
+                                <MonthLedgerView />
+                            ) : viewMode === 'allocation' ? (
+                                <AllocationLedgerView />
+                            ) : isJournalView ? (
+                                <JournalLedgerView />
+                            ) : (
                                 <div className="overflow-x-auto">
                                     <table className="min-w-full divide-y divide-gray-200">
-                                        {isJournalView ? (
-                                            // APP STYLE JOURNAL HEADERS
-                                            <thead className="bg-[#F8F9FA]">
-                                                <tr>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Date</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100 min-w-[350px]">Transaction Particulars</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Type</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Vch No.</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Status</th>
-                                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Debit (₹)</th>
-                                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Credit (₹)</th>
-                                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Running Balance</th>
-                                                </tr>
-                                            </thead>
-                                        ) : (
-                                            // ORIGINAL HEADERS
-                                            <thead className="bg-[#F8F9FA] sticky top-0">
-                                                <tr>
-                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
-                                                        <div className="flex items-center justify-between relative text-gray-400">
-                                                            <span>Date</span>
-                                                            <div className="ml-2">
-                                                                <Filter
-                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'date' ? 'text-indigo-600' : 'text-gray-300 hover:text-gray-600'}`}
-                                                                    onClick={() => toggleFilter('date')}
-                                                                />
-                                                                {activeFilter === 'date' && (
-                                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
-                                                                        <div className="flex justify-between items-center mb-2">
-                                                                            <span className="text-xs font-semibold text-gray-700">Filter Date</span>
-                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                        </div>
-                                                                        <div className="space-y-2">
-                                                                            <div>
-                                                                                <label className="text-[10px] text-gray-500 block mb-1">Start Date</label>
-                                                                                <input type="date" value={dateFilter.start} onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })} max={new Date().toISOString().split('T')[0]} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
-                                                                            </div>
-                                                                            <div>
-                                                                                <label className="text-[10px] text-gray-500 block mb-1">End Date</label>
-                                                                                <input type="date" value={dateFilter.end} onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })} max={new Date().toISOString().split('T')[0]} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
-                                                                            </div>
-                                                                            <button
-                                                                                onClick={() => setDateFilter({ start: '', end: '' })}
-                                                                                className="w-full mt-2 py-1 text-[10px] text-indigo-600 font-medium hover:bg-indigo-50 border border-indigo-100 rounded transition-colors"
-                                                                            >
-                                                                                Clear Filter
-                                                                            </button>
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </th>
-                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
-                                                        <div className="flex items-center justify-between relative text-gray-400">
-                                                            <span>Post From</span>
-                                                            <div className="ml-2">
-                                                                <Filter
-                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'postFrom' ? 'text-indigo-600' : 'text-gray-300 hover:text-gray-600'}`}
-                                                                    onClick={() => toggleFilter('postFrom')}
-                                                                />
-                                                                {activeFilter === 'postFrom' && (
-                                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-48">
-                                                                        <div className="flex justify-between items-center mb-2">
-                                                                            <span className="text-xs font-semibold text-gray-700">Filter Type</span>
-                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                        </div>
-                                                                        <select value={postFromFilter} onChange={(e) => setPostFromFilter(e.target.value as TransactionType | '')} className="w-full px-2 py-1.5 text-xs border rounded focus:ring-1 focus:ring-indigo-500">
-                                                                            <option value="">All Types</option>
-                                                                            {postFromOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                                        </select>
-                                                                        <button
-                                                                            onClick={() => setPostFromFilter('')}
-                                                                            className="w-full mt-2 py-1 text-[10px] text-indigo-600 font-medium hover:bg-indigo-50 border border-indigo-100 rounded transition-colors"
-                                                                        >
-                                                                            Clear Filter
-                                                                        </button>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </th>
-                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">Reference No</th>
-                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200 min-w-[300px]">
-                                                        <div className="flex items-center justify-between relative text-gray-400">
-                                                            <span>Ledger</span>
-                                                            <div className="ml-2">
-                                                                <Filter
-                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'ledger' ? 'text-indigo-600' : 'text-gray-300 hover:text-gray-600'}`}
-                                                                    onClick={() => toggleFilter('ledger')}
-                                                                />
-                                                                {activeFilter === 'ledger' && (
-                                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
-                                                                        <div className="flex justify-between items-center mb-2">
-                                                                            <span className="text-xs font-semibold text-gray-700">Search Ledger</span>
-                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                        </div>
-                                                                        <div className="relative">
-                                                                            <input type="text" value={ledgerFilter} onChange={(e) => setLedgerFilter(e.target.value)} placeholder="Search..." className="w-full pl-7 pr-2 py-1.5 text-xs border rounded focus:ring-1 focus:ring-indigo-500" autoFocus />
-                                                                            <Search className="w-3 h-3 text-gray-400 absolute left-2 top-1/2 transform -translate-y-1/2" />
-                                                                        </div>
-                                                                        <button
-                                                                            onClick={() => setLedgerFilter('')}
-                                                                            className="w-full mt-2 py-1 text-[10px] text-indigo-600 font-medium hover:bg-indigo-50 border border-indigo-100 rounded transition-colors"
-                                                                        >
-                                                                            Clear Filter
-                                                                        </button>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </th>
-                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
-                                                        <div className="flex items-center justify-between relative text-gray-400">
-                                                            <span>Status</span>
-                                                        </div>
-                                                    </th>
-                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
-                                                        <div className="flex items-center justify-end relative text-gray-400">
-                                                            <span>Debit</span>
-                                                            <div className="ml-2">
-                                                                <Filter
-                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'debit' ? 'text-indigo-600' : 'text-gray-300 hover:text-gray-600'}`}
-                                                                    onClick={() => toggleFilter('debit')}
-                                                                />
-                                                                {activeFilter === 'debit' && (
-                                                                    <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-40">
-                                                                        <div className="flex justify-between items-center mb-2">
-                                                                            <span className="text-xs font-semibold text-gray-700">Filter Debit</span>
-                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                        </div>
-                                                                        <label className="flex items-center text-xs cursor-pointer p-1 hover:bg-gray-50 rounded">
-                                                                            <input type="checkbox" checked={!!debitFilter} onChange={(e) => setDebitFilter(e.target.checked ? 'show' : '')} className="mr-2 rounded text-indigo-600 focus:ring-indigo-500" />
-                                                                            Show Debits Only
-                                                                        </label>
-                                                                        <button
-                                                                            onClick={() => setDebitFilter('')}
-                                                                            className="w-full mt-2 py-1 text-[10px] text-indigo-600 font-medium hover:bg-indigo-50 border border-indigo-100 rounded transition-colors"
-                                                                        >
-                                                                            Clear Filter
-                                                                        </button>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </th>
-                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
-                                                        <div className="flex items-center justify-end relative text-gray-400">
-                                                            <span>Credit</span>
-                                                            <div className="ml-2">
-                                                                <Filter
-                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'credit' ? 'text-indigo-600' : 'text-gray-300 hover:text-gray-600'}`}
-                                                                    onClick={() => toggleFilter('credit')}
-                                                                />
-                                                                {activeFilter === 'credit' && (
-                                                                    <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-40">
-                                                                        <div className="flex justify-between items-center mb-2">
-                                                                            <span className="text-xs font-semibold text-gray-700">Filter Credit</span>
-                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                        </div>
-                                                                        <label className="flex items-center text-xs cursor-pointer p-1 hover:bg-gray-50 rounded">
-                                                                            <input type="checkbox" checked={!!creditFilter} onChange={(e) => setCreditFilter(e.target.checked ? 'show' : '')} className="mr-2 rounded text-indigo-600 focus:ring-indigo-500" />
-                                                                            Show Credits Only
-                                                                        </label>
-                                                                        <button
-                                                                            onClick={() => setCreditFilter('')}
-                                                                            className="w-full mt-2 py-1 text-[10px] text-indigo-600 font-medium hover:bg-indigo-50 border border-indigo-100 rounded transition-colors"
-                                                                        >
-                                                                            Clear Filter
-                                                                        </button>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </th>
-                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                                                        <div className="flex items-center justify-end relative text-gray-400">
-                                                            <span>Running Balance</span>
-                                                        </div>
-                                                    </th>
-                                                </tr>
-                                            </thead>
-                                        )}
+                                        <thead className="bg-[#F8F9FA] sticky top-0">
+                                            <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">Date</th>
+                                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">Post From</th>
+                                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">Reference No</th>
+                                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">Ledger</th>
+                                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">Status</th>
+                                                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">Debit</th>
+                                                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">Credit</th>
+                                                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Running Balance</th>
+                                            </tr>
+                                        </thead>
                                         <tbody className="bg-white divide-y divide-gray-200">
                                             {filteredData.map((entry) => (
-                                                <React.Fragment key={entry.id}>
-                                                    {isJournalView ? (
-                                                        <>
-                                                            {/* APP-THEMED JOURNAL ROW */}
-                                                            <tr
-                                                                className={`hover:bg-indigo-50/30 transition-colors cursor-pointer border-b border-gray-100 ${selectedTransactionId === entry.id ? 'bg-indigo-50' : ''}`}
-                                                                onClick={() => handleRowClick(entry.id)}
-                                                            >
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-50">{entry.date.split('-').reverse().join('-')}</td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 border-r border-gray-50">(as per details)</td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 uppercase border-r border-gray-50">Sales</td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-50">{entry.referenceNo || entry.ledger}</td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-50">
-                                                                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-indigo-600 border-r border-gray-50">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-400 font-bold border-r border-gray-50">
-                                                                    {entry.credit !== 0 ? `₹${entry.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900">
-                                                                    {entry.runningBalance === 0 ? '-' : (
-                                                                        <span>
-                                                                            {formatCurrency(Math.abs(entry.runningBalance))}
-                                                                            <span className="ml-1 text-gray-500 text-xs font-normal">
-                                                                                {entry.runningBalance >= 0 ? 'Dr' : 'Cr'}
-                                                                            </span>
-                                                                        </span>
-                                                                    )}
-                                                                </td>
-                                                            </tr>
-                                                            {/* BREAKDOWN ROWS */}
-                                                            {entry.originalInv && (
-                                                                <>
-                                                                    {/* DEBITS */}
-                                                                    <tr className="bg-white">
-                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
-                                                                            <div className="flex justify-between items-center w-full">
-                                                                                <span>{customer.name}</span>
-                                                                                <div className="flex items-center gap-1">
-                                                                                    <span className="text-gray-900 font-bold ml-4">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                                                                                    <span className="text-gray-500 text-[10px] font-normal">Dr</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
-                                                                    </tr>
-
-                                                                    {[
-                                                                        { key: 'payment_tds_income_tax', label: 'TDS Receivable (IT)' },
-                                                                        { key: 'payment_tds_gst', label: 'TDS Receivable (GST)' }
-                                                                    ].map((tds) => {
-                                                                        const amt = entry.originalInv.payment_details?.[tds.key];
-                                                                        if (!amt || parseFloat(amt) === 0) return null;
-
-                                                                        // Calculate the total taxable value
-                                                                        const totalTaxable = (entry.originalInv.items || []).reduce((sum: number, item: any) => sum + parseFloat(item.taxable_value || 0), 0);
-                                                                        const taxPerc = totalTaxable > 0 ? parseFloat((parseFloat(amt) / totalTaxable * 100).toFixed(2)) : 0;
-                                                                        const labelWithPerc = taxPerc > 0 ? `${tds.label} @ ${taxPerc}%` : tds.label;
-
-                                                                        return (
-                                                                            <tr key={tds.key} className="bg-white">
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
-                                                                                    <div className="flex justify-between items-center w-full">
-                                                                                        <span>{labelWithPerc}</span>
-                                                                                        <div className="flex items-center gap-1">
-                                                                                            <span className="text-gray-900 font-bold ml-4">₹{parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                                                                                            <span className="text-gray-500 text-[10px] font-normal">Dr</span>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
-                                                                            </tr>
-                                                                        );
-                                                                    })}
-
-                                                                    {/* CREDITS */}
-                                                                    <tr className="bg-white">
-                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
-                                                                            <div className="flex justify-between items-center w-full">
-                                                                                <span>Sales Ledger</span>
-                                                                                <div className="flex items-center gap-1">
-                                                                                    <span className="text-gray-900 font-bold ml-4">₹{((entry.originalInv.items || []).reduce((sum: number, item: any) => sum + parseFloat(item.taxable_value || 0), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                                                                                    <span className="text-gray-500 text-[10px] font-normal">Cr</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
-                                                                    </tr>
-
-                                                                    {[
-                                                                        { key: 'payment_cgst', label: 'Output CGST Ledger' },
-                                                                        { key: 'payment_sgst', label: 'Output SGST Ledger' },
-                                                                        { key: 'payment_igst', label: 'Output IGST Ledger' },
-                                                                        { key: 'payment_cess', label: 'Output Cess Ledger' },
-                                                                        { key: 'payment_state_cess', label: 'Output State Cess Ledger' }
-                                                                    ].map((tax) => {
-                                                                        const amt = entry.originalInv.payment_details?.[tax.key];
-                                                                        if (!amt || parseFloat(amt) === 0) return null;
-
-                                                                        const totalTaxable = (entry.originalInv.items || []).reduce((sum: number, item: any) => sum + parseFloat(item.taxable_value || 0), 0);
-                                                                        const taxPerc = totalTaxable > 0 ? parseFloat((parseFloat(amt) / totalTaxable * 100).toFixed(2)) : 0;
-                                                                        const labelWithPerc = taxPerc > 0 ? `${tax.label} @ ${taxPerc}%` : tax.label;
-
-                                                                        return (
-                                                                            <tr key={tax.key} className="bg-white">
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
-                                                                                    <div className="flex justify-between items-center w-full">
-                                                                                        <span>{labelWithPerc}</span>
-                                                                                        <div className="flex items-center gap-1">
-                                                                                            <span className="text-gray-900 font-bold ml-4">₹{parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                                                                                            <span className="text-gray-500 text-[10px] font-normal">Cr</span>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
-                                                                            </tr>
-                                                                        );
-                                                                    })}
-                                                                    <tr className="bg-white">
-                                                                        <td className="py-2" colSpan={8}></td>
-                                                                    </tr>
-                                                                </>
-                                                            )}
-                                                        </>
-                                                    ) : (
-                                                        // ORIGINAL STYLE ROW
-                                                        <tr
-                                                            className={`hover:bg-indigo-50/50 transition-colors cursor-pointer ${selectedTransactionId === entry.id ? 'bg-indigo-50' : ''}`}
-                                                            onClick={() => handleRowClick(entry.id)}
-                                                        >
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-100">{entry.date.split('-').reverse().join('-')}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-100">{entry.postFrom}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-100 font-medium">{entry.referenceNo || '-'}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-100">{entry.ledger}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-100">
-                                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
-                                                            </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.debit)}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.credit)}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-semibold">
-                                                                {entry.runningBalance === 0 ? '-' : (
-                                                                    <span>
-                                                                        {formatCurrency(Math.abs(entry.runningBalance))}
-                                                                        <span className="ml-1 text-gray-500 text-xs font-normal">
-                                                                            {entry.runningBalance >= 0 ? 'Dr' : 'Cr'}
-                                                                        </span>
-                                                                    </span>
-                                                                )}
-                                                            </td>
-                                                        </tr>
-                                                    )}
-                                                </React.Fragment>
-                                            ))}
-                                            {filteredData.length === 0 && (
-                                                <tr>
-                                                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
-                                                        No ledger entries found for this customer.
+                                                <tr key={entry.id} className="hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleRowClick(entry.id)}>
+                                                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-100">{entry.date.split('-').reverse().join('-')}</td>
+                                                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-100">{entry.postFrom}</td>
+                                                    <td className="px-6 py-4 text-sm text-gray-600 border-r border-gray-100 font-medium">{entry.referenceNo || '-'}</td>
+                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-100">{entry.ledger}</td>
+                                                    <td className="px-6 py-4 text-sm border-r border-gray-100">
+                                                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.debit)}</td>
+                                                    <td className="px-6 py-4 text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.credit)}</td>
+                                                    <td className="px-6 py-4 text-sm text-right text-gray-900 font-semibold">
+                                                        {entry.runningBalance === 0 ? '-' : (
+                                                            <span>{formatCurrency(Math.abs(entry.runningBalance))}
+                                                                <span className="ml-1 text-gray-500 text-xs font-normal">{entry.runningBalance >= 0 ? 'Dr' : 'Cr'}</span>
+                                                            </span>
+                                                        )}
                                                     </td>
                                                 </tr>
-                                            )}
+                                            ))}
                                         </tbody>
                                         <tfoot className="bg-gray-50 font-semibold">
                                             <tr>
                                                 <td colSpan={5} className="px-6 py-4 text-sm text-right text-gray-700 uppercase">TOTALS:</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalDebit)}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalCredit)}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200"></td>
+                                                <td className="px-6 py-4 text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalDebit)}</td>
+                                                <td className="px-6 py-4 text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalCredit)}</td>
+                                                <td className="px-6 py-4 text-sm text-right text-gray-900 font-bold border-l border-gray-200"></td>
                                             </tr>
                                         </tfoot>
                                     </table>
                                 </div>
-                            </div>
-                        )
+                            )}
+                        </div>
                     )}
-
-                    {/* Advance Allocation Modal */}
-                    <AdvanceAllocationModal
-                        isOpen={isAdvanceModalOpen}
-                        onClose={() => setIsAdvanceModalOpen(false)}
-                        row={selectedAdvanceRow}
-                        customer={customer}
-                        ledgerEntries={ledgerEntries}
-                        setPrefilledVoucherData={setPrefilledVoucherData}
-                        onNavigate={onNavigate}
-                        onProceed={handleProceedAllocation}
-                    />
-
-                    {/* GST Details Modal */}
-
-                    <SalesGSTViewModal
-                        isOpen={isGSTModalOpen}
-                        onClose={() => setIsGSTModalOpen(false)}
-                        transactionId={selectedTransactionId}
-                    />
+                    <AdvanceAllocationModal isOpen={isAdvanceModalOpen} onClose={() => setIsAdvanceModalOpen(false)} row={selectedAdvanceRow} customer={customer} ledgerEntries={ledgerEntries} setPrefilledVoucherData={setPrefilledVoucherData} onNavigate={onNavigate} onProceed={handleProceedAllocation} />
+                    <SalesGSTViewModal isOpen={isGSTModalOpen} onClose={() => setIsGSTModalOpen(false)} transactionId={selectedTransactionId} />
                 </>
             )}
         </div>
     );
-};
+}
 
 // Sales Content Component with Aging Buckets
 interface CategoryCardProps {
@@ -7971,7 +7967,20 @@ function SalesContent({ onNavigate, setPrefilledVoucherData }: { onNavigate?: (p
     }
 
     if (showLedgerView && selectedCustomer) {
-        return <CustomerLedgerView customer={selectedCustomer} onBack={handleBackToAging} onNavigate={onNavigate} setPrefilledVoucherData={setPrefilledVoucherData} />;
+        return (
+            <CustomerLedgerView
+                customer={selectedCustomer}
+                onBack={handleBackToAging}
+                onNavigate={onNavigate}
+                setPrefilledVoucherData={setPrefilledVoucherData}
+                categoryName={activeCategory}
+                onBackToDashboard={() => {
+                    setShowLedgerView(false);
+                    setSelectedCustomer(null);
+                    setViewMode('dashboard');
+                }}
+            />
+        );
     }
 
     return (
@@ -8130,13 +8139,6 @@ function SalesContent({ onNavigate, setPrefilledVoucherData }: { onNavigate?: (p
                                                         title="View Ledger"
                                                     >
                                                         <Eye className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleSendMail(customer)}
-                                                        className="text-gray-400 hover:text-indigo-600 transition-colors"
-                                                        title="Send Reminder Email"
-                                                    >
-                                                        <Mail className="w-4 h-4" />
                                                     </button>
                                                 </div>
                                             </td>

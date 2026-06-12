@@ -1248,11 +1248,11 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
   const getVoucherParty = (v: any) => {
     let p = v.party;
     if (p && String(p).trim() !== '') return p;
-    
+
     // Fallbacks
     p = v.party_name || v.vendor_name || v.customer_name || v.pay_to_ledger || v.pay_to || v.pay_from || v.account;
     if (p && String(p).trim() !== '') return p;
-    
+
     return 'Unknown';
   };
 
@@ -1367,7 +1367,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
             // Debit Note: Debit the vendor
             const partyName = getVoucherParty(v);
             addEntry(partyName, amount, 0, 'Purchase Return', v.id);
-            
+
           } else if ((v.type as string) === 'credit_note' || v.type === 'Credit Note' || (v.type as string) === 'CREDIT_NOTE') {
             // Credit Note: Credit the customer
             const partyName = getVoucherParty(v);
@@ -1590,13 +1590,13 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
         const ledgerObj = ledgers?.find(l => l.name === name);
         let category = '-';
         if (ledgerObj) {
-           const groupLower = (ledgerObj.group || '').toLowerCase();
-           if (groupLower.includes('creditor')) category = 'Vendor';
-           else if (groupLower.includes('debtor')) category = 'Customer';
-           else {
-             // Fallback to Major Category (e.g. ASSET, LIABILITY, INCOME) as requested
-             category = ledgerObj.category || ledgerObj.group || '-';
-           }
+          const groupLower = (ledgerObj.group || '').toLowerCase();
+          if (groupLower.includes('creditor')) category = 'Vendor';
+          else if (groupLower.includes('debtor')) category = 'Customer';
+          else {
+            // Fallback to Major Category (e.g. ASSET, LIABILITY, INCOME) as requested
+            category = ledgerObj.category || ledgerObj.group || '-';
+          }
         }
         return { name, category, balance: Math.abs(net), balanceType: net > 0 ? 'Dr' : net < 0 ? 'Cr' : '' };
       })
@@ -1669,12 +1669,12 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       const rel = entries.filter(e => (e.ledger_name || e.ledger || '') === name);
       if (rel.length > 0) {
         rel.forEach(e => push(
-          e.transaction_date || e.date || '', 
-          e.particulars || e.ledger || 'N/A', 
-          normalizeVoucherType(e.voucher_type || e.type || ''), 
-          e.voucher_number || e.voucherNo || '', 
-          Number(e.debit) || 0, 
-          Number(e.credit) || 0, 
+          e.transaction_date || e.date || '',
+          e.particulars || e.ledger || 'N/A',
+          normalizeVoucherType(e.voucher_type || e.type || ''),
+          e.voucher_number || e.voucherNo || '',
+          Number(e.debit) || 0,
+          Number(e.credit) || 0,
           e.reference_number || e.referenceNo || '-',
           e
         ));
@@ -1778,9 +1778,9 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       const vt = (entry.voucherType || '').toLowerCase();
       const isSource = vt.includes('sales') || vt.includes('purchase') || vt.includes('journal') || vt.includes('opening');
       const isApplication = vt.includes('receipt') || vt.includes('payment') || vt.includes('contra') || vt.includes('debit') || vt.includes('credit');
-      
+
       let ref = entry.referenceNo?.trim() || entry.rawVoucher?.reference_number?.trim() || '-';
-      
+
       // For source vouchers, if referenceNo is empty, treat voucherNo as the reference
       if (isSource && (ref === '-' || !ref)) {
         ref = entry.voucherNo?.trim() || entry.rawVoucher?.voucher_number?.trim() || '-';
@@ -1803,17 +1803,17 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     const cpStr = activeLedger?.additional_data?.credit_period || (activeLedger as any)?.extended_data?.credit_period || activeLedger?.creditPeriod || (activeLedger as any)?.credit_period || '0';
     let cp = parseInt(String(cpStr), 10) || 0;
     if (cp === 0 && drillDownData.length > 0) {
-        cp = drillDownData[0]?.ledger_credit_period || 0;
+      cp = drillDownData[0]?.ledger_credit_period || 0;
     }
 
     const getAgingStatus = (dateStr: string) => {
-        if (!dateStr) return 'Due';
-        const invDate = new Date(dateStr);
-        const todayD = new Date();
-        const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
-        const d2 = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
-        const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-        return diffDays > cp ? 'Due' : 'Not Due';
+      if (!dateStr) return 'Due';
+      const invDate = new Date(dateStr);
+      const todayD = new Date();
+      const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+      const d2 = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
+      const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+      return diffDays > cp ? 'Due' : 'Not Due';
     };
 
     // Process groups and sort by date
@@ -1835,14 +1835,14 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
 
         const isDr = (entry.debit || 0) > 0;
         const amt = isDr ? (entry.debit || 0) : (entry.credit || 0);
-        
+
         const isApplication = ['receipt', 'payment', 'contra', 'debit', 'credit'].some(t => vt.includes(t));
         const rawSt = entry.rawVoucher?.allocation_status || entry.rawVoucher?.allocationStatus;
         let calcSt = 'Due';
         if (isApplication) {
-            calcSt = rawSt === 'Utilized' ? 'Utilized' : 'Not Utilized';
+          calcSt = rawSt === 'Utilized' ? 'Utilized' : 'Not Utilized';
         } else {
-            calcSt = rawSt === 'Utilized' ? 'Paid' : (amt === 0 ? 'Paid' : getAgingStatus(entry.date));
+          calcSt = rawSt === 'Utilized' ? 'Paid' : (amt === 0 ? 'Paid' : getAgingStatus(entry.date));
         }
 
         rows.push({
@@ -1885,29 +1885,29 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
 
         const rawDueStatus = raw.due_status || '';
         let displayStatus = getAgingStatus(firstSource.date);
-        
+
         if (raw.is_disputed || raw.status === 'Disputed' || raw.payment_status === 'Disputed') {
-            displayStatus = 'Disputed';
+          displayStatus = 'Disputed';
         } else if (isSales || isDebitNote) {
-            if (rawDueStatus) displayStatus = rawDueStatus;
-            else if (totalSourceAmt === 0) displayStatus = 'Received';
-            else displayStatus = displayStatus;
+          if (rawDueStatus) displayStatus = rawDueStatus;
+          else if (totalSourceAmt === 0) displayStatus = 'Received';
+          else displayStatus = displayStatus;
         } else if (isPurchase || isCreditNote) {
-            if (rawDueStatus) displayStatus = rawDueStatus;
-            else if (totalSourceAmt === 0) displayStatus = 'Paid';
-            else displayStatus = displayStatus;
+          if (rawDueStatus) displayStatus = rawDueStatus;
+          else if (totalSourceAmt === 0) displayStatus = 'Paid';
+          else displayStatus = displayStatus;
         } else if (isPayment) {
-            if (rawDueStatus) displayStatus = rawDueStatus;
-            else if (totalSourceAmt === 0) displayStatus = 'Utilized';
-            else displayStatus = 'Unutilized';
+          if (rawDueStatus) displayStatus = rawDueStatus;
+          else if (totalSourceAmt === 0) displayStatus = 'Utilized';
+          else displayStatus = 'Unutilized';
         } else {
-            const sourceAllocStatus = raw.allocation_status;
-            displayStatus = sourceAllocStatus === 'Utilized' ? 'Paid' : (totalSourceAmt === 0 ? 'Paid' : displayStatus);
+          const sourceAllocStatus = raw.allocation_status;
+          displayStatus = sourceAllocStatus === 'Utilized' ? 'Paid' : (totalSourceAmt === 0 ? 'Paid' : displayStatus);
         }
 
         let pendingBal = totalSourceAmt;
         if (['Paid', 'Received', 'Utilized'].includes(displayStatus)) {
-            pendingBal = 0;
+          pendingBal = 0;
         }
 
         rows.push({
@@ -1926,17 +1926,17 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       } else {
         let lastPending = totalSourceAmt;
         const totalAppAmt = applications.reduce((sum, a) => sum + (isDr ? (a.credit || 0) : (a.debit || 0)), 0);
-        
+
         let calcStatus = getAgingStatus(firstSource.date);
         if (Math.round(totalSourceAmt * 100) <= Math.round(totalAppAmt * 100)) {
-            calcStatus = 'Paid';
+          calcStatus = 'Paid';
         } else if (totalAppAmt > 0) {
-            calcStatus = 'Partially Paid';
+          calcStatus = 'Partially Paid';
         }
-        
+
         // If any application is explicitly utilized, we can also consider it partially paid at least
         if ((calcStatus === 'Due' || calcStatus === 'Not Due') && applications.some(a => a.rawVoucher?.allocation_status === 'Utilized')) {
-            calcStatus = 'Partially Paid';
+          calcStatus = 'Partially Paid';
         }
 
         applications.forEach((app, appIdx) => {
@@ -1979,8 +1979,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           {filteredVouchers.length > 0 ? filteredVouchers.map((v, idx) => {
             const party = getVoucherParty(v);
             return (
-              <tr 
-                key={`daybook-${v.type}-${v.date}-${v.id || idx}`} 
+              <tr
+                key={`daybook-${v.type}-${v.date}-${v.id || idx}`}
                 className="hover:bg-indigo-50 transition-colors cursor-pointer group"
                 onClick={() => {
                   if (setViewVoucherData && onNavigate) {
@@ -1993,7 +1993,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(v.date).toLocaleDateString()}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{v.type}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-indigo-600">{(v as any).ref_no || (v as any).voucher_number || (v as any).invoice_no || '-'}</td>
-                <td 
+                <td
                   className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 group-hover:text-indigo-600 group-hover:font-semibold transition-colors flex items-center gap-1 cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -2172,7 +2172,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                       // ── Unified Status Logic (As per user request) ──────────────────────
                       let st = '';
                       const raw = e.rawVoucher || {};
-                      
+
                       // Calculate if credit term is expired
                       let isExpired = false;
                       const amount = parseFloat(raw.total || raw.amount || raw.total_amount || 0);
@@ -2246,21 +2246,20 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap border-r border-gray-50">
                             {st !== '-' && e.voucherType !== 'Opening' ? (
-                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${
-                                st === 'Received' ? 'bg-green-100 text-green-800' :
-                                st === 'Paid' ? 'bg-green-100 text-green-800' :
-                                st === 'Utilized' ? 'bg-teal-100 text-teal-800' :
-                                st === 'Due' ? 'bg-red-100 text-red-800' :
-                                st === 'Not Due' ? 'bg-blue-100 text-blue-700' :
-                                st === 'Partially Received' ? 'bg-yellow-100 text-yellow-800' :
-                                st === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
-                                st === 'Partially Utilized' ? 'bg-amber-100 text-amber-700' :
-                                st === 'Advance Applied' ? 'bg-purple-100 text-purple-700' :
-                                st === 'Advance' ? 'bg-purple-100 text-purple-700' :
-                                st === 'Unutilized' ? 'bg-gray-100 text-gray-600' :
-                                st === 'Open' ? 'bg-gray-100 text-gray-600' :
-                                'bg-gray-100 text-gray-600'
-                              }`}>{st}</span>
+                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${st === 'Received' ? 'bg-green-100 text-green-800' :
+                                  st === 'Paid' ? 'bg-green-100 text-green-800' :
+                                    st === 'Utilized' ? 'bg-teal-100 text-teal-800' :
+                                      st === 'Due' ? 'bg-red-100 text-red-800' :
+                                        st === 'Not Due' ? 'bg-blue-100 text-blue-700' :
+                                          st === 'Partially Received' ? 'bg-yellow-100 text-yellow-800' :
+                                            st === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
+                                              st === 'Partially Utilized' ? 'bg-amber-100 text-amber-700' :
+                                                st === 'Advance Applied' ? 'bg-purple-100 text-purple-700' :
+                                                  st === 'Advance' ? 'bg-purple-100 text-purple-700' :
+                                                    st === 'Unutilized' ? 'bg-gray-100 text-gray-600' :
+                                                      st === 'Open' ? 'bg-gray-100 text-gray-600' :
+                                                        'bg-gray-100 text-gray-600'
+                                }`}>{st}</span>
                             ) : '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-50">{e.debit > 0 ? `₹${e.debit.toFixed(2)}` : '-'}</td>
@@ -2326,7 +2325,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                       // ── Unified Status Logic (As per user request) ──────────────────────
                       let st = '';
                       const raw = e.rawVoucher || {};
-                      
+
                       // Calculate if credit term is expired
                       let isExpired = false;
                       const amount = parseFloat(raw.total || raw.amount || raw.total_amount || 0);
@@ -2396,21 +2395,20 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                             <td className="px-6 py-4 text-sm text-gray-500 border-r border-gray-100">{e.voucherNo || '-'}</td>
                             <td className="px-6 py-4 whitespace-nowrap border-r border-gray-100">
                               {stFinal !== '-' && e.voucherType !== 'Opening' ? (
-                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${
-                                  stFinal === 'Received' ? 'bg-green-100 text-green-800' :
-                                  stFinal === 'Paid' ? 'bg-green-100 text-green-800' :
-                                  stFinal === 'Utilized' ? 'bg-teal-100 text-teal-800' :
-                                  stFinal === 'Due' ? 'bg-red-100 text-red-800' :
-                                  stFinal === 'Not Due' ? 'bg-blue-100 text-blue-700' :
-                                  stFinal === 'Partially Received' ? 'bg-yellow-100 text-yellow-800' :
-                                  stFinal === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
-                                  stFinal === 'Partially Utilized' ? 'bg-amber-100 text-amber-700' :
-                                  stFinal === 'Advance Applied' ? 'bg-purple-100 text-purple-700' :
-                                  stFinal === 'Advance' ? 'bg-purple-100 text-purple-700' :
-                                  stFinal === 'Unutilized' ? 'bg-gray-100 text-gray-600' :
-                                  stFinal === 'Open' ? 'bg-gray-100 text-gray-600' :
-                                  'bg-gray-100 text-gray-600'
-                                }`}>{stFinal}</span>
+                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${stFinal === 'Received' ? 'bg-green-100 text-green-800' :
+                                    stFinal === 'Paid' ? 'bg-green-100 text-green-800' :
+                                      stFinal === 'Utilized' ? 'bg-teal-100 text-teal-800' :
+                                        stFinal === 'Due' ? 'bg-red-100 text-red-800' :
+                                          stFinal === 'Not Due' ? 'bg-blue-100 text-blue-700' :
+                                            stFinal === 'Partially Received' ? 'bg-yellow-100 text-yellow-800' :
+                                              stFinal === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
+                                                stFinal === 'Partially Utilized' ? 'bg-amber-100 text-amber-700' :
+                                                  stFinal === 'Advance Applied' ? 'bg-purple-100 text-purple-700' :
+                                                    stFinal === 'Advance' ? 'bg-purple-100 text-purple-700' :
+                                                      stFinal === 'Unutilized' ? 'bg-gray-100 text-gray-600' :
+                                                        stFinal === 'Open' ? 'bg-gray-100 text-gray-600' :
+                                                          'bg-gray-100 text-gray-600'
+                                  }`}>{stFinal}</span>
                               ) : '-'}
                             </td>
                             <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right border-r border-gray-100">{e.debit > 0 ? `₹${e.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}</td>
@@ -2423,60 +2421,60 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                           {e.voucherType !== 'Opening' && (() => {
                             const raw = e.rawVoucher || {};
                             const fullLegs = raw.full_legs || [];
-                            
+
                             const drLegs: { label: string, amount: number, indent: string }[] = [];
                             const crLegs: { label: string, amount: number, indent: string }[] = [];
-                            
+
                             if (fullLegs.length > 0) {
-                                // Robustly determine taxable amount (base value for tax %)
-                                // It is the sum of amounts of all legs that are NOT tax/TDS and NOT the customer/vendor ledger itself.
-                                const isTaxOrTds = (name: string) => name.includes('Tax Liability') || name.includes('Tax Credit') || name.includes('TDS') || name.includes('TCS');
-                                const baseLegs = fullLegs.filter((l: any) => !isTaxOrTds(l.ledger_name) && l.ledger_name !== drillDownLedger);
-                                const taxableAmount = baseLegs.reduce((sum: number, l: any) => sum + (l.credit > 0 ? l.credit : l.debit), 0);
+                              // Robustly determine taxable amount (base value for tax %)
+                              // It is the sum of amounts of all legs that are NOT tax/TDS and NOT the customer/vendor ledger itself.
+                              const isTaxOrTds = (name: string) => name.includes('Tax Liability') || name.includes('Tax Credit') || name.includes('TDS') || name.includes('TCS');
+                              const baseLegs = fullLegs.filter((l: any) => !isTaxOrTds(l.ledger_name) && l.ledger_name !== drillDownLedger);
+                              const taxableAmount = baseLegs.reduce((sum: number, l: any) => sum + (l.credit > 0 ? l.credit : l.debit), 0);
 
-                                fullLegs.forEach((leg: any) => {
-                                    let label = leg.ledger_name;
-                                    const amount = leg.debit > 0 ? leg.debit : leg.credit;
-                                    
-                                    if (taxableAmount > 0 && (label.includes('Tax Liability') || label.includes('Tax Credit') || label.includes('TDS') || label.includes('TCS'))) {
-                                        const perc = parseFloat(((amount / taxableAmount) * 100).toFixed(2));
-                                        if (perc > 0) {
-                                            if (label.includes('Liability')) {
-                                                if (label.includes('(CGST)')) label = `Output CGST Ledger @ ${perc}%`;
-                                                else if (label.includes('(SGST)') || label.includes('UTGST')) label = `Output SGST Ledger @ ${perc}%`;
-                                                else if (label.includes('(IGST)')) label = `Output IGST Ledger @ ${perc}%`;
-                                                else if (label.includes('(Cess)')) label = `Output Cess Ledger @ ${perc}%`;
-                                                else if (label.includes('State Cess')) label = `Output State Cess Ledger @ ${perc}%`;
-                                                else label = `${label} @ ${perc}%`;
-                                            } else if (label.includes('Credit')) {
-                                                if (label.includes('(CGST)')) label = `Input CGST Ledger @ ${perc}%`;
-                                                else if (label.includes('(SGST)') || label.includes('UTGST')) label = `Input SGST Ledger @ ${perc}%`;
-                                                else if (label.includes('(IGST)')) label = `Input IGST Ledger @ ${perc}%`;
-                                                else if (label.includes('(Cess)')) label = `Input Cess Ledger @ ${perc}%`;
-                                                else if (label.includes('State Cess')) label = `Input State Cess Ledger @ ${perc}%`;
-                                                else label = `${label} @ ${perc}%`;
-                                            } else if (label.includes('TDS') || label.includes('TCS')) {
-                                                label = `${label} @ ${perc}%`;
-                                            }
-                                        }
-                                    }
+                              fullLegs.forEach((leg: any) => {
+                                let label = leg.ledger_name;
+                                const amount = leg.debit > 0 ? leg.debit : leg.credit;
 
-                                    if (leg.debit > 0) {
-                                        drLegs.push({ label, amount: leg.debit, indent: 'pl-10' });
+                                if (taxableAmount > 0 && (label.includes('Tax Liability') || label.includes('Tax Credit') || label.includes('TDS') || label.includes('TCS'))) {
+                                  const perc = parseFloat(((amount / taxableAmount) * 100).toFixed(2));
+                                  if (perc > 0) {
+                                    if (label.includes('Liability')) {
+                                      if (label.includes('(CGST)')) label = `Output CGST Ledger @ ${perc}%`;
+                                      else if (label.includes('(SGST)') || label.includes('UTGST')) label = `Output SGST Ledger @ ${perc}%`;
+                                      else if (label.includes('(IGST)')) label = `Output IGST Ledger @ ${perc}%`;
+                                      else if (label.includes('(Cess)')) label = `Output Cess Ledger @ ${perc}%`;
+                                      else if (label.includes('State Cess')) label = `Output State Cess Ledger @ ${perc}%`;
+                                      else label = `${label} @ ${perc}%`;
+                                    } else if (label.includes('Credit')) {
+                                      if (label.includes('(CGST)')) label = `Input CGST Ledger @ ${perc}%`;
+                                      else if (label.includes('(SGST)') || label.includes('UTGST')) label = `Input SGST Ledger @ ${perc}%`;
+                                      else if (label.includes('(IGST)')) label = `Input IGST Ledger @ ${perc}%`;
+                                      else if (label.includes('(Cess)')) label = `Input Cess Ledger @ ${perc}%`;
+                                      else if (label.includes('State Cess')) label = `Input State Cess Ledger @ ${perc}%`;
+                                      else label = `${label} @ ${perc}%`;
+                                    } else if (label.includes('TDS') || label.includes('TCS')) {
+                                      label = `${label} @ ${perc}%`;
                                     }
-                                    if (leg.credit > 0) {
-                                        crLegs.push({ label, amount: leg.credit, indent: 'pl-16' });
-                                    }
-                                });
-                            } else {
-                                // Fallback if full_legs isn't available for some reason
-                                if (e.debit > 0) {
-                                    drLegs.push({ label: drillDownLedger, amount: e.debit, indent: 'pl-10' });
-                                    crLegs.push({ label: e.particulars || 'Ledger', amount: e.debit, indent: 'pl-16' });
-                                } else if (e.credit > 0) {
-                                    drLegs.push({ label: e.particulars || 'Ledger', amount: e.credit, indent: 'pl-10' });
-                                    crLegs.push({ label: drillDownLedger, amount: e.credit, indent: 'pl-16' });
+                                  }
                                 }
+
+                                if (leg.debit > 0) {
+                                  drLegs.push({ label, amount: leg.debit, indent: 'pl-10' });
+                                }
+                                if (leg.credit > 0) {
+                                  crLegs.push({ label, amount: leg.credit, indent: 'pl-16' });
+                                }
+                              });
+                            } else {
+                              // Fallback if full_legs isn't available for some reason
+                              if (e.debit > 0) {
+                                drLegs.push({ label: drillDownLedger, amount: e.debit, indent: 'pl-10' });
+                                crLegs.push({ label: e.particulars || 'Ledger', amount: e.debit, indent: 'pl-16' });
+                              } else if (e.credit > 0) {
+                                drLegs.push({ label: e.particulars || 'Ledger', amount: e.credit, indent: 'pl-10' });
+                                crLegs.push({ label: drillDownLedger, amount: e.credit, indent: 'pl-16' });
+                              }
                             }
 
                             return (
@@ -2895,8 +2893,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                     key={tab.id}
                     onClick={() => setPanelActiveTab(tab.id)}
                     className={`px-5 py-3 text-xs font-bold transition-colors border-b-2 whitespace-nowrap ${panelActiveTab === tab.id
-                        ? 'border-indigo-600 text-indigo-600 bg-white border-b-indigo-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                      ? 'border-indigo-600 text-indigo-600 bg-white border-b-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
                       }`}
                   >
                     {tab.label}
@@ -3199,7 +3197,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                               <label className="label-text">BRANCH</label>
                               <input
                                 type="text"
-                                value={editedVoucher?.branch || ''}
+                                value={editedVoucher?.branch || editedVoucher?.customer_branch || ''}
                                 disabled={!isEditingVoucher}
                                 onChange={(e) => handleFieldChange('branch', e.target.value)}
                                 className="erp-input"
@@ -3589,18 +3587,18 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                           // Tax summary — computed from line items
                           const taxableAmt = parseFloat(editedVoucher?.total_taxable_amount ?? editedVoucher?.totalTaxableAmount ?? 0)
                             || (editedVoucher?.items || []).reduce((s: number, it: any) =>
-                                s + parseFloat(it.taxableValue ?? it.taxable_value ?? 0), 0);
+                              s + parseFloat(it.taxableValue ?? it.taxable_value ?? 0), 0);
                           const totalIgst = parseFloat(editedVoucher?.total_igst ?? editedVoucher?.totalIgst ?? 0)
                             || (editedVoucher?.items || []).reduce((s: number, it: any) =>
-                                s + parseFloat(it.igst ?? it.igst_amount ?? 0), 0);
+                              s + parseFloat(it.igst ?? it.igst_amount ?? 0), 0);
                           const totalCgst = parseFloat(editedVoucher?.total_cgst ?? editedVoucher?.totalCgst ?? 0)
                             || (editedVoucher?.items || []).reduce((s: number, it: any) =>
-                                s + parseFloat(it.cgst ?? it.cgst_amount ?? 0), 0);
+                              s + parseFloat(it.cgst ?? it.cgst_amount ?? 0), 0);
                           const totalSgst = parseFloat(editedVoucher?.total_sgst ?? editedVoucher?.totalSgst ?? 0)
                             || (editedVoucher?.items || []).reduce((s: number, it: any) =>
-                                s + parseFloat(it.sgst ?? it.sgst_amount ?? 0), 0);
+                              s + parseFloat(it.sgst ?? it.sgst_amount ?? 0), 0);
                           const totalCess = (editedVoucher?.items || []).reduce((s: number, it: any) =>
-                                s + parseFloat(it.cess ?? it.cess_amount ?? 0), 0);
+                            s + parseFloat(it.cess ?? it.cess_amount ?? 0), 0);
                           // Accounting formulas (as per standard purchase voucher)
                           // Gross Amount Due = Invoice Value − TDS/TCS Under Income Tax
                           const grossDue = invoiceVal - tdsIt;

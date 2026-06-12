@@ -472,7 +472,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
         const vendorGroups: Record<string, {
             id: string; code: string; name: string; ledger_id?: string;
-            days0to45: number; days45to90: number; months6: number; year1: number;
+            notDue: number; days0to45: number; days45to90: number; months6: number; year1: number;
             advances: number;
             openOrders: number;
         }> = {};
@@ -497,6 +497,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                             code: vendor.vendor_code || `VEN-${vendorId}`,
                             name: vendor.vendor_name,
                             ledger_id: (vendor as any).ledger_id || (vendor as any).ledger,
+                            notDue: 0,
                             days0to45: 0,
                             days45to90: 0,
                             months6: 0,
@@ -535,6 +536,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     code: vendorCode,
                     name: vendorName,
                     ledger_id: (vendor as any).ledger_id || (vendor as any).ledger,
+                    notDue: 0,
                     days0to45: 0,
                     days45to90: 0,
                     months6: 0,
@@ -544,16 +546,24 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 };
             }
 
-            // Aging by days from purchase date
+            // Aging by days relative to credit period
             const invDate = new Date(pv.date);
             const today = new Date();
-            const diffDays = Math.ceil(Math.abs(today.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24));
+            const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+            const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const diffTime = d2.getTime() - d1.getTime();
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-            if (diffDays <= 45) {
+            const creditPeriod = parseInt((vendor as any).credit_period || '0', 10);
+            const overdueDays = diffDays - creditPeriod;
+
+            if (overdueDays <= 0) {
+                vendorGroups[vendorId].notDue += amount;
+            } else if (overdueDays <= 45) {
                 vendorGroups[vendorId].days0to45 += amount;
-            } else if (diffDays <= 90) {
+            } else if (overdueDays <= 90) {
                 vendorGroups[vendorId].days45to90 += amount;
-            } else if (diffDays <= 180) {
+            } else if (overdueDays <= 180) {
                 vendorGroups[vendorId].months6 += amount;
             } else {
                 vendorGroups[vendorId].year1 += amount;
@@ -585,6 +595,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     id: vendorId,
                     code: vendorCode,
                     name: vendorName,
+                    notDue: 0,
                     days0to45: 0,
                     days45to90: 0,
                     months6: 0,
@@ -6275,7 +6286,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                 onChange={(e) => setProcurementSearchTerm(e.target.value)}
                                                                 className="pl-10 pr-4 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64 bg-white"
                                                             />
-                                                            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+<Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
                                                         </div>
                                                     )}
                                                     <button
@@ -6290,27 +6301,53 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                             {procurementViewMode === 'list' && (() => {
                                                 const agingData = getVendorAgingData(activeProcurementSubTab);
                                                 return (
-                                                    <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mt-4">
+                                                    <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden mt-4">
                                                         <div className="overflow-x-auto">
-                                                            <table className="min-w-full border-collapse">
-                                                                <thead>
-                                                                    <tr className="bg-[#F8F9FA] border-b border-gray-200">
-                                                                        <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 max-w-[150px]">Vendor Code</th>
-                                                                        <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 min-w-[200px]">Vendor Name</th>
-                                                                        <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 min-w-[180px]">Sub Category</th>
-                                                                        <th rowSpan={2} className="px-6 py-4 text-center text-[11px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 w-[80px]">Open Orders</th>
-                                                                        <th colSpan={5} className="px-6 py-3 text-center text-[11px] font-bold text-gray-500 uppercase tracking-widest border-b border-gray-100 bg-[#F8F9FA]/80 shadow-sm">Amount - Due For</th>
-                                                                        <th rowSpan={2} className="px-6 py-4 text-center text-[11px] font-bold text-gray-500 uppercase tracking-widest border-l border-gray-100 w-[100px]">Actions</th>
+                                                            <table className="min-w-full divide-y divide-gray-200">
+                                                                <thead className="bg-gray-50">
+                                                                    <tr>
+                                                                        {/* Vendor Information */}
+                                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                                                                            Vendor Code
+                                                                        </th>
+                                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                                                                            Vendor Name
+                                                                        </th>
+                                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                                                                            Sub Category
+                                                                        </th>
+
+                                                                        {/* Aging Buckets */}
+                                                                        <th colSpan={5} className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-b border-gray-200">
+                                                                            Amount - Due For
+                                                                        </th>
+                                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l border-gray-200">
+                                                                            Actions
+                                                                        </th>
                                                                     </tr>
-                                                                    <tr className="bg-[#F8F9FA]/80">
-                                                                        <th className="px-3 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 w-[100px]">Not Due</th>
-                                                                        <th className="px-3 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 w-[100px]">0-45 Days</th>
-                                                                        <th className="px-3 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 w-[100px]">45-90 Days</th>
-                                                                        <th className="px-3 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 w-[100px]">{">"} 6 Months</th>
-                                                                        <th className="px-3 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest w-[100px]">{">"} 1 Year</th>
+                                                                    <tr>
+                                                                        <th className="border-r border-gray-200"></th>
+                                                                        <th className="border-r border-gray-200"></th>
+                                                                        <th className="border-r border-gray-200"></th>
+                                                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-r border-gray-200">
+                                                                            Not Due
+                                                                        </th>
+                                                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-r border-gray-200">
+                                                                            0-45 Days
+                                                                        </th>
+                                                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-r border-gray-200">
+                                                                            45-90 Days
+                                                                        </th>
+                                                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-r border-gray-200">
+                                                                            {'>'} 6 Months
+                                                                        </th>
+                                                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50">
+                                                                            {'>'} 1 Year
+                                                                        </th>
+                                                                        <th className="border-l border-gray-200"></th>
                                                                     </tr>
                                                                 </thead>
-                                                                <tbody className="bg-white divide-y divide-gray-100">
+                                                                <tbody className="bg-white divide-y divide-gray-200">
                                                                     {loadingProcurementAging ? (
                                                                         <tr>
                                                                             <td colSpan={9} className="px-6 py-10 text-center text-sm text-gray-500">
@@ -6325,7 +6362,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         </tr>
                                                                     ) : getFilteredVendorAging(agingData).length === 0 ? (
                                                                         <tr>
-                                                                            <td colSpan={10} className="px-6 py-10 text-center text-sm text-gray-500">
+                                                                            <td colSpan={9} className="px-6 py-10 text-center text-sm text-gray-500">
                                                                                 {agingData.length === 0
                                                                                     ? `No active procurement data (orders or outstanding invoices) for ${activeProcurementSubTab}.`
                                                                                     : "No vendors found matching your search term."}
@@ -6333,34 +6370,40 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         </tr>
                                                                     ) : (
                                                                         getFilteredVendorAging(agingData).map((vendor) => (
-                                                                            <tr key={vendor.id} className="hover:bg-indigo-50/40 transition-colors group">
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-800 border-r border-gray-50">{vendor.code}</td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 border-r border-gray-50">{vendor.name}</td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 border-r border-gray-50">
-                                                                                    <span className="text-gray-600">{activeProcurementSubTab}</span>
+                                                                            <tr key={vendor.id} className="hover:bg-gray-50">
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-100">
+                                                                                    {vendor.code}
                                                                                 </td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center font-bold text-gray-600 border-r border-gray-50">
-                                                                                    <span className={vendor.openOrders > 0 ? "bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full" : "text-gray-300"}>
-                                                                                        {vendor.openOrders}
-                                                                                    </span>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100">
+                                                                                    {vendor.name}
                                                                                 </td>
-
-                                                                                {/* Amount columns */}
-                                                                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center text-slate-400 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">₹0.00</td>
-                                                                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-medium text-slate-700 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">{formatProcurementCurrency(vendor.days0to45)}</td>
-                                                                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-medium text-slate-700 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">{formatProcurementCurrency(vendor.days45to90)}</td>
-                                                                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-medium text-slate-700 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">{formatProcurementCurrency(vendor.months6)}</td>
-                                                                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-medium text-slate-700 bg-slate-50/30 group-hover:bg-transparent">{formatProcurementCurrency(vendor.year1)}</td>
-
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-center border-l border-gray-50">
-                                                                                    <div className="flex items-center justify-center space-x-2">
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100">
+                                                                                    {activeProcurementSubTab}
+                                                                                </td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-600 border-r border-gray-100">
+                                                                                    {formatProcurementCurrency(vendor.notDue)}
+                                                                                </td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-600 border-r border-gray-100">
+                                                                                    {formatProcurementCurrency(vendor.days0to45)}
+                                                                                </td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-600 border-r border-gray-100">
+                                                                                    {formatProcurementCurrency(vendor.days45to90)}
+                                                                                </td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-600 border-r border-gray-100">
+                                                                                    {formatProcurementCurrency(vendor.months6)}
+                                                                                </td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-600 bg-indigo-50/30">
+                                                                                    {formatProcurementCurrency(vendor.year1)}
+                                                                                </td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium border-l border-gray-100">
+                                                                                    <div className="flex items-center justify-center space-x-3">
                                                                                         <button
                                                                                             onClick={() => {
                                                                                                 setSelectedProcurementVendor(vendor);
                                                                                                 setProcurementViewMode('ledger');
                                                                                                 fetchVendorLedger(vendor.id, vendor.name);
                                                                                             }}
-                                                                                            className="text-indigo-600 hover:text-indigo-900 transition-colors p-1.5 rounded-full hover:bg-indigo-100"
+                                                                                            className="text-indigo-600 hover:text-indigo-900"
                                                                                             title="View Ledger"
                                                                                         >
                                                                                             <Eye className="w-4 h-4" />

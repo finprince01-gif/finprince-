@@ -1093,6 +1093,28 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     // Attempt to find the most accurate ledger ID
     const findLedgerId = (name: string) => {
       if (!name) return null;
+      
+      let matchedVendor: any = null;
+
+      if (name.startsWith('vend-')) {
+        const id = Number(name.replace('vend-', ''));
+        matchedVendor = richVendors.find(v => v.id === id);
+      } else if (name.startsWith('portal-vend-')) {
+        const id = Number(name.replace('portal-vend-', ''));
+        matchedVendor = richVendors.find(v => v.id === id);
+      }
+
+      if (matchedVendor) {
+        if (matchedVendor.ledger_id || matchedVendor.ledger) {
+            return matchedVendor.ledger_id || matchedVendor.ledger;
+        }
+        // Fallback: look up by vendor_name in ledgers
+        if (matchedVendor.vendor_name) {
+            const vendorLedger = ledgers.find(l => (l.name || '').toLowerCase().trim() === (matchedVendor.vendor_name || '').toLowerCase().trim());
+            if (vendorLedger?.id) return vendorLedger.id;
+        }
+      }
+
       const lower = name.toLowerCase().trim();
 
       // 1. Check richVendors for a matching vendor with a ledger_id
@@ -1100,8 +1122,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         (v.vendor_name || '').toLowerCase().trim() === lower ||
         (v.name || '').toLowerCase().trim() === lower
       );
-      // Only return ledger_id if it's actually set; if vendor found but ledger_id is null,
-      // fall through to the ledgers array below (vendor.vendor_name becomes the lookup key)
       if (vendor && (vendor.ledger_id || vendor.ledger)) return vendor.ledger_id || vendor.ledger;
 
       // 2. Check richCustomers for a matching customer with a ledger_id
@@ -1111,17 +1131,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       );
       if (customer && (customer.ledger_id || customer.ledger)) return customer.ledger_id || customer.ledger;
 
-      // 3. Direct MasterLedger lookup by name — this is the key fallback when vendor.ledger_id is null
-      // Works because ReceiptVoucherItem.customer_id = MasterLedger.id
+      // 3. Direct MasterLedger lookup by name
       const ledger = ledgers.find(l => (l.name || '').toLowerCase().trim() === lower);
       if (ledger?.id) return ledger.id;
 
-      // 4. If a vendor was found but had no ledger_id, try looking up ledger by vendor_name
+      // 4. Fallback lookup by vendor_name
       if (vendor && vendor.vendor_name) {
         const vendorLedger = ledgers.find(l => (l.name || '').toLowerCase().trim() === (vendor.vendor_name || '').toLowerCase().trim());
         if (vendorLedger?.id) return vendorLedger.id;
       }
-
+      
       return null;
     };
 
@@ -3261,10 +3280,28 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       ...richCustomers.map(c => c.customer_name)
     ])].filter(Boolean);
 
-    const purchasePartyOptions = [...new Set([
-      ...effectiveLedgers.filter(l => isVendorLedger(l) && isRealLedgerLeaf(l)).map(l => l.name),
-      ...richVendors.map(v => v.vendor_name)
-    ])].filter(Boolean);
+    // Build purchase party options as objects so duplicate vendor names can be shown with their code
+    const purchasePartyOptions: { label: string; value: string; isVendor?: boolean }[] = [];
+    const seenVendorIds = new Set<string>();
+    // Add all vendors from richVendors (portal) - include duplicates with code
+    richVendors.forEach(v => {
+      const id = String(v.id);
+      if (seenVendorIds.has(id)) return;
+      seenVendorIds.add(id);
+      const name = v.vendor_name || '';
+      if (!name) return;
+      const code = v.vendor_code || '';
+      const label = code ? `${name} - ${code}` : name;
+      purchasePartyOptions.push({ label, value: code ? `${name}__${id}` : name, isVendor: true });
+    });
+    // Add ledger-only vendors (not in portal) by name
+    const vendorLedgerNames = effectiveLedgers.filter(l => isVendorLedger(l) && isRealLedgerLeaf(l)).map(l => l.name);
+    vendorLedgerNames.forEach(ledgerName => {
+      const alreadyInPortal = richVendors.some(v => (v.vendor_name || '').toLowerCase() === (ledgerName || '').toLowerCase());
+      if (!alreadyInPortal) {
+        purchasePartyOptions.push({ label: ledgerName, value: ledgerName });
+      }
+    });
 
     const salesPartyOptions = [...new Set([
       ...richCustomers.map(c => c.customer_name)
@@ -3324,8 +3361,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions, expenseLedgerOptions };
   }, [ledgers, freshLedgers, hierarchy, cashBankLedgers, richVendors, vendorGstDetails, richCustomers]);
 
-  const handlePartyChange = useCallback((value: string, forcedId?: number | null) => {
-    setParty(value);
+  const handlePartyChange = useCallback((value: string, forcedId?: number | string | null) => {
+    // If the value is in "name__id" format (used for duplicate vendor disambiguation),
+    // extract just the name for storage/display
+    const cleanValue = value.replace(/^(.+)__\d+$/, '$1');
+    setParty(cleanValue);
     setWasPartyAutoSet(false);
 
     // Clear GRN, PO and items when vendor changes to prevent stale data
@@ -3335,8 +3375,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       setPurchaseItems([{ id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null }]);
     }
 
-    if (forcedId !== undefined) {
-      setVendorId(forcedId);
+    if (forcedId !== undefined && forcedId !== null) {
+      if (typeof forcedId === 'number') {
+        setVendorId(forcedId);
+      } else if (typeof forcedId === 'string') {
+        const match = forcedId.match(/vend-(\d+)/);
+        if (match) {
+          setVendorId(Number(match[1]));
+        } else {
+          setVendorId(null);
+        }
+      } else {
+        setVendorId(null);
+      }
     } else {
       setVendorId(null); // Reset until matched
     }
@@ -3366,8 +3417,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       const refName = match ? match[2] : null;
 
       // 1. Try to match Vendor from Rich Data
+      // New value format for portal vendors: "VendorName__<id>" (to support duplicates)
+      // Legacy format: just the name, or "Name (code)"
       const lowerEntityName = (entityName || '').toLowerCase();
-      const vendor = richVendors.find(v => (v.vendor_name || '').toLowerCase() === lowerEntityName);
+      let vendor: any = null;
+      const idMatch = value.match(/^(.+)__(\d+)$/);
+      if (idMatch) {
+        const vendorId = parseInt(idMatch[2], 10);
+        vendor = richVendors.find(v => v.id === vendorId);
+      } else {
+        vendor = richVendors.find(v => (v.vendor_name || '').toLowerCase() === lowerEntityName);
+      }
       if (vendor) {
         setVendorId(vendor.id);
         let matchedGst = vendorGstDetails.find(g =>
@@ -3505,7 +3565,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
       // 4. ALWAYS fetch advances if value present
       if (value) {
-        fetchVendorAdvances(value);
+        let lookupValue = value;
+        const idMatch = value.match(/^(.+)__(\d+)$/);
+        if (idMatch) {
+          lookupValue = `vend-${idMatch[2]}`;
+        } else if (typeof forcedId === 'string' && forcedId.includes('vend-')) {
+          lookupValue = forcedId;
+        }
+        fetchVendorAdvances(lookupValue);
       }
     }
   }, [richVendors, richCustomers, vendorGstDetails, voucherType, setAddressFields, setGstin, setVendorBillingCurrency, setVendorAddresses, setPurchaseTerms, setMasterTermsData, ledgers, setGrnRefNo, setSelectedPurchasePOs, setPurchaseItems, setPurchaseAdvanceRefs, fetchVendorAdvances]);
@@ -5592,12 +5659,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <SearchableSelect
                       value={party}
                       onChange={handlePartyChange}
-                      options={purchasePartyOptions.map(name => {
-                        const vendor = richVendors.find(v => v.vendor_name === name);
-                        return vendor && vendor.vendor_code
-                          ? { label: `${name} (${vendor.vendor_code})`, value: name }
-                          : { label: name, value: name };
-                      })}
+                      options={purchasePartyOptions}
                       onFocus={fetchRichData}
                       placeholder="Select Vendor"
                       className="w-full"
@@ -6948,7 +7010,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         </div>
                       ) : (
                         <div className="text-center py-8 text-gray-500 text-sm italic">
-                          No unutilized advance receipts found for this vendor.
+                          No unutilized advance payments found for this vendor.
                         </div>
                       )}
                     </div>
@@ -8488,9 +8550,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     SALES INVOICE NO. <span className="text-red-500">*</span>
                   </label>
                   <div
-                    className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] flex items-center justify-between min-h-[42px] ${
-                      cnCustomer && cnBranch ? 'bg-white cursor-pointer' : 'bg-gray-50 cursor-not-allowed opacity-60'
-                    }`}
+                    className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] flex items-center justify-between min-h-[42px] ${cnCustomer && cnBranch ? 'bg-white cursor-pointer' : 'bg-gray-50 cursor-not-allowed opacity-60'
+                      }`}
                     onClick={() => {
                       if (!cnCustomer || !cnBranch) return;
                       if (!isCnInvoiceDropdownOpen) {
