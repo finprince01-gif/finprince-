@@ -1105,7 +1105,7 @@ class ApiService {
                         // ── Party / vendor info ────────────────────────────────────────
                         party: detail.vendor_name || detail.customer_name || base.party,
                         gstin: detail.gstin || base.gstin || '',
-                        branch: detail.branch || base.branch || '',
+                        branch: detail.branch || detail.customer_branch || base.branch || base.customer_branch || '',
                         // ── Addresses (BILL TO / SHIP TO as shown in the UI) ──────────
                         bill_to_address_1: billToAddr,
                         bill_to_address_2: billToObj.address_line_2 || '',

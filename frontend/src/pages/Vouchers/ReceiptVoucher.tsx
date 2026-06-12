@@ -100,6 +100,55 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
     const normalizeName = (s: any) => (s ?? '').toString().trim().toLowerCase();
 
+    const findLedgerId = (val: string | number | null | undefined, isReceiveFrom: boolean = false): any => {
+        if (val === null || val === undefined || val === '') return null;
+        const valStr = String(val).trim();
+        if (valStr.startsWith('portal-cust-') || valStr.startsWith('portal-vend-')) {
+            return valStr;
+        }
+        if (valStr.startsWith('hierarchy-')) {
+            return valStr;
+        }
+        if (!isNaN(Number(valStr))) {
+            return Number(valStr);
+        }
+
+        const normalized = valStr.toLowerCase();
+        if (isReceiveFrom) {
+            const option = receiveFromOptions.find(o => o.id === valStr || (o.name || '').trim().toLowerCase() === normalized);
+            if (option) {
+                return option.id;
+            }
+        } else {
+            const inOption = receiveInLedgers.find(o => o.id === val || (o.name || '').trim().toLowerCase() === normalized);
+            if (inOption) return inOption.id;
+        }
+
+        const ledger = allLedgers.find(l => l.id === val || (l.name || '').trim().toLowerCase() === normalized);
+        if (ledger) return ledger.id;
+        return null;
+    };
+
+    const getResolvedName = (val: string | number | null | undefined): string => {
+        if (val === null || val === undefined || val === '') return '';
+        const valStr = String(val).trim();
+        if (valStr.startsWith('portal-cust-')) {
+            const id = valStr.replace('portal-cust-', '');
+            const cust = portalCustomers.find(c => c.id.toString() === id);
+            return cust ? (cust.customer_name || cust.name || '') : valStr;
+        }
+        if (valStr.startsWith('portal-vend-')) {
+            const id = valStr.replace('portal-vend-', '');
+            const vend = portalVendors.find(v => v.id.toString() === id);
+            return vend ? (vend.vendor_name || vend.name || '') : valStr;
+        }
+        if (!isNaN(Number(valStr))) {
+            const ledger = allLedgers.find(l => l.id.toString() === valStr);
+            return ledger ? ledger.name : valStr;
+        }
+        return valStr;
+    };
+
     const buildHierarchySets = (rows: any[]) => {
         const nonLeaf = new Set<string>();
         const leaf = new Set<string>();
@@ -212,7 +261,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             group: 'Sundry Debtors',
             isPortal: true,
             type: 'customer',
-            ledger_id: c.ledger_id
+            ledger_id: c.ledger_id,
+            code: c.customer_code,
+            category: c.customer_category_name ? `Customer - ${c.customer_category_name}` : 'Customer'
         }));
 
         const vendOptions = portalVendors.map(v => ({
@@ -221,7 +272,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             group: 'Sundry Creditors',
             isPortal: true,
             type: 'vendor',
-            ledger_id: v.ledger_id
+            ledger_id: v.ledger_id,
+            code: v.vendor_code,
+            category: v.vendor_category ? `Vendor - ${v.vendor_category}` : 'Vendor'
         }));
 
         const ledgerOptions = allLedgers
@@ -231,17 +284,37 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             .map(l => ({
                 ...l,
                 type: l.group === 'Sundry Debtors' ? 'customer' :
-                    l.group === 'Sundry Creditors' ? 'vendor' : 'ledger'
+                    l.group === 'Sundry Creditors' ? 'vendor' : 'ledger',
+                category: l.group === 'Sundry Debtors' ? 'Customer' : l.group === 'Sundry Creditors' ? 'Vendor' : ''
             }));
 
-        // Combine and deduplicate
-        // Preference: portal entities > tenant ledgers > hierarchy seeds
-        const masterMap = new Map<string, any>();
-        hierarchySeedLedgers.forEach(o => masterMap.set(o.name.toLowerCase(), o));
-        ledgerOptions.forEach(l => masterMap.set(l.name.toLowerCase(), l));
-        [...custOptions, ...vendOptions].forEach(o => masterMap.set(o.name.toLowerCase(), o));
+        // Build a set of portal entity names to suppress duplicate ledger entries
+        const portalNames = new Set([
+            ...custOptions.map(c => (c.name || '').trim().toLowerCase()),
+            ...vendOptions.map(v => (v.name || '').trim().toLowerCase()),
+        ]);
 
-        return Array.from(masterMap.values()).sort((a,b) => a.name.localeCompare(b.name));
+        const masterMap = new Map<string, any>();
+
+        // Add portal entities first using unique IDs so duplicates survive
+        [...custOptions, ...vendOptions].forEach(o => masterMap.set(o.id, o));
+
+        // Suppress ledger/hierarchy entries whose name is covered by a portal entity
+        ledgerOptions
+            .filter(o => !portalNames.has((o.name || '').trim().toLowerCase()))
+            .forEach(o => {
+                const key = `ledger-${(o.name || '').toLowerCase()}`;
+                if (!masterMap.has(key)) masterMap.set(key, o);
+            });
+        hierarchySeedLedgers
+            .filter(o => !portalNames.has((o.name || '').trim().toLowerCase()))
+            .forEach(o => {
+                const key = `hierarchy-${(o.name || '').toLowerCase()}`;
+                if (!masterMap.has(key)) masterMap.set(key, o);
+            });
+
+        const finalList = Array.from(masterMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+        return finalList;
     }, [allLedgers, portalCustomers, portalVendors, hierarchy]);
 
 
@@ -333,7 +406,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             setRefNo((prefilledData as any).reference_number);
             setSingleAdvanceRefNo((prefilledData as any).reference_number);
         } else if (prefilledData.invoiceNumber) {
-             setSingleAdvanceRefNo(prefilledData.invoiceNumber);
+            setSingleAdvanceRefNo(prefilledData.invoiceNumber);
         }
 
         if ((prefilledData as any).narration) {
@@ -354,7 +427,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         // ── Hydrate Allocation Items (Drill-down) ─────────────────────────────
         if (isReadOnlyMode && (prefilledData as any).items && Array.isArray((prefilledData as any).items)) {
             const itemsList = (prefilledData as any).items;
-            
+
             // 1. Look for an advance item (Prioritize Explicit Advances over Implicit ones!)
             const vNum = (prefilledData as any).invoiceNumber || (prefilledData as any).voucher_number || '';
             const explicitAdvance = itemsList.find((i: any) => {
@@ -376,7 +449,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     setSingleAdvanceAmount(parseFloat(advanceItem.received_amount || advanceItem.amount_applied || advanceItem.amount || '0'));
                 }
             }
-            
+
             // 2. Map standard invoice allocation items
             const invoices = itemsList.filter((i: any) => !i.is_advance && i.reference_type !== 'ADVANCE');
             if (invoices.length > 0) {
@@ -384,7 +457,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     const applied = parseFloat(i.received_amount || i.amount_applied || i.amount || '0');
                     const pendingBefore = parseFloat(i.pending_before || '0');
                     const balAfter = parseFloat(i.balance_after || '0');
-                    
+
                     return {
                         id: (i.id || i.reference_id || Math.random()).toString(),
                         date: i.invoice_date || i.date || getCurrentDate(),
@@ -402,7 +475,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
         // Only clear if NOT in read-only mode (otherwise repeated renders lose view state)
         if (clearPrefilledData && !isReadOnlyMode) clearPrefilledData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [prefilledData, clearPrefilledData, allLedgers, isReadOnlyMode]);
 
     const fetchReceiptConfigs = useCallback(async () => {
@@ -417,7 +490,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             }));
 
             setReceiptVoucherConfigs(receiptConfigs);
-            
+
             // If there's only 1 and none selected, default to it
             if (receiptConfigs && receiptConfigs.length === 1 && !selectedReceiptConfig) {
                 setSelectedReceiptConfig(receiptConfigs[0].voucher_name);
@@ -438,7 +511,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         if (prefilledData && (prefilledData as any).voucher_type && receiptVoucherConfigs.length > 0) {
             const typeStr = String((prefilledData as any).voucher_type).trim();
             if (typeStr.toLowerCase() !== 'receipt' && typeStr.toLowerCase() !== 'receipts') {
-                const match = receiptVoucherConfigs.find(c => 
+                const match = receiptVoucherConfigs.find(c =>
                     String(c.voucher_name).trim().toLowerCase() === typeStr.toLowerCase()
                 );
                 if (match) {
@@ -459,7 +532,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     const prefix = (cfg.prefix || '').toLowerCase();
                     return prefix && vNumLower.startsWith(prefix);
                 });
-                
+
                 if (matchedConfig) {
                     setSelectedReceiptConfig(matchedConfig.voucher_name);
                 } else if (!selectedReceiptConfig && receiptVoucherConfigs.length > 0) {
@@ -577,25 +650,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             showError("Please enter an amount first.");
             return;
         }
-        
+
         try {
-            const findLedgerId = (name: string, isReceiveFrom: boolean = false) => {
-                if (!name) return null;
-                const normalized = name.trim().toLowerCase();
-                
-                if (isReceiveFrom) {
-                    const found = receiveFromOptions.find(opt => opt.name.trim().toLowerCase() === normalized);
-                    if (found) {
-                        if (found.id && typeof found.id === 'string' && found.id.startsWith('portal-')) return found.id;
-                        return found.ledger_id || found.id;
-                    }
-                } else {
-                    const inOption = receiveInLedgers.find(o => (o.name || '').trim().toLowerCase() === normalized);
-                    if (inOption) return inOption.id;
-                }
-                
-                return allLedgers.find(l => (l.name || '').trim().toLowerCase() === normalized)?.id;
-            };
+
 
             const receiveFromId = findLedgerId(receiveFrom, true);
             const receiveInId = findLedgerId(receiveIn, false);
@@ -617,7 +674,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 narration: postingNote,
                 is_amount_only: true
             };
-            
+
             let response: any;
             if (editingVoucherId) {
                 payload.items = [{
@@ -634,7 +691,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 response = await httpClient.post('/api/vouchers/receipt-single/save-amount-only/', payload);
                 showSuccess("Receipt recorded (Amount Only)");
             }
-            
+
             if (onAddVouchers) {
                 onAddVouchers([{
                     id: response?.id?.toString() || Date.now().toString(),
@@ -651,7 +708,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 setVoucherNumber(response.next_voucher_number);
             }
             fetchReceiptConfigs();
-            
+
             handleCancel();
         } catch (error: any) {
             console.error("Receipt save error:", error);
@@ -1010,7 +1067,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             if (!receiveIn) { showError("Please select 'Receive In' ledger"); return; }
             if (!receiveFrom) { showError("Please select 'Receive From' account"); return; }
             if (topAmount <= 0) { showError("Please enter an amount"); return; }
-            
+
             if (isUnderAllocated) {
                 showError(`₹${difference.toLocaleString('en-IN', { minimumFractionDigits: 2 })} still needs to be allocated`);
             } else if (hasAnyOverAllocation) {
@@ -1022,32 +1079,6 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         }
 
         try {
-            const findLedgerId = (name: string, isReceiveFrom: boolean = false) => {
-                if (!name) return null;
-                const normalized = name.trim().toLowerCase();
-
-                if (isReceiveFrom) {
-                    // Try to find the exact option they selected
-                    const option = receiveFromOptions.find(o => (o.name || '').trim().toLowerCase() === normalized);
-                    if (option) {
-                        // Return portal-cust-X or portal-vend-X so backend resolves perfectly
-                        if (option.id && typeof option.id === 'string' && option.id.startsWith('portal-')) {
-                            return option.id;
-                        }
-                        return option.id; // Fallback to ledger id
-                    }
-                } else {
-                    const inOption = receiveInLedgers.find(o => (o.name || '').trim().toLowerCase() === normalized);
-                    if (inOption) return inOption.id;
-                }
-
-                // Fallback: Check regular ledgers by name
-                const ledger = allLedgers.find(l => (l.name || '').trim().toLowerCase() === normalized);
-                if (ledger) return ledger.id;
-
-                return null;
-            };
-
             const receiveInId = findLedgerId(receiveIn, false);
 
             if (activeTab === 'single') {
@@ -1056,6 +1087,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     showError("Please select valid 'Receive In' and 'Receive From' accounts.");
                     return;
                 }
+
+                const resolvedName = getResolvedName(receiveFrom);
 
                 const finalAmount = topAmount > 0 ? topAmount : totalReceipt;
 
@@ -1071,7 +1104,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                             customer: receiveFromId,
                             reference_id: t.referenceNumber,
                             reference_type: 'invoice',
-                            pending_transaction: { ...t, customer_name: receiveFrom },
+                            pending_transaction: { ...t, customer_name: resolvedName },
                             amount: Number(Number(t.amount).toFixed(2)),
                             pending_before: Number(Number(t.amount).toFixed(2)),
                             received_amount: Number(Number(t.receipt).toFixed(2)),
@@ -1084,7 +1117,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                         customer: receiveFromId,
                         reference_id: singleAdvanceRefNo || 'ADVANCE',
                         reference_type: 'advance',
-                        pending_transaction: { customer_name: receiveFrom },
+                        pending_transaction: { customer_name: resolvedName },
                         amount: Number(Number(singleAdvanceAmount).toFixed(2)),
                         received_amount: Number(Number(singleAdvanceAmount).toFixed(2)),
                         is_advance: true,
@@ -1098,7 +1131,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                         customer: receiveFromId,
                         reference_id: singleAdvanceRefNo || 'ADVANCE',
                         reference_type: 'advance',
-                        pending_transaction: { customer_name: receiveFrom },
+                        pending_transaction: { customer_name: resolvedName },
                         amount: Number(Number(finalAmount).toFixed(2)),
                         received_amount: Number(Number(finalAmount).toFixed(2)),
                         is_advance: true,
@@ -1196,6 +1229,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     const rowCustomerId = findLedgerId(row.receiveFrom);
                     if (!rowCustomerId) continue;
 
+                    const resolvedRowName = getResolvedName(row.receiveFrom);
+
                     grandTotal += row.amount;
 
                     // If this row is the one currently active in the right pane, use its allocations
@@ -1210,7 +1245,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 customer: rowCustomerId,
                                 reference_id: t.invoiceNo,
                                 reference_type: 'invoice',
-                                pending_transaction: { ...t, customer_name: row.receiveFrom },
+                                pending_transaction: { ...t, customer_name: resolvedRowName },
                                 amount: Number(Number(t.amount).toFixed(2)),
                                 pending_before: Number(Number(t.amount).toFixed(2)),
                                 received_amount: Number(Number(t.receiveNow).toFixed(2)),
@@ -1230,7 +1265,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 customer: rowCustomerId,
                                 reference_id: rowAdvanceRefNo || 'ADVANCE',
                                 reference_type: 'advance',
-                                pending_transaction: { customer_name: row.receiveFrom },
+                                pending_transaction: { customer_name: resolvedRowName },
                                 amount: Number(Math.max(remaining, rowAdvanceAmount, row.amount).toFixed(2)),
                                 received_amount: Number(Math.max(remaining, rowAdvanceAmount).toFixed(2)),
                                 is_advance: true,
@@ -1245,7 +1280,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 customer: rowCustomerId,
                                 reference_id: t.invoiceNo,
                                 reference_type: 'invoice',
-                                pending_transaction: { ...t, customer_name: row.receiveFrom },
+                                pending_transaction: { ...t, customer_name: resolvedRowName },
                                 amount: t.amount,
                                 pending_before: t.amount,
                                 received_amount: t.receiveNow,
@@ -1263,7 +1298,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 customer: rowCustomerId,
                                 reference_id: rowAdvanceRefNo || 'ADVANCE',
                                 reference_type: 'advance',
-                                pending_transaction: { customer_name: row.receiveFrom },
+                                pending_transaction: { customer_name: resolvedRowName },
                                 amount: Math.max(remaining, rowAdvanceAmount, row.amount),
                                 received_amount: Math.max(remaining, rowAdvanceAmount),
                                 is_advance: true,
@@ -1277,7 +1312,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                             customer: rowCustomerId,
                             reference_id: rowAdvanceRefNo || row.referenceNumber || 'RCV',
                             reference_type: isAdvance ? 'advance' : 'on_account',
-                            pending_transaction: { customer_name: row.receiveFrom },
+                            pending_transaction: { customer_name: resolvedRowName },
                             amount: Number(Number(row.amount).toFixed(2)),
                             received_amount: Number(Number(row.amount).toFixed(2)),
                             is_advance: isAdvance,
@@ -1451,10 +1486,15 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                         setReceiveFrom(val);
                                         handleCustomerSelect(val);
                                     }}
-                                    options={receiveFromOptions.map(l => ({
-                                        label: l.type ? `${l.name} (${l.type.charAt(0).toUpperCase() + l.type.slice(1)})` : l.name,
-                                        value: l.name
-                                    }))}
+                                    options={receiveFromOptions.map(l => {
+                                         const typeLabel = l.type ? l.type.charAt(0).toUpperCase() + l.type.slice(1) : '';
+                                         let label = l.name;
+                                         if ((l.type === 'customer' || l.type === 'vendor') && l.code) {
+                                             label = `${l.name} - ${l.code}`;
+                                         }
+                                         if (typeLabel) label = `${label} (${typeLabel})`;
+                                         return { label, value: l.id };
+                                     })}
                                     placeholder="Select Receive From"
                                     className="flex-1"
                                 />
@@ -1490,7 +1530,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                     setTopAmount(val);
                                     handleTotalAmountChange(val);
                                 }}
-                               
+
                                 className="w-full px-3 py-2 border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-right h-10 shadow-sm"
                                 placeholder="0.00"
                             />
@@ -1522,7 +1562,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                         type="number" onWheel={(e) => e.currentTarget.blur()}
                                         value={singleAdvanceAmount || ''}
                                         onChange={(e) => setSingleAdvanceAmount(parseFloat(e.target.value) || 0)}
-                                       
+
                                         className="w-full px-3 py-2 border border-indigo-200 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                                         placeholder="0.00"
                                     />
@@ -1543,77 +1583,76 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
                         {receiveFrom ? (
                             <>
-                            <div className="border-2 border-gray-200 rounded-[4px] overflow-hidden">
-                                <table className="w-full">
-                                    <thead className="bg-indigo-600 border-b-2 border-indigo-700 text-white">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase">DATE</th>
-                                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase">REFERENCE NUMBER</th>
-                                            <th className="px-3 py-3 text-center text-xs font-semibold uppercase">BILL STATUS</th>
-                                            <th className="px-3 py-3 text-center text-xs font-semibold uppercase">ALLOCATION</th>
-                                            <th className="px-6 py-3 text-right text-xs font-semibold uppercase">PENDING</th>
-                                            <th className="px-6 py-3 text-center text-xs font-semibold uppercase">ACTION</th>
-                                            <th className="px-6 py-3 text-right text-xs font-semibold uppercase">RECEIPT</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {pendingTransactions.map((txn, index) => {
-                                            const status = getRowStatus(txn.receipt || 0, txn.amount);
-                                            const isProblemRow = (isUnderAllocated && (txn.receipt === 0 || txn.receipt < txn.amount - 0.01)) || (isOverAllocated && txn.receipt > txn.amount + 0.01);
-                                            
-                                            return (
-                                                <tr key={index} className={`transition-colors ${isProblemRow ? 'bg-red-50/30' : 'hover:bg-gray-50'}`}>
-                                                    <td className="px-6 py-4 text-sm text-gray-700">{txn.date}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-700">
-                                                        <div className="font-medium">{txn.referenceNumber}</div>
-                                                        {txn.dueDate && (
-                                                            <div className="text-[10px] text-gray-400">Due: {txn.dueDate}</div>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-3 py-4 text-center">
-                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${txn.status === 'Due' || txn.status === 'Due Today'
-                                                            ? 'bg-red-100 text-red-600 border border-red-200'
-                                                            : (txn.status === 'Partially Received' || txn.status === 'Partially Paid')
-                                                                ? 'bg-orange-100 text-orange-600 border border-orange-200'
-                                                                : 'bg-green-100 text-green-600 border border-green-200'
-                                                            }`}>
-                                                            {txn.status}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-3 py-4 text-center">
-                                                        <div className={`px-2 py-1 rounded-[4px] border text-[10px] font-black uppercase tracking-tight ${status.bg} ${status.text} ${status.border}`}>
-                                                            {status.label}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-sm text-gray-700 text-right font-medium text-red-600">
-                                                        ₹{Math.max(0, txn.amount - txn.receipt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <button
-                                                            onClick={() => handleReceive(index)}
-                                                            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-600 text-white text-xs font-medium rounded shadow-sm transition-colors uppercase font-bold"
-                                                        >
-                                                            Receive
-                                                        </button>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        <input
-                                                            type="number" onWheel={(e) => e.currentTarget.blur()}
-                                                            value={txn.receipt || ''}
-                                                            onChange={(e) => handleReceiptChange(index, parseFloat(e.target.value) || 0)}
-                                                            placeholder="0"
-                                                            className={`w-24 px-3 py-1.5 text-right border rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-bold ${
-                                                                status.status === 'OVER' ? 'border-red-500 bg-red-50 text-red-700' : 
-                                                                status.status === 'PARTIAL' ? 'border-orange-300 bg-orange-50 text-orange-700' : 
-                                                                status.status === 'FULL' ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700'
-                                                            }`}
-                                                        />
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                                <div className="border-2 border-gray-200 rounded-[4px] overflow-hidden">
+                                    <table className="w-full">
+                                        <thead className="bg-indigo-600 border-b-2 border-indigo-700 text-white">
+                                            <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-semibold uppercase">DATE</th>
+                                                <th className="px-6 py-3 text-left text-xs font-semibold uppercase">REFERENCE NUMBER</th>
+                                                <th className="px-3 py-3 text-center text-xs font-semibold uppercase">BILL STATUS</th>
+                                                <th className="px-3 py-3 text-center text-xs font-semibold uppercase">ALLOCATION</th>
+                                                <th className="px-6 py-3 text-right text-xs font-semibold uppercase">PENDING</th>
+                                                <th className="px-6 py-3 text-center text-xs font-semibold uppercase">ACTION</th>
+                                                <th className="px-6 py-3 text-right text-xs font-semibold uppercase">RECEIPT</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {pendingTransactions.map((txn, index) => {
+                                                const status = getRowStatus(txn.receipt || 0, txn.amount);
+                                                const isProblemRow = (isUnderAllocated && (txn.receipt === 0 || txn.receipt < txn.amount - 0.01)) || (isOverAllocated && txn.receipt > txn.amount + 0.01);
+
+                                                return (
+                                                    <tr key={index} className={`transition-colors ${isProblemRow ? 'bg-red-50/30' : 'hover:bg-gray-50'}`}>
+                                                        <td className="px-6 py-4 text-sm text-gray-700">{txn.date}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-700">
+                                                            <div className="font-medium">{txn.referenceNumber}</div>
+                                                            {txn.dueDate && (
+                                                                <div className="text-[10px] text-gray-400">Due: {txn.dueDate}</div>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-3 py-4 text-center">
+                                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${txn.status === 'Due' || txn.status === 'Due Today'
+                                                                ? 'bg-red-100 text-red-600 border border-red-200'
+                                                                : (txn.status === 'Partially Received' || txn.status === 'Partially Paid')
+                                                                    ? 'bg-orange-100 text-orange-600 border border-orange-200'
+                                                                    : 'bg-green-100 text-green-600 border border-green-200'
+                                                                }`}>
+                                                                {txn.status}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-3 py-4 text-center">
+                                                            <div className={`px-2 py-1 rounded-[4px] border text-[10px] font-black uppercase tracking-tight ${status.bg} ${status.text} ${status.border}`}>
+                                                                {status.label}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-sm text-gray-700 text-right font-medium text-red-600">
+                                                            ₹{Math.max(0, txn.amount - txn.receipt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center">
+                                                            <button
+                                                                onClick={() => handleReceive(index)}
+                                                                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-600 text-white text-xs font-medium rounded shadow-sm transition-colors uppercase font-bold"
+                                                            >
+                                                                Receive
+                                                            </button>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-right">
+                                                            <input
+                                                                type="number" onWheel={(e) => e.currentTarget.blur()}
+                                                                value={txn.receipt || ''}
+                                                                onChange={(e) => handleReceiptChange(index, parseFloat(e.target.value) || 0)}
+                                                                placeholder="0"
+                                                                className={`w-24 px-3 py-1.5 text-right border rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-bold ${status.status === 'OVER' ? 'border-red-500 bg-red-50 text-red-700' :
+                                                                    status.status === 'PARTIAL' ? 'border-orange-300 bg-orange-50 text-orange-700' :
+                                                                        status.status === 'FULL' ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700'
+                                                                    }`}
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
                                 </div>
                                 {/* Allocation Summary Strip */}
                                 <div className={`border-2 mt-2 px-6 py-3 flex items-center justify-between rounded-[4px] ${isExactMatch ? 'bg-emerald-50 border-emerald-100' : isOverAllocated ? 'bg-red-50 border-red-100' : 'bg-orange-50 border-orange-100'}`}>
@@ -1672,11 +1711,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                         <button
                             onClick={handlePostReceipt}
                             disabled={!canPost}
-                            className={`px-8 py-2 font-bold rounded-[4px] text-sm transition-all uppercase tracking-wider ${
-                                canPost 
-                                    ? 'bg-white border-2 border-emerald-200 text-emerald-600 hover:bg-emerald-50' 
-                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
-                            }`}
+                            className={`px-8 py-2 font-bold rounded-[4px] text-sm transition-all uppercase tracking-wider ${canPost
+                                ? 'bg-white border-2 border-emerald-200 text-emerald-600 hover:bg-emerald-50'
+                                : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                                }`}
                         >
                             {isExactMatch ? 'Post Receipt' : 'Complete Allocation'}
                         </button>
@@ -1761,7 +1799,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                         type="number" onWheel={(e) => e.currentTarget.blur()}
                                         value={runningBalance}
                                         readOnly
-                                       
+
                                         className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500 text-right"
                                     />
                                 </div>
@@ -1777,10 +1815,15 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                 key={`receive-from-${row.id}`}
                                                 value={row.receiveFrom}
                                                 onChange={val => handleReceiptRowChange(row.id, 'receiveFrom', val)}
-                                                options={receiveFromOptions.map(l => ({
-                                                    label: l.type ? `${l.name} (${l.type.charAt(0).toUpperCase() + l.type.slice(1)})` : l.name,
-                                                    value: l.name
-                                                }))}
+                                                options={receiveFromOptions.map(l => {
+                                                     const typeLabel = l.type ? l.type.charAt(0).toUpperCase() + l.type.slice(1) : '';
+                                                     let lbl = l.name;
+                                                     if ((l.type === 'customer' || l.type === 'vendor') && l.code) {
+                                                         lbl = `${l.name} - ${l.code}`;
+                                                     }
+                                                     if (typeLabel) lbl = `${lbl} (${typeLabel})`;
+                                                     return { label: lbl, value: l.id };
+                                                 })}
                                                 placeholder="Select Receive From"
                                                 className="w-full h-[40px]"
                                             />
@@ -1804,7 +1847,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                 type="number" onWheel={(e) => e.currentTarget.blur()}
                                                 value={row.amount || ''}
                                                 onChange={e => handleReceiptRowChange(row.id, 'amount', parseFloat(e.target.value) || 0)}
-                                               
+
                                                 placeholder="Receive now/Advance total"
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm h-[40px]"
                                             />
@@ -1928,11 +1971,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                                         type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                         value={transaction.receiveNow || ''}
                                                                         onChange={e => handleReceiveNowChange(transaction.id, parseFloat(e.target.value) || 0)}
-                                                                        className={`w-24 px-3 py-1.5 text-right border rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-bold ${
-                                                                            status.status === 'OVER' ? 'border-red-500 bg-red-50 text-red-700' : 
-                                                                            status.status === 'PARTIAL' ? 'border-orange-300 bg-orange-50 text-orange-700' : 
-                                                                            status.status === 'FULL' ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700'
-                                                                        }`}
+                                                                        className={`w-24 px-3 py-1.5 text-right border rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-bold ${status.status === 'OVER' ? 'border-red-500 bg-red-50 text-red-700' :
+                                                                            status.status === 'PARTIAL' ? 'border-orange-300 bg-orange-50 text-orange-700' :
+                                                                                status.status === 'FULL' ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700'
+                                                                            }`}
                                                                     />
                                                                 </td>
                                                                 <td className="py-3 px-2">
@@ -1989,7 +2031,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                     type="number" onWheel={(e) => e.currentTarget.blur()}
                                                     value={advanceAmount || ''}
                                                     onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
-                                                   
+
                                                     className="w-full px-3 py-2 border border-gray-300 rounded"
                                                 />
                                             </div>

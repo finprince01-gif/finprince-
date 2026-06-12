@@ -200,7 +200,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         group: 'Sundry Creditors',
                         isPortal: true,
                         type: 'vendor',
-                        ledger_id: v.ledger_id, // Strictly use ledger_id, do not fall back to vendor id
+                        code: v.vendor_code || '',
+                        ledger_id: v.ledger_id,
                         portal_id: v.id
                     })),
                     ...customersData.map((c: any) => ({
@@ -209,6 +210,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         group: 'Sundry Debtors',
                         isPortal: true,
                         type: 'customer',
+                        code: c.customer_code || '',
                         ledger_id: c.ledger_id,
                         portal_id: c.id
                     }))
@@ -222,13 +224,23 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         ...l,
                         type: l.group === 'Sundry Debtors' ? 'customer' :
                             l.group === 'Sundry Creditors' ? 'vendor' : 'ledger',
-                        ledger_id: l.id // Ensure consistency
+                        ledger_id: l.id
                     }));
 
+                // Build a set of portal entity names (lowercase) so we can suppress
+                // duplicate ledger entries for the same vendor/customer
+                const portalNames = new Set(portalEntities.map((o: any) => (o.name || '').trim().toLowerCase()));
+
                 const masterMap = new Map<string, any>();
-                hierarchySeedLedgers.forEach((o: any) => masterMap.set(o.name.toLowerCase(), o));
-                ledgerOptions.forEach((o: any) => masterMap.set(o.name.toLowerCase(), o));
-                portalEntities.forEach((o: any) => masterMap.set(o.name.toLowerCase(), o));
+                // Only add hierarchy/ledger entries whose name is NOT covered by a portal entity
+                hierarchySeedLedgers
+                    .filter((o: any) => !portalNames.has((o.name || '').trim().toLowerCase()))
+                    .forEach((o: any) => masterMap.set(`hierarchy-${o.name.toLowerCase()}`, o));
+                ledgerOptions
+                    .filter((o: any) => !portalNames.has((o.name || '').trim().toLowerCase()))
+                    .forEach((o: any) => masterMap.set(`ledger-${o.name.toLowerCase()}`, o));
+                // Portal entities use their unique ID as key so duplicates are preserved
+                portalEntities.forEach((o: any) => masterMap.set(o.id, o));
 
                 setPayToOptions(Array.from(masterMap.values()).sort((a, b) => a.name.localeCompare(b.name)));
             } catch (error) {
@@ -1430,10 +1442,15 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 <SearchableSelect
                                     value={payTo}
                                     onChange={(val) => setPayTo(val)}
-                                    options={payToOptions.map(l => ({
-                                        label: l.type ? `${l.name} (${l.type.charAt(0).toUpperCase() + l.type.slice(1)})` : l.name,
-                                        value: l.name
-                                    }))}
+                                    options={payToOptions.map(l => {
+                                        const typeLabel = l.type ? l.type.charAt(0).toUpperCase() + l.type.slice(1) : '';
+                                        let label = l.name;
+                                        if ((l.type === 'customer' || l.type === 'vendor') && l.code) {
+                                            label = `${l.name} - ${l.code}`;
+                                        }
+                                        if (typeLabel) label = `${label} (${typeLabel})`;
+                                        return { label, value: l.name };
+                                    })}
                                     placeholder="Select Pay To"
                                     className="flex-1"
                                 />
@@ -1783,10 +1800,15 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                 <SearchableSelect
                                                     value={row.payTo}
                                                     onChange={val => handlePaymentRowChange(row.id, 'payTo', val)}
-                                                    options={payToOptions.map(l => ({
-                                                        label: l.type ? `${l.name} (${l.type.charAt(0).toUpperCase() + l.type.slice(1)})` : l.name,
-                                                        value: l.name
-                                                    }))}
+                                                    options={payToOptions.map(l => {
+                                                        const typeLabel = l.type ? l.type.charAt(0).toUpperCase() + l.type.slice(1) : '';
+                                                        let label = l.name;
+                                                        if ((l.type === 'customer' || l.type === 'vendor') && l.code) {
+                                                            label = `${l.name} - ${l.code}`;
+                                                        }
+                                                        if (typeLabel) label = `${label} (${typeLabel})`;
+                                                        return { label, value: l.name };
+                                                    })}
                                                     placeholder="Select Pay To"
                                                     className="w-full h-[40px]"
                                                 />

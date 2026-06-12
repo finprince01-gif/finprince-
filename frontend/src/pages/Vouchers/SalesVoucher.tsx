@@ -51,6 +51,24 @@ const normalizeStatutorySection = (str: string): string => {
     return str.replace(/[-\|]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 };
 
+const getCustomerUniqueName = (c: any, allCustomers: any[]): string => {
+    if (!c) return '';
+    const name = c.customer_name || c.name || '';
+    
+    const code = c.customer_code || '';
+    if (code) {
+        return `${name} - ${code}`;
+    }
+
+    const norm = name.trim().toLowerCase();
+    const count = allCustomers.filter(x => (x.customer_name || x.name || '').trim().toLowerCase() === norm).length;
+    if (count > 1) {
+        return `${name} (ID: ${c.id})`;
+    }
+    return name;
+};
+
+
 const findRate = (map: Record<string, number>, sectionStr: string): number => {
     if (!sectionStr) return 0;
     const normalizedSearch = normalizeStatutorySection(sectionStr);
@@ -553,70 +571,6 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     const [customerId, setCustomerId] = useState<number | string | null>(null);
     const [customerBranch, setCustomerBranch] = useState('');
 
-    const [outwardSlipNo, setOutwardSlipNo] = useState('');
-    const [outwardSlipId, setOutwardSlipId] = useState<number | null>(null);
-    const [outwardSlipsData, setOutwardSlipsData] = useState<any[]>([]);
-
-    // Filtered options for Outward Slip dropdown
-    const outwardSlipOptions = useMemo(() => {
-        if (!customerName) return [];
-
-        const filtered = outwardSlipsData.filter(item => {
-            const slipCustomer = (item.customer_name || item.customerName || '').toString().trim().toLowerCase();
-            const currentCustomer = (customerName || '').toString().trim().toLowerCase();
-
-            const matchesCustomer = slipCustomer === currentCustomer;
-
-            // Type filter: Only show 'sales' outward slips in Sales Voucher
-            const slipType = (item.outward_type || item.outwardType || '').toLowerCase();
-            const isSalesType = !slipType || slipType === 'sales';
-
-            // Optional: Filter by branch if it's available and selected
-            if (customerBranch) {
-                const slipBranch = (item.branch || item.branch_name || '').toString().trim().toLowerCase();
-                const currentBranch = (customerBranch || '').toString().trim().toLowerCase();
-                return matchesCustomer && isSalesType && (slipBranch === currentBranch || !slipBranch);
-            }
-
-            return matchesCustomer && isSalesType;
-        });
-
-        if (filtered.length === 0 && outwardSlipsData.length > 0 && customerName) {
-            console.log(`[SalesVoucher] No matching slips for customer "${customerName}". Available slips authors:`,
-                outwardSlipsData.map(s => s.customer_name || s.customerName)
-            );
-        }
-
-        const options = filtered.map(item => (item.outward_slip_no || item.slip_no || '').toString().trim()).filter(Boolean);
-        return [...new Set(options)].sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
-    }, [outwardSlipsData, customerName, customerBranch]);
-
-    // Fetch Outward Slips
-    const fetchOutwardSlips = React.useCallback(async () => {
-        try {
-            // Add timestamp to prevent browser caching of the GET response
-            const data = await httpClient.get<any[]>(`/api/inventory/operations/outward/?_t=${Date.now()}`).catch(() => []);
-            if (Array.isArray(data)) {
-                // FILTER: Only show PENDING slips, or the currently selected one (for edit mode)
-                const filteredData = data.filter(item =>
-                    item.status === 'PENDING' ||
-                    item.status === 'Posted' ||
-                    !item.status ||
-                    item.outward_slip_no === outwardSlipNo
-                );
-                setOutwardSlipsData(filteredData);
-                return filteredData;
-            }
-        } catch (e) {
-            console.error('Failed to fetch outward slips', e);
-        }
-        return [];
-    }, []);
-
-    React.useEffect(() => {
-        fetchOutwardSlips();
-    }, [fetchOutwardSlips]);
-
     const [masterCustomers, setMasterCustomers] = useState<any[]>([]);
     const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
     const [customerBillingCurrency, setCustomerBillingCurrency] = useState('');
@@ -658,33 +612,109 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         }
     }, [sameAsBillTo, billToAddress1, billToAddress2, billToAddress3, billToCity, billToPincode, billToState, billToCountry]);
 
+    const resolvedCustomer = useMemo(() => {
+        if (!customerName) return null;
+        const allCustomers = [...(customers || []), ...(masterCustomers || [])];
+        const valTrimmed = customerName.trim().toLowerCase();
+        return allCustomers.find(c => {
+            const uniq = getCustomerUniqueName(c, allCustomers).trim().toLowerCase();
+            const rawName = (c.customer_name || c.name || '').trim().toLowerCase();
+            return uniq === valTrimmed || rawName === valTrimmed;
+        });
+    }, [customerName, customers, masterCustomers]);
+
+    const [outwardSlipNo, setOutwardSlipNo] = useState('');
+    const [outwardSlipId, setOutwardSlipId] = useState<number | null>(null);
+    const [outwardSlipsData, setOutwardSlipsData] = useState<any[]>([]);
+
+    // Filtered options for Outward Slip dropdown
+    const outwardSlipOptions = useMemo(() => {
+        if (!customerName) return [];
+        const rawCustName = resolvedCustomer ? (resolvedCustomer.customer_name || resolvedCustomer.name || '').toString().trim().toLowerCase() : customerName.trim().toLowerCase();
+
+        const filtered = outwardSlipsData.filter(item => {
+            const slipCustomer = (item.customer_name || item.customerName || '').toString().trim().toLowerCase();
+            const matchesCustomer = slipCustomer === rawCustName;
+
+            // Type filter: Only show 'sales' outward slips in Sales Voucher
+            const slipType = (item.outward_type || item.outwardType || '').toLowerCase();
+            const isSalesType = !slipType || slipType === 'sales';
+
+            // Optional: Filter by branch if it's available and selected
+            if (customerBranch) {
+                const slipBranch = (item.branch || item.branch_name || '').toString().trim().toLowerCase();
+                const currentBranch = (customerBranch || '').toString().trim().toLowerCase();
+                return matchesCustomer && isSalesType && (slipBranch === currentBranch || !slipBranch);
+            }
+
+            return matchesCustomer && isSalesType;
+        });
+
+        if (filtered.length === 0 && outwardSlipsData.length > 0 && customerName) {
+            console.log(`[SalesVoucher] No matching slips for customer "${rawCustName}". Available slips authors:`,
+                outwardSlipsData.map(s => s.customer_name || s.customerName)
+            );
+        }
+
+        const options = filtered.map(item => (item.outward_slip_no || item.slip_no || '').toString().trim()).filter(Boolean);
+        return [...new Set(options)].sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
+    }, [outwardSlipsData, customerName, resolvedCustomer, customerBranch]);
+
+    // Fetch Outward Slips
+    const fetchOutwardSlips = React.useCallback(async () => {
+        try {
+            // Add timestamp to prevent browser caching of the GET response
+            const data = await httpClient.get<any[]>(`/api/inventory/operations/outward/?_t=${Date.now()}`).catch(() => []);
+            if (Array.isArray(data)) {
+                // FILTER: Only show PENDING slips, or the currently selected one (for edit mode)
+                const filteredData = data.filter(item =>
+                    item.status === 'PENDING' ||
+                    item.status === 'Posted' ||
+                    !item.status ||
+                    item.outward_slip_no === outwardSlipNo
+                );
+                setOutwardSlipsData(filteredData);
+                return filteredData;
+            }
+        } catch (e) {
+            console.error('Failed to fetch outward slips', e);
+        }
+        return [];
+    }, [outwardSlipNo]);
+
+    React.useEffect(() => {
+        fetchOutwardSlips();
+    }, [fetchOutwardSlips]);
+
     const customerOptions = useMemo(() => {
         const allCustomers = [...(customers || []), ...(masterCustomers || [])];
-        return Array.from(new Set(allCustomers.map(c => c.customer_name).filter(Boolean)));
+        const uniqueNames = new Set<string>();
+        const optionsList: string[] = [];
+        allCustomers.forEach(c => {
+            const uniqName = getCustomerUniqueName(c, allCustomers);
+            if (uniqName && !uniqueNames.has(uniqName.toLowerCase())) {
+                uniqueNames.add(uniqName.toLowerCase());
+                optionsList.push(uniqName);
+            }
+        });
+        return optionsList.sort((a, b) => a.localeCompare(b));
     }, [customers, masterCustomers]);
 
     // Branch options: Reference Names from the selected customer's GST branches
     const branchOptions = useMemo(() => {
-        if (!customerName) return [];
-        const allCustomers = [...(customers || []), ...(masterCustomers || [])];
-        const customer = allCustomers.find(c => c.customer_name === customerName);
-        if (!customer) return [];
-        const branches: any[] = customer.gst_details?.branches || [];
+        if (!resolvedCustomer) return [];
+        const branches: any[] = resolvedCustomer.gst_details?.branches || [];
         return branches
             .map((b: any) => b.defaultRef || b.referenceName || '')
             .filter(Boolean);
-    }, [customerName, customers, masterCustomers]);
+    }, [resolvedCustomer]);
 
     // Show GSTINs only for the selected customer
     const gstinOptions = useMemo(() => {
-        if (!customerName) return [];
-
-        const allCustomers = [...(customers || []), ...(masterCustomers || [])];
-        const customer = allCustomers.find(c => c.customer_name === customerName);
-        if (!customer) return [];
+        if (!resolvedCustomer) return [];
 
         const options: string[] = [];
-        const branches = customer.gst_details?.branches || [];
+        const branches = resolvedCustomer.gst_details?.branches || [];
 
         branches.forEach((b: any) => {
             if (b.gstin) {
@@ -695,8 +725,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         });
 
         // Add main GSTIN if exists
-        if (customer.gstin && !options.includes(customer.gstin)) {
-            options.push(customer.gstin);
+        if (resolvedCustomer.gstin && !options.includes(resolvedCustomer.gstin)) {
+            options.push(resolvedCustomer.gstin);
         }
 
         if (options.length === 0) {
@@ -704,7 +734,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         }
 
         return Array.from(new Set(options));
-    }, [customerName, customers, masterCustomers]);
+    }, [resolvedCustomer]);
 
     // Handle Customer Selection
     const handleCustomerChange = (val: string) => {
@@ -715,11 +745,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
         const allCustomers = [...(customers || []), ...(masterCustomers || [])];
         const valTrimmed = val.trim().toLowerCase();
-        const customer = allCustomers.find(c => {
-            const cName = (c.customer_name || '').trim().toLowerCase();
-            const cAlt = (c.name || '').trim().toLowerCase();
-            return cName === valTrimmed || cAlt === valTrimmed;
-        });
+        let customer = allCustomers.find(c => getCustomerUniqueName(c, allCustomers).trim().toLowerCase() === valTrimmed);
+        if (!customer) {
+            customer = allCustomers.find(c => {
+                const cName = (c.customer_name || '').trim().toLowerCase();
+                const cAlt = (c.name || '').trim().toLowerCase();
+                return cName === valTrimmed || cAlt === valTrimmed;
+            });
+        }
         if (customer) {
             setCustomerId(customer.id);
             const branches: any[] = customer.gst_details?.branches || [];
@@ -1065,10 +1098,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     // Handle Branch selection – auto-fill address from that branch
     const handleBranchChange = (branchRef: string) => {
         setCustomerBranch(branchRef);
-        const allCustomers = [...(customers || []), ...(masterCustomers || [])];
-        const customer = allCustomers.find(c => c.customer_name === customerName);
-        if (!customer) return;
-        const branches: any[] = customer.gst_details?.branches || [];
+        if (!resolvedCustomer) return;
+        const branches: any[] = resolvedCustomer.gst_details?.branches || [];
         const branch = branches.find((b: any) => (b.defaultRef || b.referenceName || '') === branchRef);
         if (!branch) return;
         // Fill billing address from branch
@@ -1087,10 +1118,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
     const handleGstinChange = (val: string) => {
         setGstin(val);
-        const allCustomers = [...(customers || []), ...(masterCustomers || [])];
-        const customer = allCustomers.find(c => c.customer_name === customerName);
-        if (customer) {
-            const branches = customer.gst_details?.branches || [];
+        if (resolvedCustomer) {
+            const branches = resolvedCustomer.gst_details?.branches || [];
             const matchedBranch = branches.find((b: any) => {
                 const bGstin = b.gstin || 'Unregistered';
                 return bGstin === val;
@@ -1098,7 +1127,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
             // Check for structured address fields first
             if (matchedBranch) {
-                setContact(matchedBranch.contactNumber || customer.contact_number || '');
+                setContact(matchedBranch.contactNumber || resolvedCustomer.contact_number || '');
                 if (matchedBranch.addressLine1 || matchedBranch.city || matchedBranch.state) {
                     setBillToAddress1(matchedBranch.addressLine1 || '');
                     setBillToAddress2(matchedBranch.addressLine2 || '');
@@ -1931,8 +1960,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         const slipBranch = selectedSlip.branch || selectedSlip.branch_name || '';
         const slipGstin = selectedSlip.gstin || '';
 
-        if (slipCustomer && customerName && slipCustomer !== customerName) {
-            setOutwardSlipError(`Customer Name '${customerName}' does not match Outward Slip (${slipCustomer}).`);
+        const rawCustName = resolvedCustomer ? (resolvedCustomer.customer_name || resolvedCustomer.name || '') : customerName;
+        if (slipCustomer && rawCustName && slipCustomer.trim().toLowerCase() !== rawCustName.trim().toLowerCase()) {
+            setOutwardSlipError(`Customer Name '${rawCustName}' does not match Outward Slip (${slipCustomer}).`);
             return false;
         }
 
@@ -2080,7 +2110,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 voucher_name: voucherName,
                 outward_slip_no: outwardSlipNo,
                 outward_slip_id: outwardSlipId,
-                customer_name: customerName,
+                customer_name: resolvedCustomer ? (resolvedCustomer.customer_name || resolvedCustomer.name || '') : customerName,
                 customer_id: customerId,
                 customer_branch: customerBranch,
                 bill_to: JSON.stringify(billTo),
@@ -2292,7 +2322,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
             const payload = {
                 date: formatDate(date), sales_invoice_no: salesInvoiceNo, voucher_name: voucherName, outward_slip_no: outwardSlipNo, outward_slip_id: outwardSlipId,
-                customer_name: customerName, customer_id: customerId, customer_branch: customerBranch, bill_to: JSON.stringify(billTo), ship_to: JSON.stringify(shipTo), gstin, contact, tax_type: taxType,
+                customer_name: resolvedCustomer ? (resolvedCustomer.customer_name || resolvedCustomer.name || '') : customerName, customer_id: customerId, customer_branch: customerBranch, bill_to: JSON.stringify(billTo), ship_to: JSON.stringify(shipTo), gstin, contact, tax_type: taxType,
                 state_type: stateType, export_type: exportType, exchange_rate: exchangeRate, supporting_document: supportingDocument,
                 sales_order_no: salesOrderNos.join(', '), place_of_supply: placeOfSupply || null, reverse_charge: reverseCharge, invoice_type: invoiceType,
                 gst_export_type: stateType === 'export' ? gstExportType : null, port_code: stateType === 'export' ? portCode : null,

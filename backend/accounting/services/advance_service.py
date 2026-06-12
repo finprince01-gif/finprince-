@@ -34,26 +34,37 @@ def get_allocated_amount(advance_source_id: int, advance_source_type: str, tenan
     # Resolve source_v using any tenant variant
     source_v = Voucher.objects.filter(id=advance_source_id, tenant_id__in=tenant_variants).first()
     
-    if not ref_no:
-        source = AdvanceAllocation.objects.filter(id=advance_source_id, tenant_id__in=tenant_variants).first()
-        if not source:
-            source = PendingTransaction.objects.filter(id=advance_source_id, tenant_id__in=tenant_variants, is_advance=True).first()
-        
-        if source:
+    # 1. Resolve source
+    source = AdvanceAllocation.objects.filter(id=advance_source_id, tenant_id__in=tenant_variants).first()
+    if not source:
+        source = PendingTransaction.objects.filter(id=advance_source_id, tenant_id__in=tenant_variants, is_advance=True).first()
+
+    if source:
+        if not ref_no:
             ref_no = source.advance_ref_no or source.reference_number
-            # If we don't have source_v yet, resolved it from source.transaction_id
-            if not source_v:
-                 source_v = Voucher.objects.filter(reference_id=source.transaction_id, tenant_id__in=tenant_variants).first()
-    
+        if not source_v:
+             source_v = Voucher.objects.filter(reference_id=source.transaction_id, tenant_id__in=tenant_variants).first()
+
+    # Identify the ledger to prevent cross-vendor ref_no collisions
+    ledger_id = None
+    if source:
+        ledger_id = getattr(source, 'pay_to_ledger_id_val', None) or getattr(source, 'pay_from_ledger_id_val', None)
+
     # 2. Sum from the new dedicated table (VoucherAdvanceAdjustment)
-    # Use variant matching for tenant to ensure we find all stored formats
     adv_q = Q(tenant_id__in=tenant_variants)
     if source_v and ref_no:
-        adv_q &= (Q(advance_voucher=source_v) | Q(ref_no__iexact=ref_no))
+        # Match by voucher if possible, otherwise by ref_no + ledger
+        q_ref = Q(ref_no__iexact=ref_no)
+        if ledger_id:
+            q_ref &= (Q(vendor_id=ledger_id) | Q(customer_id=ledger_id))
+        adv_q &= (Q(advance_voucher=source_v) | q_ref)
     elif source_v:
         adv_q &= Q(advance_voucher=source_v)
     elif ref_no:
-        adv_q &= Q(ref_no__iexact=ref_no)
+        q_ref = Q(ref_no__iexact=ref_no)
+        if ledger_id:
+            q_ref &= (Q(vendor_id=ledger_id) | Q(customer_id=ledger_id))
+        adv_q &= q_ref
     else:
         return Decimal('0')
 
@@ -68,28 +79,26 @@ def get_allocated_amount(advance_source_id: int, advance_source_type: str, tenan
         
     new_target_v_ids = VoucherAdvanceAdjustment.objects.filter(match_q).values_list('target_voucher_id', flat=True)
 
-    sum_pending = PendingTransaction.objects.filter(
+    # For legacy, we sum PendingTransactions that CONSUME the advance (is_advance=False)
+    pt_q = Q(
         tenant_id__in=tenant_variants,
         reference_number__iexact=ref_no,
-        reference_type__iexact='ADVANCE'
-    ).exclude(
+        reference_type__iexact='ADVANCE',
+        is_advance=False
+    )
+    if ledger_id:
+        pt_q &= (Q(pay_to_ledger_id_val=ledger_id) | Q(pay_from_ledger_id_val=ledger_id))
+
+    sum_pending = PendingTransaction.objects.filter(pt_q).exclude(
         id=advance_source_id
     ).exclude(
         transaction_id__in=new_target_v_ids
     ).aggregate(total=Sum('allocated_amount'))['total'] or Decimal('0')
 
-    sum_history = AdvanceAllocation.objects.filter(
-        tenant_id__in=tenant_variants,
-        reference_number__iexact=ref_no,
-        reference_type__iexact='ADVANCE'
-    ).exclude(
-        id=advance_source_id
-    ).exclude(
-        transaction_id__in=new_target_v_ids
-    ).aggregate(total=Sum('allocated_amount'))['total'] or Decimal('0')
+    # AdvanceAllocation represents CREATION of advances, so we MUST NOT sum its allocated_amount as consumptions!
+    sum_history = Decimal('0')
 
     return Decimal(str(sum_new)) + Decimal(str(sum_pending)) + Decimal(str(sum_history))
-
 
 def get_remaining_advance(advance_source_id: int, advance_source_type: str,
                           total_amount, tenant_id) -> Decimal:
