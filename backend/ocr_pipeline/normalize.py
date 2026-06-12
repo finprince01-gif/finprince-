@@ -398,14 +398,40 @@ def get_normalized_export_record(invoice: Any, tenant_id: str = None) -> Dict[st
             # 5. Item Level Promotion (Last Resort Fallback)
             items = invoice.get('items') or invoice.get('sections', {}).get('items') or []
             if items and isinstance(items, list) and len(items) > 0:
-                primary = items[0]
-                if isinstance(primary, dict):
-                    for k in keys:
-                        if not is_empty(primary.get(k)): return primary.get(k), f"items[0].{k}"
-                        # Check Title Case as well
-                        alias = TITLE_ALIASES.get(k)
-                        if alias and not is_empty(primary.get(alias)):
-                            return primary.get(alias), f"items[0].alias.{alias}"
+                # Check if we are looking up a numeric total field
+                NUMERIC_KEYS = {
+                    "total_taxable_value", "taxable_value", "subtotal",
+                    "total_igst", "igst",
+                    "total_cgst", "cgst",
+                    "total_sgst", "sgst", "utgst",
+                    "total_cess", "cess", "cess_amount",
+                    "total_invoice_value", "invoice_total", "total_amount", "grand_total",
+                    "round_off", "rounding", "adjustment", "rounding_adjustment"
+                }
+                
+                for k in keys:
+                    is_numeric_field = (k in NUMERIC_KEYS)
+                    alias = TITLE_ALIASES.get(k)
+                    
+                    if is_numeric_field:
+                        has_val = False
+                        total_sum = 0.0
+                        for item in items:
+                            if isinstance(item, dict):
+                                val = item.get(k)
+                                if is_empty(val) and alias:
+                                    val = item.get(alias)
+                                if not is_empty(val):
+                                    has_val = True
+                                    total_sum += normalize_amount(val)
+                        if has_val:
+                            return total_sum, f"items.sum.{k}"
+                    else:
+                        primary = items[0]
+                        if isinstance(primary, dict):
+                            if not is_empty(primary.get(k)): return primary.get(k), f"items[0].{k}"
+                            if alias and not is_empty(primary.get(alias)):
+                                return primary.get(alias), f"items[0].alias.{alias}"
 
         return default, "NONE"
 

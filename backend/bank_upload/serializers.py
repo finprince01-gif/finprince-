@@ -89,6 +89,9 @@ class BankStatementRowUpdateSerializer(serializers.Serializer):
         choices=['draft', 'mapped', 'posted', 'failed', 'duplicate'],
         required=False
     )
+    date             = serializers.DateField(required=False, allow_null=True)
+    narration        = serializers.CharField(required=False, allow_blank=True)
+    amount           = serializers.DecimalField(max_digits=25, decimal_places=2, required=False, allow_null=True)
 
 
 

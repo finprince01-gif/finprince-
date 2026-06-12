@@ -488,6 +488,18 @@ class BankRowUpdateView(APIView):
         if 'bank_ledger_id'  in data: row.bank_ledger_id  = data['bank_ledger_id']
         if 'bank_ledger_name' in data: row.bank_ledger_name = data['bank_ledger_name']
         if 'ref_no'          in data: row.ref_no          = data['ref_no'] or None
+        if 'posting_note'    in data: row.posting_note    = data['posting_note'] or ''
+        if 'date'            in data: row.date            = data['date']
+        if 'narration'       in data: row.narration       = data['narration'] or ''
+        if 'amount'          in data: row.amount          = data['amount']
+
+        # Synchronize debit/credit based on inferred_type and amount
+        if row.inferred_type == 'payment':
+            row.debit = row.amount
+            row.credit = None
+        else:
+            row.credit = row.amount
+            row.debit = None
 
         # Allow manual status override (e.g. un-mark a false-positive duplicate)
         if 'status' in data:

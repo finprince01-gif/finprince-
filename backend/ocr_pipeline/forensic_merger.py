@@ -105,6 +105,16 @@ class ForensicMerger:
         - Only accept continuation values when primary is empty/zero-equivalent.
         - Reject sparse overrides.
         """
+        NUMERIC_FIELDS = {
+            "total_taxable_value", "taxable_value", "subtotal",
+            "total_igst", "igst",
+            "total_cgst", "cgst",
+            "total_sgst", "sgst", "utgst",
+            "total_cess", "cess", "cess_amount",
+            "total_invoice_value", "invoice_total", "total_amount", "grand_total",
+            "round_off", "rounding", "adjustment", "rounding_adjustment"
+        }
+        
         for k, v in continuation.items():
             if k == "items":
                 continue
@@ -115,9 +125,23 @@ class ForensicMerger:
             
             if is_pri_empty and not is_cont_empty:
                 logger.info(f"[CONTINUATION_FIELD_ACCEPTED] field='{k}' accepted='{v}'")
-                primary[k] = v
+                primary[k] = copy.deepcopy(v)
             elif not is_pri_empty and not is_cont_empty:
-                if str(primary_val).strip() != str(v).strip():
+                if isinstance(primary_val, list) and isinstance(v, list):
+                    combined = []
+                    for item in primary_val + v:
+                        if item not in combined:
+                            combined.append(item)
+                    primary[k] = combined
+                    logger.info(f"[FIELD_LIST_MERGED] field='{k}' combined list lengths: {len(primary_val)} + {len(v)} -> {len(combined)}")
+                elif isinstance(primary_val, dict) and isinstance(v, dict):
+                    self.safe_merge(primary_val, v)
+                    logger.info(f"[FIELD_DICT_MERGED] field='{k}' recursively merged dictionary values")
+                elif k in NUMERIC_FIELDS:
+                    summed_val = float(self._to_decimal(primary_val) + self._to_decimal(v))
+                    primary[k] = summed_val
+                    logger.info(f"[FIELD_NUMERIC_ADDED] field='{k}' primary={primary_val} continuation={v} summed={summed_val}")
+                elif str(primary_val).strip() != str(v).strip():
                     logger.info(f"[PRIMARY_FIELD_PRESERVED] field='{k}' preserved='{primary_val}' rejected_override='{v}'")
                     # Optionally preserve longer strings if applicable, but reject zero/garbage overrides
                     if isinstance(primary_val, str) and isinstance(v, str):
@@ -129,7 +153,7 @@ class ForensicMerger:
             elif not is_pri_empty and is_cont_empty:
                 logger.info(f"[FIELD_OVERRIDE_BLOCKED] field='{k}' preserved primary='{primary_val}' blocked continuation sparse/empty")
 
-    def recompute_totals_if_needed(self, inv: Dict[str, Any]):
+    def recompute_totals_if_needed(self, inv: Dict[str, Any], is_multipage: bool = False):
         """
         Recomputes invoice totals from line items using Decimal arithmetic
         strictly following safety preservation rules.
@@ -159,7 +183,7 @@ class ForensicMerger:
         elif not self.is_empty_or_zero(header_round_off):
             logger.info(f"[ROUND_OFF_CANDIDATE] invoice_no='{invoice_no}' value={header_round_off}")
         
-        logger.info(f"[TOTAL_RECOMPUTE_INPUT] invoice_no='{invoice_no}' header_taxable={header_taxable} header_invoice={header_invoice_val} header_igst={header_igst} header_cgst={header_cgst} header_sgst={header_sgst} header_cess={header_cess} header_round_off={header_round_off} items_count={len(items)}")
+        logger.info(f"[TOTAL_RECOMPUTE_INPUT] invoice_no='{invoice_no}' header_taxable={header_taxable} header_invoice={header_invoice_val} header_igst={header_igst} header_cgst={header_cgst} header_sgst={header_sgst} header_cess={header_cess} header_round_off={header_round_off} items_count={len(items)} is_multipage={is_multipage}")
 
         # Item totals calculations
         calc_taxable = Decimal("0.00")
@@ -192,44 +216,52 @@ class ForensicMerger:
         invoice_val_missing = self.is_empty_or_zero(header_invoice_val)
 
         # 1. Taxable Value Recomputation
-        if taxable_missing:
+        if taxable_missing or (is_multipage and not self.is_empty_or_zero(calc_taxable)):
             if not self.is_empty_or_zero(calc_taxable):
-                logger.info(f"[TOTAL_RECOMPUTED_SAFE] invoice_no='{invoice_no}' field='total_taxable_value' old={header_taxable} new={calc_taxable} reason='field_missing'")
+                logger.info(f"[TOTAL_RECOMPUTED_SAFE] invoice_no='{invoice_no}' field='total_taxable_value' old={header_taxable} new={calc_taxable} reason='field_missing_or_multipage'")
                 inv["total_taxable_value"] = float(calc_taxable)
         else:
             logger.info(f"[TOTAL_PRESERVED] invoice_no='{invoice_no}' field='total_taxable_value' value={header_taxable}")
             logger.info(f"[TOTAL_OVERRIDE_BLOCKED] invoice_no='{invoice_no}' field='total_taxable_value' preserved={header_taxable} rejected={calc_taxable} reason='original_field_valid'")
             inv["total_taxable_value"] = float(header_taxable)
 
-        # 2. Tax Components Overrides (Only if missing in header)
-        if self.is_empty_or_zero(header_igst) and not self.is_empty_or_zero(calc_igst):
+        # 2. Tax Components Overrides
+        if (self.is_empty_or_zero(header_igst) or is_multipage) and not self.is_empty_or_zero(calc_igst):
             inv["total_igst"] = float(calc_igst)
-            logger.info(f"[TOTAL_RECOMPUTED_SAFE] invoice_no='{invoice_no}' field='total_igst' old={header_igst} new={calc_igst} reason='field_missing'")
+            logger.info(f"[TOTAL_RECOMPUTED_SAFE] invoice_no='{invoice_no}' field='total_igst' old={header_igst} new={calc_igst} reason='field_missing_or_multipage'")
+        elif is_multipage and self.is_empty_or_zero(calc_igst):
+            inv["total_igst"] = 0.0
         else:
             inv["total_igst"] = float(header_igst)
 
-        if self.is_empty_or_zero(header_cgst) and not self.is_empty_or_zero(calc_cgst):
+        if (self.is_empty_or_zero(header_cgst) or is_multipage) and not self.is_empty_or_zero(calc_cgst):
             inv["total_cgst"] = float(calc_cgst)
-            logger.info(f"[TOTAL_RECOMPUTED_SAFE] invoice_no='{invoice_no}' field='total_cgst' old={header_cgst} new={calc_cgst} reason='field_missing'")
+            logger.info(f"[TOTAL_RECOMPUTED_SAFE] invoice_no='{invoice_no}' field='total_cgst' old={header_cgst} new={calc_cgst} reason='field_missing_or_multipage'")
+        elif is_multipage and self.is_empty_or_zero(calc_cgst):
+            inv["total_cgst"] = 0.0
         else:
             inv["total_cgst"] = float(header_cgst)
 
-        if self.is_empty_or_zero(header_sgst) and not self.is_empty_or_zero(calc_sgst):
+        if (self.is_empty_or_zero(header_sgst) or is_multipage) and not self.is_empty_or_zero(calc_sgst):
             inv["total_sgst"] = float(calc_sgst)
-            logger.info(f"[TOTAL_RECOMPUTED_SAFE] invoice_no='{invoice_no}' field='total_sgst' old={header_sgst} new={calc_sgst} reason='field_missing'")
+            logger.info(f"[TOTAL_RECOMPUTED_SAFE] invoice_no='{invoice_no}' field='total_sgst' old={header_sgst} new={calc_sgst} reason='field_missing_or_multipage'")
+        elif is_multipage and self.is_empty_or_zero(calc_sgst):
+            inv["total_sgst"] = 0.0
         else:
             inv["total_sgst"] = float(header_sgst)
 
-        if self.is_empty_or_zero(header_cess) and not self.is_empty_or_zero(calc_cess):
+        if (self.is_empty_or_zero(header_cess) or is_multipage) and not self.is_empty_or_zero(calc_cess):
             inv["total_cess"] = float(calc_cess)
-            logger.info(f"[TOTAL_RECOMPUTED_SAFE] invoice_no='{invoice_no}' field='total_cess' old={header_cess} new={calc_cess} reason='field_missing'")
+            logger.info(f"[TOTAL_RECOMPUTED_SAFE] invoice_no='{invoice_no}' field='total_cess' old={header_cess} new={calc_cess} reason='field_missing_or_multipage'")
+        elif is_multipage and self.is_empty_or_zero(calc_cess):
+            inv["total_cess"] = 0.0
         else:
             inv["total_cess"] = float(header_cess)
 
         # 3. Invoice Total Value Recomputation
-        if invoice_val_missing:
+        if invoice_val_missing or is_multipage:
             if not self.is_empty_or_zero(calc_invoice_val):
-                logger.info(f"[TOTAL_RECOMPUTED_SAFE] invoice_no='{invoice_no}' field='total_invoice_value' old={header_invoice_val} new={calc_invoice_val} reason='field_missing'")
+                logger.info(f"[TOTAL_RECOMPUTED_SAFE] invoice_no='{invoice_no}' field='total_invoice_value' old={header_invoice_val} new={calc_invoice_val} reason='field_missing_or_multipage'")
                 inv["total_invoice_value"] = float(calc_invoice_val)
                 inv["total_amount"] = float(calc_invoice_val)
         else:
@@ -943,6 +975,27 @@ class ForensicMerger:
         import json
         group = copy.deepcopy(group) # Deepcopy to prevent DTO leakage during in-place merges
 
+        # Filter out duplicate copies of pages in the group (e.g. transporter/supplier duplicate copies)
+        unique_pages = []
+        seen_page_item_keys = set()
+        for p in group:
+            p_items = p.get("items", [])
+            item_keys = []
+            for itm in p_items:
+                desc = str(itm.get("description") or itm.get("item_name") or "").strip().lower()
+                qty = float(itm.get("qty") or itm.get("quantity") or 0.0)
+                rate = float(itm.get("rate") or 0.0)
+                amt = float(itm.get("taxable_value") or itm.get("amount") or 0.0)
+                item_keys.append((desc, qty, rate, amt))
+            page_items_key = tuple(sorted(item_keys))
+            if not page_items_key or page_items_key not in seen_page_item_keys:
+                if page_items_key:
+                    seen_page_item_keys.add(page_items_key)
+                unique_pages.append(p)
+            else:
+                logger.info(f"[DUPLICATE_PAGE_FILTERED] page={p.get('_page_no')} filtered out as a duplicate copy.")
+        group = unique_pages
+
         # [FORENSIC_PRE_MERGE]
         try:
             sorted_group = sorted(group, key=lambda x: x.get("_page_no", 0))
@@ -1019,7 +1072,7 @@ class ForensicMerger:
 
         # Defensive merge from other pages (Continuation/Totals/Tax Summary)
         for other in group:
-            if other is merged_invoice:
+            if other.get('_page_no') == merged_invoice.get('_page_no') or other is merged_invoice:
                 continue
             self.safe_merge(merged_invoice, other)
 
@@ -1135,7 +1188,7 @@ class ForensicMerger:
             logger.warning(f"[FORENSIC_CANONICAL_DTO_LOG_ERR] {le}")
 
         # Recompute totals defensively (Requirement #6)
-        self.recompute_totals_if_needed(merged_invoice)
+        self.recompute_totals_if_needed(merged_invoice, is_multipage=len(sorted_group) > 1)
         
         # [ITEM_AFTER_MERGE] Trace
         for itm in merged_invoice["items"]:
