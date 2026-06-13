@@ -2040,6 +2040,9 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
     try:
         try:
             record = InvoiceTempOCR.objects.select_for_update().get(id=record.id)
+            if record.extracted_data:
+                sync_record_flattened_fields(record, record.extracted_data, commit=False)
+                record.save(update_fields=['supplier_invoice_no', 'gstin', 'branch', 'irn', 'ack_no', 'ack_date'])
         except InvoiceTempOCR.DoesNotExist:
             logger.error(f"[VALIDATION_ABORT] Record {record.id} not found in database.")
             return {"status": "ERROR"}

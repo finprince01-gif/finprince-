@@ -1256,13 +1256,17 @@ class CleanOCRStagingView(views.APIView):
             record.status = PipelineStatus.FINALIZED
             record.supplier_invoice_no = (
                 sections.get('supplier_details', {}).get('supplier_invoice_no') or 
-                raw_target.get('supplier_invoice_no')
+                raw_target.get('supplier_invoice_no') or
+                raw_target.get('invoice_no')
             )
             record.gstin = (
                 sections.get('supplier_details', {}).get('gstin') or 
                 raw_target.get('gstin')
             )
-            record.branch = sections.get('supplier_details', {}).get('branch') or ''
+            record.branch = sections.get('supplier_details', {}).get('branch') or raw_target.get('branch') or ''
+            
+            from .pipeline import sync_record_flattened_fields
+            sync_record_flattened_fields(record, record.extracted_data, commit=False)
             record.save()
             
             # Run the authoritative pipeline validation
@@ -1959,9 +1963,32 @@ class OCRStagingFinalizeView(views.APIView):
                         res = validate_and_process(db_rec, auto_save=True)
                         save_status = res.get('status') if isinstance(res, dict) else None
                         
+                        if save_status == 'LOCK_HELD':
+                            logger.info(f"[LOCK_HELD_DETECTED] record={db_rec.id} is being processed by another worker. Polling database for status update...")
+                            import time
+                            poll_start = time.time()
+                            completed_status = None
+                            # Poll for up to 10 seconds (with 0.5s intervals) to allow background worker to finish
+                            while time.time() - poll_start < 10.0:
+                                time.sleep(0.5)
+                                fresh_rec = InvoiceTempOCR.objects.filter(id=db_rec.id).first()
+                                if fresh_rec and fresh_rec.processed:
+                                    completed_status = fresh_rec.validation_status
+                                    break
+                            
+                            if completed_status:
+                                save_status = completed_status
+                                db_rec.refresh_from_db()
+                                logger.info(f"[LOCK_HELD_RESOLVED_BY_POLLING] record={db_rec.id} resolved to status={save_status}")
+                            else:
+                                logger.warning(f"[LOCK_HELD_POLL_TIMEOUT] record={db_rec.id} did not finish processing in 10 seconds")
+                        
                         if save_status == 'VOUCHER_CREATED':
                             summary['created'] += 1
-                            logger.info(f"[VOUCHER_INSERT_SUCCESS] record={db_rec.id} voucher_id={res.get('voucher_id')}")
+                            v_id = res.get('voucher_id') if isinstance(res, dict) else None
+                            if not v_id:
+                                v_id = getattr(db_rec, 'voucher_id', None)
+                            logger.info(f"[VOUCHER_INSERT_SUCCESS] record={db_rec.id} voucher_id={v_id}")
                             # Mark the row as completed to prevent it from reappearing in resume staging
                             db_rec.processed = True
                             db_rec.validation_status = 'VOUCHER_CREATED'
