@@ -102,12 +102,19 @@ def evaluate_pending_purchase(record, vendor_status, voucher_status, item_status
             f"record_id={record.id}"
         )
 
+        # A record is RESOLVED ONLY when a voucher has been saved or it is a confirmed
+        # duplicate. Vendor/item existence alone is NOT sufficient — if we mark RESOLVED
+        # here, the row disappears from the queue before the user can click Finalize.
+        voucher_actually_saved = (
+            record.validation_status in ('VOUCHER_CREATED',)
+            or voucher_status in ('VOUCHER_STATUS_EXISTING', 'VOUCHER_CREATED')
+        )
         dynamic_status = 'RESOLVED' if (
-            record.validation_status in ('VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE')
-            or voucher_status in ('VOUCHER_STATUS_EXISTING', 'VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE')
+            voucher_actually_saved
+            or record.validation_status in ('DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE')
             or is_duplicate
-            or not is_pending
         ) else 'PENDING'
+
 
         # ── UPSERT: prevent duplicate queue entries on revalidation ──
         obj, created = PendingPurchase.objects.update_or_create(

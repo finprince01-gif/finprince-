@@ -120,14 +120,22 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
         """
         try:
             pp = self.get_object()
+            from ocr_pipeline.models import InvoiceTempOCR
+            staging = InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).first()
+            staging_exists = staging is not None
+            logger.critical(
+                f"[PENDING_REVALIDATE]\n"
+                f"pending_id={pp.id}\n"
+                f"source_scan_row_id={pp.source_scan_row_id}\n"
+                f"staging_exists={staging_exists}\n"
+                f"tenant_id={pp.company_id}"
+            )
             logger.critical(f"[AUTO_REVALIDATE_TRIGGERED] id={pp.id} source_scan_row_id={pp.source_scan_row_id}")
             logger.info(
                 f"[PENDING_REVALIDATE] id={pp.id} invoice={pp.invoice_number} "
                 f"source_row={pp.source_scan_row_id}"
             )
 
-            from ocr_pipeline.models import InvoiceTempOCR
-            staging = InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).first()
             if not staging:
                 return Response(
                     {'error': f'Staging record {pp.source_scan_row_id} not found'},
@@ -143,9 +151,13 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
             staging = InvoiceTempOCR.objects.get(id=pp.source_scan_row_id)
 
             from ocr_pipeline.pipeline import validate_and_process
-            # Pass auto_save=True so that if the pending purchase is fully resolved,
-            # it automatically proceeds to create the Voucher.
-            result = validate_and_process(staging, auto_save=True)
+            # Pass auto_save=False: revalidate only updates status badges.
+            # auto_save=True is reserved exclusively for resolve() / finalize flows
+            # that actually create the voucher. Using True here causes auto_save to
+            # collapse voucher_unresolved and validation_unresolved flags in
+            # _needs_pending_queue(), making is_pending=False the moment vendor+item
+            # exist — which prematurely marks the row RESOLVED before any voucher is saved.
+            result = validate_and_process(staging, auto_save=False)
             
             if isinstance(result, dict) and result.get("status") == "LOCK_HELD":
                 return Response({'error': 'Record is currently being processed by another background task. Please try again in a few seconds.'}, status=409)

@@ -1547,6 +1547,27 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                     # Clear stale sibling records for the session to prevent unique key violation
                     InvoiceTempOCR.objects.filter(upload_session_id=record.upload_session_id).exclude(id=record.id).delete()
                     InvoiceTempOCR.objects.bulk_create(siblings)
+                    
+                    # Re-associate any existing PendingPurchase records with the new sibling IDs
+                    try:
+                        from pending_purchases.models import PendingPurchase
+                        for sib in siblings:
+                            if sib.id and sib.supplier_invoice_no:
+                                updated_count = PendingPurchase.objects.filter(
+                                    scan_session_id=record.upload_session_id,
+                                    invoice_number=sib.supplier_invoice_no
+                                ).update(
+                                    source_scan_row_id=sib.id,
+                                    source_document_hash=sib.file_hash
+                                )
+                                if updated_count > 0:
+                                    logger.critical(
+                                        f"[PENDING_PURCHASE_REASSOCIATED] Updated PP for invoice={sib.supplier_invoice_no} "
+                                        f"new_source_scan_row_id={sib.id} count={updated_count}"
+                                    )
+                    except Exception as e_reassoc:
+                        logger.error(f"[PENDING_PURCHASE_REASSOCIATE_ERROR] Failed to update sibling references: {e_reassoc}")
+
                     for sib in siblings:
                         logger.info(
                             f"[DB_RECORD_CREATED] record_id={sib.id} invoice_no={sib.supplier_invoice_no} "
