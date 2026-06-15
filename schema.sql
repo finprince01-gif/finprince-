@@ -63,7 +63,7 @@ CREATE TABLE `advance_allocation` (
   CONSTRAINT `advance_allocation_pay_from_ledger_id_0eaeca7e_fk_master_le` FOREIGN KEY (`pay_from_ledger_id`) REFERENCES `master_ledgers` (`id`),
   CONSTRAINT `advance_allocation_pay_to_ledger_id_336922ab_fk_master_le` FOREIGN KEY (`pay_to_ledger_id`) REFERENCES `master_ledgers` (`id`),
   CONSTRAINT `advance_allocation_transaction_id_7b578e38_fk_transactions_id` FOREIGN KEY (`transaction_id`) REFERENCES `transactions` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=101 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=104 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -190,7 +190,7 @@ CREATE TABLE `bank_statement_temp` (
   `session_id` varchar(64) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `bank_statement_temp_tenant_id_a754fa74` (`tenant_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=27 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -227,7 +227,7 @@ CREATE TABLE `bank_statement_temp_rows` (
   PRIMARY KEY (`id`),
   KEY `bank_statement_temp_tenant_id_a754fa74` (`tenant_id`),
   KEY `bank_statement_temp_session_id_25116493` (`session_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=10948 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11167 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -334,7 +334,7 @@ CREATE TABLE `bulk_invoice_jobs` (
   KEY `bulk_invoice_jobs_last_task_id_49005405` (`last_task_id`),
   KEY `bulk_invoic_status_e89097_idx` (`status`,`created_at`),
   KEY `bulk_invoic_tenant__fe7294_idx` (`tenant_id`,`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=746 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=756 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -387,7 +387,7 @@ CREATE TABLE `customer_master_category` (
   UNIQUE KEY `customer_category_tenant_unique` (`tenant_id`,`category`(100),`group`(100),`subgroup`(100)),
   KEY `customer_category_is_active_idx` (`tenant_id`,`is_active`),
   KEY `customer_category_category_idx` (`category`(100))
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -410,7 +410,7 @@ CREATE TABLE `customer_master_customer_banking` (
   KEY `customer_bank_tenant_acc_idx` (`tenant_id`,`account_number`),
   KEY `customer_bank_basic_detail_idx` (`customer_basic_detail_id`),
   CONSTRAINT `customer_bank_basic_detail_fk` FOREIGN KEY (`customer_basic_detail_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -442,7 +442,7 @@ CREATE TABLE `customer_master_customer_basicdetails` (
   KEY `fk_customer_ledger` (`ledger_id`),
   CONSTRAINT `customer_basic_category_fk` FOREIGN KEY (`customer_category_id`) REFERENCES `customer_master_category` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_customer_ledger` FOREIGN KEY (`ledger_id`) REFERENCES `master_ledgers` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -473,7 +473,7 @@ CREATE TABLE `customer_master_customer_gstdetails` (
   KEY `customer_gst_tenant_gstin_idx` (`tenant_id`,`gstin`),
   KEY `customer_gst_basic_detail_idx` (`customer_basic_detail_id`),
   CONSTRAINT `customer_gst_basic_detail_fk` FOREIGN KEY (`customer_basic_detail_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -522,7 +522,7 @@ CREATE TABLE `customer_master_customer_tds` (
   UNIQUE KEY `customer_tds_basic_detail_uniq` (`customer_basic_detail_id`),
   KEY `customer_tds_tenant_idx` (`tenant_id`),
   CONSTRAINT `customer_tds_basic_detail_fk` FOREIGN KEY (`customer_basic_detail_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -546,7 +546,7 @@ CREATE TABLE `customer_master_customer_termscondition` (
   UNIQUE KEY `customer_terms_basic_detail_uniq` (`customer_basic_detail_id`),
   KEY `customer_terms_tenant_idx` (`tenant_id`),
   CONSTRAINT `customer_terms_basic_detail_fk` FOREIGN KEY (`customer_basic_detail_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -703,7 +703,7 @@ CREATE TABLE `customer_transaction` (
   KEY `customer_transaction_tenant_id_customer_id_idx` (`tenant_id`,`customer_id`),
   KEY `customer_transaction_date_idx` (`transaction_date`),
   KEY `idx_customer_tx_tenant_date_id` (`tenant_id`,`transaction_date`,`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=238 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=248 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -975,7 +975,7 @@ CREATE TABLE `entries` (
   PRIMARY KEY (`id`),
   KEY `entries_vendor_id_1464aba9_fk_vendor_ma` (`vendor_id`),
   CONSTRAINT `entries_vendor_id_1464aba9_fk_vendor_ma` FOREIGN KEY (`vendor_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=501 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=615 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -1103,7 +1103,7 @@ CREATE TABLE `gemini_quotas` (
   `tokens` double NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `tenant_id` (`tenant_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=32 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=33 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -1339,7 +1339,7 @@ CREATE TABLE `inventory_master_inventoryitems` (
   KEY `inventory_m_tenant__feb7a0_idx` (`tenant_id`,`item_code`,`hsn_code`),
   CONSTRAINT `inv_items_category_fk` FOREIGN KEY (`category_id`) REFERENCES `inventory_master_category` (`id`) ON DELETE SET NULL,
   CONSTRAINT `inv_items_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=28 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=47 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -1732,7 +1732,7 @@ CREATE TABLE `inventory_operation_new_grn` (
   `transporter_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `vehicle_no` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=43 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=45 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -1761,7 +1761,7 @@ CREATE TABLE `inventory_operation_new_grn_items` (
   KEY `inventory_operation__parent_id_b3d55e78_fk_inventory` (`parent_id`),
   KEY `inventory_operation_new_grn_items_tenant_id_ed6058b1` (`tenant_id`),
   CONSTRAINT `inventory_operation__parent_id_b3d55e78_fk_inventory` FOREIGN KEY (`parent_id`) REFERENCES `inventory_operation_new_grn` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=67 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=69 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -1802,7 +1802,7 @@ CREATE TABLE `inventory_operation_outward` (
   CONSTRAINT `fk_outward_customer` FOREIGN KEY (`customer_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_outward_linked_voucher` FOREIGN KEY (`linked_sales_voucher_id`) REFERENCES `voucher_sales_invoicedetails` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_outward_sales` FOREIGN KEY (`linked_sales_voucher_id`) REFERENCES `voucher_sales_invoicedetails` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=51 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=52 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -1831,7 +1831,7 @@ CREATE TABLE `inventory_operation_outward_items` (
   KEY `inventory_operation__parent_id_a538ecf4_fk_inventory` (`parent_id`),
   KEY `inventory_operation_outward_items_tenant_id_ceac5768` (`tenant_id`),
   CONSTRAINT `inventory_operation__parent_id_a538ecf4_fk_inventory` FOREIGN KEY (`parent_id`) REFERENCES `inventory_operation_outward` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=49 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=50 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -2001,7 +2001,7 @@ CREATE TABLE `inventory_stock_items` (
   UNIQUE KEY `inventory_stock_items_tenant_id_item_code_3040fa9d_uniq` (`tenant_id`,`item_code`),
   KEY `inventory_stock_items_tenant_id_15fba8d0` (`tenant_id`),
   KEY `inventory_stock_items_item_code_afced5e7` (`item_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -2027,7 +2027,7 @@ CREATE TABLE `inventory_stock_movements` (
   KEY `inventory_stock_movements_item_code_2daa7021` (`item_code`),
   KEY `inventory_s_tenant__a1ed12_idx` (`tenant_id`,`item_code`,`date`),
   KEY `inventory_s_tenant__13dd88_idx` (`tenant_id`,`location`)
-) ENGINE=InnoDB AUTO_INCREMENT=125 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=128 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -2042,7 +2042,7 @@ CREATE TABLE `inventory_unit` (
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`),
   KEY `inventory_unit_tenant_id_idx` (`tenant_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=145 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=161 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -2091,7 +2091,7 @@ CREATE TABLE `invoice_ocr_temp` (
   UNIQUE KEY `invoice_ocr_temp_tenant_id_file_hash_uplo_8181e188_uniq` (`tenant_id`,`file_hash`,`upload_session_id`),
   KEY `invoice_ocr_temp_group_id_be2506c4` (`group_id`),
   KEY `idx_ocr_status` (`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=1006973 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1007450 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -2112,7 +2112,7 @@ CREATE TABLE `invoice_page_results` (
   KEY `invoice_page_results_session_id_51942db3` (`session_id`),
   KEY `invoice_pag_record__464fee_idx` (`record_id`,`page_number`),
   KEY `invoice_pag_session_0984f6_idx` (`session_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=11513 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11979 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -2150,7 +2150,7 @@ CREATE TABLE `invoice_processing_items` (
   KEY `invoice_pro_tenant__49d9df_idx` (`tenant_id`,`status`),
   KEY `invoice_pro_status_9a4154_idx` (`status`,`updated_at`),
   CONSTRAINT `invoice_processing_items_job_id_ef36791a_fk_bulk_invoice_jobs_id` FOREIGN KEY (`job_id`) REFERENCES `bulk_invoice_jobs` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=885 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=895 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -2214,7 +2214,7 @@ CREATE TABLE `master_ledger_groups` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `master_ledger_groups_name_tenant_id_7f67aa3f_uniq` (`name`,`tenant_id`),
   KEY `master_ledger_groups_tenant_id_b55cdb7c` (`tenant_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=241 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=242 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -2250,7 +2250,7 @@ CREATE TABLE `master_ledgers` (
   KEY `master_ledgers_tenant_id_idx` (`tenant_id`),
   KEY `master_ledgers_category_idx` (`category`),
   KEY `master_ledgers_group_idx` (`group`)
-) ENGINE=InnoDB AUTO_INCREMENT=223 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=240 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -2302,7 +2302,7 @@ CREATE TABLE `master_voucher_contra` (
   PRIMARY KEY (`id`),
   KEY `idx_tenant_contra` (`tenant_id`),
   KEY `idx_voucher_name_contra` (`voucher_name`)
-) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -2326,7 +2326,7 @@ CREATE TABLE `master_voucher_creditnote` (
   PRIMARY KEY (`id`),
   KEY `idx_tenant_creditnote` (`tenant_id`),
   KEY `idx_voucher_name_creditnote` (`voucher_name`)
-) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -2350,7 +2350,7 @@ CREATE TABLE `master_voucher_debitnote` (
   PRIMARY KEY (`id`),
   KEY `idx_tenant_debitnote` (`tenant_id`),
   KEY `idx_voucher_name_debitnote` (`voucher_name`)
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -2374,7 +2374,7 @@ CREATE TABLE `master_voucher_expenses` (
   PRIMARY KEY (`id`),
   KEY `idx_tenant_expenses` (`tenant_id`),
   KEY `idx_voucher_name_expenses` (`voucher_name`)
-) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -2398,7 +2398,7 @@ CREATE TABLE `master_voucher_journal` (
   PRIMARY KEY (`id`),
   KEY `idx_tenant_journal` (`tenant_id`),
   KEY `idx_voucher_name_journal` (`voucher_name`)
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -2470,7 +2470,7 @@ CREATE TABLE `master_voucher_receipts` (
   PRIMARY KEY (`id`),
   KEY `idx_tenant_receipts` (`tenant_id`),
   KEY `idx_voucher_name_receipts` (`voucher_name`)
-) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -2515,7 +2515,7 @@ CREATE TABLE `norm_journal_voucher_entries` (
   KEY `norm_journal_voucher_voucher_id_91678885_fk_voucher_j` (`voucher_id`),
   KEY `norm_journal_voucher_entries_tenant_id_73ab0cae` (`tenant_id`),
   CONSTRAINT `norm_journal_voucher_voucher_id_91678885_fk_voucher_j` FOREIGN KEY (`voucher_id`) REFERENCES `voucher_journal` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -3005,7 +3005,7 @@ CREATE TABLE `pending_purchase_queue` (
   KEY `pending_purchase_queue_invoice_number_d2358123` (`invoice_number`),
   KEY `pending_purchase_queue_vendor_gstin_6b005bd7` (`vendor_gstin`),
   KEY `pending_purchase_queue_pending_purchase_status_4bc208fd` (`pending_purchase_status`)
-) ENGINE=InnoDB AUTO_INCREMENT=2240 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2470 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -3064,7 +3064,7 @@ CREATE TABLE `pending_transaction` (
   CONSTRAINT `pending_transaction_pay_from_ledger_id_d6a93a80_fk_master_le` FOREIGN KEY (`pay_from_ledger_id`) REFERENCES `master_ledgers` (`id`),
   CONSTRAINT `pending_transaction_pay_to_ledger_id_a8c827a0_fk_master_le` FOREIGN KEY (`pay_to_ledger_id`) REFERENCES `master_ledgers` (`id`),
   CONSTRAINT `pending_transaction_transaction_id_181f5b92_fk_transactions_id` FOREIGN KEY (`transaction_id`) REFERENCES `transactions` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=100 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=103 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -3093,7 +3093,7 @@ CREATE TABLE `pipeline_events` (
   KEY `pipeline_ev_session_94faa3_idx` (`session_id`,`status`),
   KEY `pipeline_ev_workflo_f54505_idx` (`workflow_id`,`workflow_version`),
   KEY `pipeline_events_workflow_id_2572625c` (`workflow_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=678 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=763 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -3694,7 +3694,7 @@ CREATE TABLE `transactions` (
   KEY `transactions_date_ec2ce9b4` (`date`),
   CONSTRAINT `transactions_pay_from_ledger_id_30e5f13c_fk_master_ledgers_id` FOREIGN KEY (`pay_from_ledger_id`) REFERENCES `master_ledgers` (`id`),
   CONSTRAINT `transactions_pay_to_ledger_id_6bf87a0b_fk_master_ledgers_id` FOREIGN KEY (`pay_to_ledger_id`) REFERENCES `master_ledgers` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=185 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=187 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -3867,7 +3867,7 @@ CREATE TABLE `vendor_master_vendorcreation_banking` (
   KEY `vendor_banking_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
   KEY `vendor_banking_bank_account_no_idx` (`bank_account_no`),
   CONSTRAINT `vendor_banking_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=34 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -3901,7 +3901,7 @@ CREATE TABLE `vendor_master_vendorcreation_basicdetail` (
   KEY `fk_vendor_ledger` (`ledger_id`),
   KEY `vendor_mast_is_dele_9f7a44_idx` (`is_deleted`),
   CONSTRAINT `fk_vendor_ledger` FOREIGN KEY (`ledger_id`) REFERENCES `master_ledgers` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=38 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=47 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -3941,7 +3941,7 @@ CREATE TABLE `vendor_master_vendorcreation_gstdetails` (
   KEY `vendor_gstdetails_gstin_idx` (`gstin`),
   KEY `vendor_gstdetails_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
   CONSTRAINT `vendor_gstdetails_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=46 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=55 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -3965,7 +3965,7 @@ CREATE TABLE `vendor_master_vendorcreation_productservices_items` (
   KEY `idx_vendor_items_vendor_id` (`vendor_basic_detail_id`),
   KEY `idx_vendor_items_tenant_id` (`tenant_id`),
   CONSTRAINT `fk_vendor_basic_detail` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=85 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=99 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4002,7 +4002,7 @@ CREATE TABLE `vendor_master_vendorcreation_tds` (
   KEY `vendor_tds_tenant_id_idx` (`tenant_id`),
   KEY `vendor_tds_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
   CONSTRAINT `vendor_tds_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=42 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=51 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -4028,7 +4028,7 @@ CREATE TABLE `vendor_master_vendorcreation_terms` (
   KEY `vendor_terms_tenant_id_idx` (`tenant_id`),
   KEY `vendor_terms_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
   CONSTRAINT `vendor_terms_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=44 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -4056,7 +4056,7 @@ CREATE TABLE `vendor_transaction` (
   KEY `vendor_transaction_tenant_id_vendor_id_idx` (`tenant_id`,`vendor_id`),
   KEY `vendor_transaction_transaction_date_idx` (`transaction_date`),
   KEY `idx_vendor_tx_tenant_date_id` (`tenant_id`,`transaction_date`,`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=336 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=358 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -4155,7 +4155,7 @@ CREATE TABLE `voucher_advance_adjustments` (
   KEY `voucher_advance_adjustments_type_abf40520` (`type`),
   CONSTRAINT `voucher_advance_adju_advance_voucher_id_e3736e82_fk_vouchers_` FOREIGN KEY (`advance_voucher_id`) REFERENCES `vouchers` (`id`),
   CONSTRAINT `voucher_advance_adju_target_voucher_id_f8d7e887_fk_vouchers_` FOREIGN KEY (`target_voucher_id`) REFERENCES `vouchers` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=38 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4192,7 +4192,7 @@ CREATE TABLE `voucher_contra` (
   KEY `idx_voucher_contra_tenant` (`tenant_id`),
   KEY `idx_voucher_contra_voucher` (`voucher_number`),
   KEY `idx_voucher_contra_voucher_id` (`voucher_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -4221,7 +4221,7 @@ CREATE TABLE `voucher_credit_note_due_details` (
   UNIQUE KEY `credit_note_details_id` (`credit_note_details_id`),
   KEY `tenant_id` (`tenant_id`),
   CONSTRAINT `fk_cn_invoice_due` FOREIGN KEY (`credit_note_details_id`) REFERENCES `voucher_credit_note_invoice_details` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4256,7 +4256,7 @@ CREATE TABLE `voucher_credit_note_invoice_details` (
   KEY `tenant_id` (`tenant_id`),
   KEY `date` (`date`),
   KEY `customer_id` (`customer_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4277,7 +4277,7 @@ CREATE TABLE `voucher_credit_note_item_details` (
   UNIQUE KEY `credit_note_details_id` (`credit_note_details_id`),
   KEY `tenant_id` (`tenant_id`),
   CONSTRAINT `fk_cn_invoice_items` FOREIGN KEY (`credit_note_details_id`) REFERENCES `voucher_credit_note_invoice_details` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4305,7 +4305,7 @@ CREATE TABLE `voucher_credit_note_item_lines` (
   KEY `voucher_credit_note__item_details_id_1a4bf244_fk_voucher_c` (`item_details_id`),
   KEY `voucher_credit_note_item_lines_tenant_id_0aa7facf` (`tenant_id`),
   CONSTRAINT `voucher_credit_note__item_details_id_1a4bf244_fk_voucher_c` FOREIGN KEY (`item_details_id`) REFERENCES `voucher_credit_note_item_details` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4330,7 +4330,7 @@ CREATE TABLE `voucher_credit_note_transit_details` (
   UNIQUE KEY `credit_note_details_id` (`credit_note_details_id`),
   KEY `tenant_id` (`tenant_id`),
   CONSTRAINT `fk_cn_invoice_transit` FOREIGN KEY (`credit_note_details_id`) REFERENCES `voucher_credit_note_invoice_details` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4355,7 +4355,7 @@ CREATE TABLE `voucher_debit_note_due_details` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_debit_note_due_details` (`debit_note_details_id`),
   CONSTRAINT `fk_debit_note_due_details` FOREIGN KEY (`debit_note_details_id`) REFERENCES `voucher_debit_note_supplier_details` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4376,7 +4376,7 @@ CREATE TABLE `voucher_debit_note_item_details` (
   UNIQUE KEY `debit_note_details_id` (`debit_note_details_id`),
   KEY `voucher_debit_note_item_details_tenant_id_e801802e` (`tenant_id`),
   CONSTRAINT `voucher_debit_note_i_debit_note_details_i_149a98ff_fk_voucher_d` FOREIGN KEY (`debit_note_details_id`) REFERENCES `voucher_debit_note_supplier_details` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4404,7 +4404,7 @@ CREATE TABLE `voucher_debit_note_item_lines` (
   KEY `voucher_debit_note_i_item_details_id_9dc5ccef_fk_voucher_d` (`item_details_id`),
   KEY `voucher_debit_note_item_lines_tenant_id_53c83bf0` (`tenant_id`),
   CONSTRAINT `voucher_debit_note_i_item_details_id_9dc5ccef_fk_voucher_d` FOREIGN KEY (`item_details_id`) REFERENCES `voucher_debit_note_item_details` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4439,7 +4439,7 @@ CREATE TABLE `voucher_debit_note_supplier_details` (
   PRIMARY KEY (`id`),
   KEY `fk_voucher_debit_note_vendor` (`vendor_basic_detail_id`),
   CONSTRAINT `fk_voucher_debit_note_vendor` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4463,7 +4463,7 @@ CREATE TABLE `voucher_debit_note_transit_details` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_debit_note_transit_details` (`debit_note_details_id`),
   CONSTRAINT `fk_debit_note_transit_details` FOREIGN KEY (`debit_note_details_id`) REFERENCES `voucher_debit_note_supplier_details` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4505,15 +4505,11 @@ CREATE TABLE `voucher_journal` (
   `total_credit` decimal(15,2) NOT NULL DEFAULT '0.00',
   `narration` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `voucher_id` bigint DEFAULT NULL,
-  `bank_statement_id` bigint DEFAULT NULL,
-  `bank_reconciled` tinyint(1) NOT NULL,
-  `bank_reference_number` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `bank_reconcile_date` date DEFAULT NULL,
   `voucher_series` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_voucher_journal_tenant` (`tenant_id`),
   KEY `idx_voucher_journal_voucher` (`voucher_number`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -4532,7 +4528,7 @@ CREATE TABLE `voucher_purchase_advance_links` (
   KEY `voucher_purchase_adv_due_details_id_67db4207_fk_voucher_p` (`due_details_id`),
   KEY `voucher_purchase_advance_links_tenant_id_4bc220f3` (`tenant_id`),
   CONSTRAINT `voucher_purchase_adv_due_details_id_67db4207_fk_voucher_p` FOREIGN KEY (`due_details_id`) REFERENCES `voucher_purchase_due_details` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=148 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=159 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4554,7 +4550,7 @@ CREATE TABLE `voucher_purchase_due_details` (
   KEY `idx_vpdd_tenant` (`tenant_id`),
   KEY `idx_vpdd_supplier` (`supplier_details_id`),
   CONSTRAINT `fk_vpdd_supplier` FOREIGN KEY (`supplier_details_id`) REFERENCES `voucher_purchase_supplier_details` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=168 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=186 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -4584,7 +4580,7 @@ CREATE TABLE `voucher_purchase_items` (
   KEY `voucher_purchase_items_tenant_id_61d700bd` (`tenant_id`),
   KEY `voucher_purchase_ite_supplier_details_id_cb77d995_fk_voucher_p` (`supplier_details_id`),
   CONSTRAINT `voucher_purchase_ite_supplier_details_id_cb77d995_fk_voucher_p` FOREIGN KEY (`supplier_details_id`) REFERENCES `voucher_purchase_supplier_details` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=377 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=406 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4618,7 +4614,7 @@ CREATE TABLE `voucher_purchase_supplier_details` (
   KEY `fk_vpsd_vendor` (`vendor_basic_detail_id`),
   KEY `idx_purchase_supplier_grn_ref` (`tenant_id`,`grn_reference`),
   CONSTRAINT `fk_vpsd_vendor` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=175 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=193 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -4655,7 +4651,7 @@ CREATE TABLE `voucher_purchase_supply_inr_details` (
   KEY `idx_vpsid_tenant` (`tenant_id`),
   KEY `idx_vpsid_supplier` (`supplier_details_id`),
   CONSTRAINT `fk_vpsid_supplier` FOREIGN KEY (`supplier_details_id`) REFERENCES `voucher_purchase_supplier_details` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=171 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=189 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -4716,7 +4712,7 @@ CREATE TABLE `voucher_purchase_transit_details` (
   KEY `idx_vptd_tenant` (`tenant_id`),
   KEY `idx_vptd_supplier` (`supplier_details_id`),
   CONSTRAINT `fk_vptd_supplier` FOREIGN KEY (`supplier_details_id`) REFERENCES `voucher_purchase_supplier_details` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=106 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=124 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -4770,7 +4766,7 @@ CREATE TABLE `voucher_sales_dispatchdetails` (
   UNIQUE KEY `invoice_id` (`invoice_id`),
   KEY `voucher_sales_dispatchdetails_tenant_id_8c1c414b` (`tenant_id`),
   CONSTRAINT `voucher_sales_dispat_invoice_id_594c7043_fk_voucher_s` FOREIGN KEY (`invoice_id`) REFERENCES `voucher_sales_invoicedetails` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=54 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=55 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4799,7 +4795,7 @@ CREATE TABLE `voucher_sales_ewaybill` (
   KEY `voucher_sales_ewaybi_invoice_id_68862ccb_fk_voucher_s` (`invoice_id`),
   KEY `voucher_sales_ewaybill_tenant_id_35fe8846` (`tenant_id`),
   CONSTRAINT `voucher_sales_ewaybi_invoice_id_68862ccb_fk_voucher_s` FOREIGN KEY (`invoice_id`) REFERENCES `voucher_sales_invoicedetails` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=50 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=51 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4843,7 +4839,7 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   `posting_status` varchar(20) NOT NULL,
   `posting_error` longtext,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=55 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=56 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4873,7 +4869,7 @@ CREATE TABLE `voucher_sales_items` (
   KEY `voucher_sales_items_invoice_id_8393120a_fk_voucher_s` (`invoice_id`),
   KEY `voucher_sales_items_tenant_id_d4aa028b` (`tenant_id`),
   CONSTRAINT `voucher_sales_items_invoice_id_8393120a_fk_voucher_s` FOREIGN KEY (`invoice_id`) REFERENCES `voucher_sales_invoicedetails` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=55 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=56 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4927,7 +4923,7 @@ CREATE TABLE `voucher_sales_paymentdetails` (
   UNIQUE KEY `invoice_id` (`invoice_id`),
   KEY `voucher_sales_paymentdetails_tenant_id_70b6f0ec` (`tenant_id`),
   CONSTRAINT `voucher_sales_paymen_invoice_id_dd7b57c8_fk_voucher_s` FOREIGN KEY (`invoice_id`) REFERENCES `voucher_sales_invoicedetails` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=54 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=55 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4964,7 +4960,7 @@ CREATE TABLE `vouchers` (
   `reference_no` varchar(100) DEFAULT NULL,
   `ref_no` varchar(150) DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=325 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=350 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 
@@ -4976,7 +4972,3 @@ CREATE TABLE `workflow_sequences` (
   `last_event_id` bigint DEFAULT NULL,
   PRIMARY KEY (`workflow_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
-
-
