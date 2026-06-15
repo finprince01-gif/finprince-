@@ -1,4 +1,4 @@
-/**
+  /**
  * CreateNewVendorFullModal
  * A full-featured vendor creation modal that mirrors every section
  * of the Vendor Portal > Create New Vendor flow.
@@ -16,16 +16,16 @@ interface PlaceOfBusiness {
     id: string;
     referenceName: string;
     address: string;
-    addressLine1: string;
-    addressLine2: string;
-    addressLine3: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    addressLine3?: string;
     contactPerson: string;
     email: string;
     contactNumber: string;
-    pincode: string;
-    city: string;
-    state: string;
-    country: string;
+    pincode?: string;
+    city?: string;
+    state?: string;
+    country?: string;
     isExpanded?: boolean;
 }
 
