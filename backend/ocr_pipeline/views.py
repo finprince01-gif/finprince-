@@ -412,7 +412,7 @@ class CleanOCRStagingView(views.APIView):
                         "consignee_gstin": norm.get("consignee_gstin") or norm.get("ship_to_gstin") or "",
                         "vendor_name": getattr(r, 'vendor_name', None) or norm.get("vendor_name") or ""
                     }
-                    classification = GSTINOwnershipClassifier.classify_gstins(raw_text, extracted_data_dict, tenant_id)
+                    classification = GSTINOwnershipClassifier.classify_gstins(raw_text, extracted_data_dict, str(tenant_id or ""))
                     norm = dict(norm)
                     norm.update(classification)
                 except Exception as _fe:
@@ -1540,7 +1540,6 @@ class OCRStagingMatchItemView(views.APIView):
                 _vendor_map = build_session_vendor_map(tenant_id, [record])
             except Exception:
                 pass
-            from ocr_pipeline.views import CleanOCRStagingView
             view_instance = CleanOCRStagingView()
             view_instance.request = request
             mapped = view_instance._map_record_to_ui_row(record, vendor_map=_vendor_map)
@@ -1799,6 +1798,7 @@ class OCRJobStatusView(views.APIView):
             
             # ── [PHASE 10: GRANULAR PROGRESS (PER PAGE)] ──
             # Use SessionFinalizationState to track sub-task completion for multi-page docs.
+            from django.db import models
             from .models import SessionFinalizationState
             record_ids = job.tasks.filter(result_id__isnull=False).values_list('result_id', flat=True)
             stats = SessionFinalizationState.objects.filter(id__in=[str(rid) for rid in record_ids]).aggregate(
@@ -1869,11 +1869,24 @@ class OCRStagingFinalizeView(views.APIView):
         from core.redis_orchestrator import orchestrator
         auth_state = orchestrator.get_authoritative_session_state(upload_session_id)
         
-        expected = auth_state.get('expected_pages', 0)
-        completed = auth_state.get('completed_pages', 0)
-        failed = auth_state.get('failed_pages', 0)
-        snapshot_complete = auth_state.get('snapshot_complete', False)
-        materialization_complete = auth_state.get('materialization_complete', False)
+        def _to_int(val) -> int:
+            try:
+                return int(val) if val is not None else 0
+            except (ValueError, TypeError):
+                return 0
+
+        def _to_bool(val) -> bool:
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, str):
+                return val.lower() in ('true', '1', 'yes')
+            return bool(val)
+
+        expected = _to_int(auth_state.get('expected_pages', 0))
+        completed = _to_int(auth_state.get('completed_pages', 0))
+        failed = _to_int(auth_state.get('failed_pages', 0))
+        snapshot_complete = _to_bool(auth_state.get('snapshot_complete', False))
+        materialization_complete = _to_bool(auth_state.get('materialization_complete', False))
         
         # Check convergence: Finalize must only run when completed + failed == expected.
         is_converged = (expected > 0) and ((completed + failed) == expected) and snapshot_complete and materialization_complete
@@ -2118,6 +2131,7 @@ class OCRStagingRescanView(views.APIView):
             msg_copy = deepcopy(msg)
             
             try:
+                from core.sqs import queue_service
                 pushed = queue_service.push(msg_copy, queue_type='ingestion')
                 if pushed:
                     logger.info(f"[QUEUE_FORWARD_SUCCESS] target_queue=ingestion msg_id={msg_copy['id']}")
@@ -2273,6 +2287,7 @@ class ZohoAdapterView(views.APIView):
         logger.info(f"[EXPORT_TRIGGER] session_id={session_id} task_id={msg_copy['id']}")
         
         try:
+            from core.sqs import queue_service
             queue_service.push(msg_copy, queue_type='export')
             logger.info(f"[QUEUE_FORWARD_SUCCESS] target_queue=export msg_id={msg_copy['id']}")
             logger.info(f"[DOWNSTREAM_ENQUEUE_SUCCESS] target_queue=export msg_id={msg_copy['id']}")

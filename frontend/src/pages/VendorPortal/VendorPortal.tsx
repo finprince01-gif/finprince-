@@ -341,16 +341,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
         id: string;
         referenceName: string;
         address: string;
-        addressLine1: string;
-        addressLine2: string;
-        addressLine3: string;
+        addressLine1?: string;
+        addressLine2?: string;
+        addressLine3?: string;
         contactPerson: string;
         email: string;
         contactNumber: string;
-        pincode: string;
-        city: string;
-        state: string;
-        country: string;
+        pincode?: string;
+        city?: string;
+        state?: string;
+        country?: string;
         isExpanded?: boolean;
     }
 

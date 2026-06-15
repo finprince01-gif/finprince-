@@ -1082,7 +1082,45 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         return final;
     }, [scanResults, pollingIntervalRef2.current]); // Added a few more deps to ensure refresh
 
+    const currentDataset = groupPages ? mergedResults : scanResults;
 
+    const [activeFilter, setActiveFilter] = useState<'all' | 'vendor_required' | 'item_required' | 'voucher_need_save'>('all');
+
+    const isVendorRequired = useCallback((r: ScanResult) => {
+        if (r.validationStatus === 'VOUCHER_CREATED') return false;
+        const IN_PROGRESS_STATUSES = new Set(['processing', 'PENDING', 'PROCESSING', 'scanning', 'EXTRACTING']);
+        if (IN_PROGRESS_STATUSES.has(r.validationStatus)) return false;
+        const hasEffectiveMatch = ['EXISTS', 'FOUND', 'MATCHED', 'RESOLVED'].includes(r.vendor_status || '');
+        return !r.vendor_id || !hasEffectiveMatch;
+    }, []);
+
+    const isItemRequired = useCallback((r: ScanResult) => {
+        if (r.validationStatus === 'VOUCHER_CREATED') return false;
+        const IN_PROGRESS_STATUSES = new Set(['processing', 'PENDING', 'PROCESSING', 'scanning', 'EXTRACTING']);
+        if (IN_PROGRESS_STATUSES.has(r.validationStatus)) return false;
+        return r.item_status === 'CREATE ITEM';
+    }, []);
+
+    const isVoucherNeedSave = useCallback((r: ScanResult) => {
+        if (r.validationStatus === 'VOUCHER_CREATED' || r.validationStatus === 'DUPLICATE' || r.validationStatus === 'DUPLICATE_IN_BATCH') return false;
+        const IN_PROGRESS_STATUSES = new Set(['processing', 'PENDING', 'PROCESSING', 'scanning', 'EXTRACTING']);
+        if (IN_PROGRESS_STATUSES.has(r.validationStatus)) return false;
+        return !!(r.vendor_id || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_TO_SAVE', 'PENDING_PURCHASE'].includes(r.validationStatus));
+    }, []);
+
+    const visibleRows = React.useMemo(() => {
+        return currentDataset.filter(r => {
+            if (activeFilter === 'vendor_required') return isVendorRequired(r);
+            if (activeFilter === 'item_required') return isItemRequired(r);
+            if (activeFilter === 'voucher_need_save') return isVoucherNeedSave(r);
+            return true;
+        });
+    }, [currentDataset, activeFilter, isVendorRequired, isItemRequired, isVoucherNeedSave]);
+
+    const countAll = currentDataset.length;
+    const countVendorRequired = currentDataset.filter(isVendorRequired).length;
+    const countItemRequired = currentDataset.filter(isItemRequired).length;
+    const countVoucherNeedSave = currentDataset.filter(isVoucherNeedSave).length;
 
     // ── Resume Workflow State ──
     const [isCheckingUnresolved, setIsCheckingUnresolved] = useState(true);
@@ -2679,24 +2717,72 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                         {/* ────── STEP: REVIEW ────── */}
                         {step === 'review' && (
                             <div className="p-4 space-y-4">
-                                <div className="flex justify-center">
-                                    <div
-                                        onClick={() => setFilterStatus('pending')}
-                                        className={`p-3 rounded-2xl border-2 text-center font-bold cursor-pointer transition-all shadow-lg w-full max-w-[280px] ${filterStatus === 'pending'
-                                            ? 'border-amber-500 bg-amber-50 text-amber-700 ring-4 ring-amber-100'
-                                            : 'border-amber-100 bg-amber-50/50 text-amber-600 hover:border-amber-300'
-                                            }`}
+                                {/* ── Action Filter Tabs ── */}
+                                <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-gray-150 justify-center">
+                                    <button
+                                        onClick={() => setActiveFilter('all')}
+                                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 select-none outline-none ${
+                                            activeFilter === 'all'
+                                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-150 border border-indigo-600'
+                                                : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-100'
+                                        }`}
                                     >
-                                        <div className="text-xl mb-1">⚠️</div>
-                                        <div className="text-2xl">{attentionNeededCount}</div>
-                                        <div className="text-[10px] uppercase opacity-70 tracking-wider">Need Attention</div>
-                                        <div className="mt-1 text-[9px] text-amber-600/60 font-medium">
-                                            (from {mergedResults.filter(r => !r.processed && (r.validationStatus === 'NEED_VENDOR' || r.vendor_status === 'NEW' || r.vendor_status === 'CREATE_VENDOR' || r.validationStatus === 'NOT_FOUND' || r.validationStatus === 'VENDOR_MISSING' || !r.vendor_id)).reduce((acc, r) => acc + (r._mergedCount || 1), 0)} physical files)
-                                        </div>
-                                    </div>
-                                </div>
+                                        <span>📂 All</span>
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                                            activeFilter === 'all' ? 'bg-indigo-700 text-indigo-100' : 'bg-indigo-200 text-indigo-600'
+                                        }`}>
+                                            {countAll}
+                                        </span>
+                                    </button>
 
-                                {/* Footer Filter Toggle - removed for focus */}
+                                    <button
+                                        onClick={() => setActiveFilter('vendor_required')}
+                                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 select-none outline-none ${
+                                            activeFilter === 'vendor_required'
+                                                ? 'bg-orange-600 text-white shadow-md shadow-orange-150 border border-orange-600'
+                                                : 'bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-100'
+                                        }`}
+                                    >
+                                        <span>👤 Vendor Required</span>
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                                            activeFilter === 'vendor_required' ? 'bg-orange-700 text-orange-100' : 'bg-orange-200 text-orange-600'
+                                        }`}>
+                                            {countVendorRequired}
+                                        </span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => setActiveFilter('item_required')}
+                                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 select-none outline-none ${
+                                            activeFilter === 'item_required'
+                                                ? 'bg-amber-600 text-white shadow-md shadow-amber-150 border border-amber-600'
+                                                : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100'
+                                        }`}
+                                    >
+                                        <span>📦 Item Required</span>
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                                            activeFilter === 'item_required' ? 'bg-amber-700 text-amber-100' : 'bg-amber-200 text-amber-600'
+                                        }`}>
+                                            {countItemRequired}
+                                        </span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => setActiveFilter('voucher_need_save')}
+                                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 select-none outline-none ${
+                                            activeFilter === 'voucher_need_save'
+                                                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-150 border border-emerald-600'
+                                                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100'
+                                        }`}
+                                    >
+                                        <span>💾 Need to Save</span>
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                                            activeFilter === 'voucher_need_save' ? 'bg-emerald-700 text-emerald-100' : 'bg-emerald-200 text-emerald-600'
+                                        }`}>
+                                            {countVoucherNeedSave}
+                                        </span>
+                                    </button>
+                                </div>
 
                                 {/* Banners */}
                                 {missingCount > 0 && (
@@ -2736,26 +2822,11 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                     </div>
                                 )}
 
-                                <div className="flex items-center justify-between px-2 mb-2 bg-gray-50/50 p-2 rounded-xl border border-gray-100">
-                                    <div className="flex items-center gap-6">
+                                {selectedHashes.size > 0 && (
+                                    <div className="flex items-center justify-between px-2 mb-2 bg-gray-50/50 p-2 rounded-xl border border-gray-100 animate-fadeIn">
                                         <div className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                                            {selectedHashes.size > 0 ? `${selectedHashes.size} items selected` : 'Batch Actions'}
+                                            {selectedHashes.size} items selected
                                         </div>
-                                        <label className="flex items-center gap-2 cursor-pointer group">
-                                            <div className="relative inline-flex items-center">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={groupPages}
-                                                    onChange={e => setGroupPages(e.target.checked)}
-                                                    className="sr-only"
-                                                />
-                                                <div className={`w-8 h-4 rounded-full transition-colors ${groupPages ? 'bg-indigo-600' : 'bg-gray-300'}`} />
-                                                <div className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${groupPages ? 'translate-x-4' : 'translate-x-0'}`} />
-                                            </div>
-                                            <span className="text-[10px] font-black text-indigo-900/60 uppercase tracking-widest group-hover:text-indigo-600 transition-colors">Group multi-page invoices</span>
-                                        </label>
-                                    </div>
-                                    {selectedHashes.size > 0 && (
                                         <button
                                             onClick={handleBulkDelete}
                                             className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-bold hover:bg-red-200 transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
@@ -2763,53 +2834,49 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                             Delete Selected
                                         </button>
-                                    )}
-                                </div>
-                                <table className="w-full text-sm">
-                                    <thead className="bg-gray-50 border-b border-gray-200">
-                                        <tr className="text-gray-600 text-[10px] uppercase font-bold tracking-wider">
-                                            <th className="px-3 py-3 text-left w-8">
-                                                <input
-                                                    type="checkbox"
-                                                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                                    checked={selectedHashes.size > 0 && selectedHashes.size === scanResults.filter(row => !['EXISTS', 'FOUND', 'MATCHED'].includes(row.vendor_status || '')).length}
-                                                    onChange={toggleSelectAll}
-                                                />
-                                            </th>
-                                            <th className="px-3 py-3 text-center w-10">S.No</th>
-                                            <th className="px-3 py-3 text-left">File Name</th>
-                                            <th className="px-3 py-3 text-left">Inv No</th>
-                                            <th className="px-3 py-3 text-left">Date</th>
-                                            <th className="px-3 py-3 text-left">Vendor</th>
-                                            <th className="px-3 py-3 text-left">GSTIN</th>
-                                            <th className="px-3 py-3 text-left">Branch</th>
-                                            <th className="px-3 py-3 text-right">Amount</th>
-                                            <th className="px-3 py-3 text-center">Vendor Status</th>
-                                            <th className="px-3 py-3 text-center">Item Status</th>
-                                            <th className="px-3 py-3 text-center">Voucher Status</th>
-                                            <th className="px-3 py-3 text-center">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {(groupPages ? mergedResults : scanResults)
-                                            .filter(r => {
-                                                // If we are on the 'Ready' tab, only show Ready/Found/Success
-                                                if (filterStatus === 'ready') return ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_TO_SAVE'].includes(r.validationStatus);
+                                    </div>
+                                )}
+                                {(() => {
+                                    const showVendorCol = activeFilter === 'all' || activeFilter === 'vendor_required';
+                                    const showItemCol = activeFilter === 'all' || activeFilter === 'item_required';
+                                    const showVoucherCol = activeFilter === 'all' || activeFilter === 'voucher_need_save';
+                                    const totalVisibleCols = 10 + (showVendorCol ? 1 : 0) + (showItemCol ? 1 : 0) + (showVoucherCol ? 1 : 0);
 
-                                                // If we are on the 'Pending' tab:
-                                                if (filterStatus === 'pending') {
-                                                    // CRITICAL: If the user chose the 'View Unresolved Vendors' shortcut, we stay strict.
-                                                    if (vFilterRef.current === 'create_vendor') {
-                                                        // Strict: ONLY show rows that need vendor registration
-                                                        return ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND'].includes(r.validationStatus);
-                                                    }
-                                                    // Otherwise (Fresh Upload or Full Review), show everything EXCEPT already saved vouchers.
-                                                    // This ensures every uploaded file (including duplicates or ready items) is visible for review.
-                                                    return r.validationStatus !== 'VOUCHER_CREATED';
-                                                }
-                                                return true;
-                                            })
-                                            .map((row, idx) => {
+                                    return (
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-gray-50 border-b border-gray-200">
+                                                <tr className="text-gray-600 text-[10px] uppercase font-bold tracking-wider">
+                                                    <th className="px-3 py-3 text-left w-8">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                            checked={selectedHashes.size > 0 && selectedHashes.size === scanResults.filter(row => !['EXISTS', 'FOUND', 'MATCHED'].includes(row.vendor_status || '')).length}
+                                                            onChange={toggleSelectAll}
+                                                        />
+                                                    </th>
+                                                    <th className="px-3 py-3 text-center w-10">S.No</th>
+                                                    <th className="px-3 py-3 text-left">File Name</th>
+                                                    <th className="px-3 py-3 text-left">Inv No</th>
+                                                    <th className="px-3 py-3 text-left">Date</th>
+                                                    <th className="px-3 py-3 text-left">Vendor</th>
+                                                    <th className="px-3 py-3 text-left">GSTIN</th>
+                                                    <th className="px-3 py-3 text-left">Branch</th>
+                                                    <th className="px-3 py-3 text-right">Amount</th>
+                                                    {showVendorCol && <th className="px-3 py-3 text-center">Vendor Status</th>}
+                                                    {showItemCol && <th className="px-3 py-3 text-center">Item Status</th>}
+                                                    {showVoucherCol && <th className="px-3 py-3 text-center">Voucher Status</th>}
+                                                    <th className="px-3 py-3 text-center">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {visibleRows.length === 0 && (
+                                                    <tr>
+                                                        <td colSpan={totalVisibleCols} className="text-center py-8 text-gray-500 font-medium italic">
+                                                            No invoices match the selected filter.
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                {visibleRows.map((row, idx) => {
                                                 const invoice = row.extracted_data?.invoice || row.extracted_data?.header || row.extracted_data || {};
 
                                                 // CROSS-CHECK: Robust Instant Vendor Link
@@ -2902,76 +2969,98 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                 return val;
                                                             })()}</td>
                                                             {/* Vendor Status */}
-                                                            <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
-                                                                {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
-                                                                    <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
-                                                                        <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
-                                                                    </span>
-                                                                ) : row.validationStatus === "EXTRACTION_FAILED" ? (
-                                                                    <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">FAILED</span>
-                                                                ) : hasEffectiveMatch ? (
-                                                                    <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded">ALREADY EXIST</span>
-                                                                ) : (
-                                                                    <button
-                                                                        onClick={() => openCreateVendorModal(row)}
-                                                                        className="bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white border border-orange-600 px-2 py-1 rounded cursor-pointer transition-colors"
-                                                                    >
-                                                                        Create Vendor
-                                                                    </button>
-                                                                )}
-                                                            </td>
+                                                            {showVendorCol && (
+                                                                <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
+                                                                    {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
+                                                                        <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
+                                                                            <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
+                                                                        </span>
+                                                                    ) : row.validationStatus === "EXTRACTION_FAILED" ? (
+                                                                        <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">FAILED</span>
+                                                                    ) : hasEffectiveMatch ? (
+                                                                        <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded">ALREADY EXIST</span>
+                                                                    ) : (
+                                                                        <button
+                                                                            onClick={() => openCreateVendorModal(row)}
+                                                                            className="bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white border border-orange-600 px-2 py-1 rounded cursor-pointer transition-colors"
+                                                                        >
+                                                                            Create Vendor
+                                                                        </button>
+                                                                    )}
+                                                                </td>
+                                                            )}
                                                             {/* Item Status */}
-                                                            <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
-                                                                {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
-                                                                    <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
-                                                                        <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
-                                                                    </span>
-                                                                ) : row.item_status === 'ALREADY EXIST' ? (
-                                                                    <div className="flex flex-col items-center gap-1">
-                                                                        <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded inline-block">ALREADY EXIST</span>
-                                                                        {row.items && row.items.length > 0 && (
+                                                            {showItemCol && (
+                                                                <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
+                                                                    {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
+                                                                        <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
+                                                                            <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
+                                                                        </span>
+                                                                    ) : row.item_status === 'ALREADY EXIST' ? (
+                                                                        <div className="flex flex-col items-center gap-1">
+                                                                            <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded inline-block">ALREADY EXIST</span>
+                                                                            {row.items && row.items.length > 0 && (
+                                                                                <button
+                                                                                    onClick={() => toggleExpandRow(row.id)}
+                                                                                    className="text-[9px] text-indigo-600 hover:text-indigo-800 font-bold underline focus:outline-none"
+                                                                                >
+                                                                                    {expandedRows.has(row.id) ? 'Hide Items' : 'View Items'}
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    ) : row.item_status === 'CREATE ITEM' ? (
+                                                                        <div className="flex flex-col items-center gap-1">
+                                                                            <span className="bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 rounded inline-block">CREATE ITEM</span>
                                                                             <button
                                                                                 onClick={() => toggleExpandRow(row.id)}
                                                                                 className="text-[9px] text-indigo-600 hover:text-indigo-800 font-bold underline focus:outline-none"
                                                                             >
-                                                                                {expandedRows.has(row.id) ? 'Hide Items' : 'View Items'}
+                                                                                {expandedRows.has(row.id) ? 'Hide Items' : 'Expand Items'}
                                                                             </button>
-                                                                        )}
-                                                                    </div>
-                                                                ) : row.item_status === 'CREATE ITEM' ? (
-                                                                    <div className="flex flex-col items-center gap-1">
-                                                                        <span className="bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 rounded inline-block">CREATE ITEM</span>
-                                                                        <button
-                                                                            onClick={() => toggleExpandRow(row.id)}
-                                                                            className="text-[9px] text-indigo-600 hover:text-indigo-800 font-bold underline focus:outline-none"
-                                                                        >
-                                                                            {expandedRows.has(row.id) ? 'Hide Items' : 'Expand Items'}
-                                                                        </button>
-                                                                    </div>
-                                                                ) : (
-                                                                    <span className="text-gray-300">—</span>
-                                                                )}
-                                                            </td>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-gray-300">—</span>
+                                                                    )}
+                                                                </td>
+                                                            )}
                                                             {/* Voucher Status */}
-                                                            <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
-                                                                {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
-                                                                    <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
-                                                                        <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
-                                                                    </span>
-                                                                ) : row.validationStatus === "VOUCHER_CREATED" ? (
-                                                                    <span className="bg-emerald-600 text-white px-2 py-1 rounded">✅ Saved</span>
-                                                                ) : (row.validationStatus === "DUPLICATE" || row.validationStatus === "DUPLICATE_IN_BATCH") ? (
-                                                                    <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">Already Exist</span>
-                                                                ) : (effectiveVendorId || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_TO_SAVE', 'PENDING_PURCHASE'].includes(row.validationStatus)) ? (
-                                                                    <span className="bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 rounded">Need to Save</span>
-                                                                ) : (['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'GSTIN_CONFLICT', 'CREATE_VENDOR'].includes(row.validationStatus)) ? (
-                                                                    <span className="bg-orange-100 text-orange-700 border border-orange-200 px-2 py-1 rounded">Create Vendor First</span>
-                                                                ) : row.validationStatus === "EXTRACTION_FAILED" ? (
-                                                                    <span className="bg-red-100 text-red-700 border border-red-200 px-2 py-1 rounded">Failed</span>
-                                                                ) : (
-                                                                    <span className="bg-amber-50 text-amber-600 border border-amber-200 px-2 py-1 rounded">Pending</span>
-                                                                )}
-                                                            </td>
+                                                            {showVoucherCol && (
+                                                                <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
+                                                                    {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
+                                                                        <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
+                                                                            <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
+                                                                        </span>
+                                                                    ) : row.validationStatus === "VOUCHER_CREATED" ? (
+                                                                        <span className="bg-emerald-600 text-white px-2 py-1 rounded">✅ Saved</span>
+                                                                    ) : (row.validationStatus === "DUPLICATE" || row.validationStatus === "DUPLICATE_IN_BATCH") ? (
+                                                                        <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">Already Exist</span>
+                                                                    ) : (effectiveVendorId || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_TO_SAVE', 'PENDING_PURCHASE'].includes(row.validationStatus)) ? (
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                if (onEditRow) {
+                                                                                    onEditRow({
+                                                                                        ...row,
+                                                                                        uploadSessionId: uploadSessionId,
+                                                                                        file_name: row.file_path?.split(/[\/]/).pop() || row.file_path || '',
+                                                                                    });
+                                                                                } else {
+                                                                                    setEditingRow(row);
+                                                                                }
+                                                                            }}
+                                                                            title="Open Voucher For Review"
+                                                                            className="bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 rounded hover:bg-indigo-200 hover:text-indigo-800 transition-colors cursor-pointer font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 inline-block"
+                                                                        >
+                                                                            Need to Save
+                                                                        </button>
+                                                                    ) : (['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'GSTIN_CONFLICT', 'CREATE_VENDOR'].includes(row.validationStatus)) ? (
+                                                                        <span className="bg-orange-100 text-orange-700 border border-orange-200 px-2 py-1 rounded">Create Vendor First</span>
+                                                                    ) : row.validationStatus === "EXTRACTION_FAILED" ? (
+                                                                        <span className="bg-red-100 text-red-700 border border-red-200 px-2 py-1 rounded">Failed</span>
+                                                                    ) : (
+                                                                        <span className="bg-amber-50 text-amber-600 border border-amber-200 px-2 py-1 rounded">Pending</span>
+                                                                    )}
+                                                                </td>
+                                                            )}
                                                             <td className="px-2 py-3 text-center">
                                                                 <div
                                                                     className="flex items-center justify-center gap-1"
@@ -2980,19 +3069,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                         pointerEvents: (['PENDING', 'processing', 'PROCESSING', 'SCANNING', 'EXTRACTING', 'scanning', 'resolving', 'validating'].includes(row.validationStatus)) ? 'none' : 'auto'
                                                                     }}
                                                                 >
-                                                                    {!hasEffectiveMatch && ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND'].includes(row.validationStatus) && (
-                                                                        <button onClick={(e) => {
-                                                                            console.log('[DIAGNOSTIC][CREATE_VENDOR] button onClick fired');
-                                                                            const rect = e.currentTarget.getBoundingClientRect();
-                                                                            const x = rect.left + rect.width / 2;
-                                                                            const y = rect.top + rect.height / 2;
-                                                                            const el = document.elementFromPoint(x, y);
-                                                                            console.log('[DIAGNOSTIC][CREATE_VENDOR] Element under coordinates (', x, ',', y, ') is:', el);
-                                                                            openCreateVendorModal(row);
-                                                                        }} className="px-2 py-1 bg-orange-500 text-white rounded text-[10px] font-bold hover:bg-orange-600 uppercase border-2 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]">
-                                                                            CREATE VENDOR
-                                                                        </button>
-                                                                    )}
+
                                                                     {/* Revalidate button — triggers a fresh vendor check without opening edit modal */}
                                                                     {!['PENDING', 'VOUCHER_CREATED'].includes(row.validationStatus) && (
                                                                         <button
@@ -3026,26 +3103,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                                                         </button>
                                                                     )}
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            if (onEditRow) {
-                                                                                // Enrich row with session context for Vouchers.tsx
-                                                                                onEditRow({
-                                                                                    ...row,
-                                                                                    uploadSessionId: uploadSessionId,
-                                                                                    file_name: row.file_path?.split(/[\/]/).pop() || row.file_path || '',
-                                                                                });
-                                                                            } else {
-                                                                                setEditingRow(row);
-                                                                            }
-                                                                        }}
-                                                                        className="p-1 hover:bg-indigo-100 rounded text-indigo-600"
-                                                                        title="Edit in Purchase Voucher"
-                                                                    >
-                                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                                        </svg>
-                                                                    </button>
+
                                                                 </div>
                                                             </td>
 
@@ -3055,7 +3113,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
                                                             <tr className="bg-slate-50/30">
 
-                                                                <td colSpan={12} className="px-6 py-4">
+                                                                <td colSpan={totalVisibleCols} className="px-6 py-4">
 
                                                                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
 
@@ -3179,6 +3237,8 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                             })}
                                     </tbody>
                                 </table>
+                                    );
+                                })()}
                             </div>
                         )}
 
