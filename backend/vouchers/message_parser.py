@@ -77,8 +77,8 @@ class MessageParser:
         logger.info(f"[CONTEXT_TRACE_SCHEMA_VALIDATE] msg_id={msg_id} job_id={job_id} record_id={record_id} payload_keys={list(payload.keys())}")
         
         if not job_id or str(job_id).lower() == 'unknown':
-            logger.error(f"[INVALID_JOB_CONTEXT_REJECTED] job_id missing or unknown. id={msg_id}")
-            return False, None, "MISSING_JOB_ID"
+            job_id = f"single_{session_id}"
+            logger.info(f"[JOB_ID_COMPAT] Assigned synthetic job_id={job_id} for session={session_id}")
             
         if not record_id or str(record_id).lower() == 'unknown':
             logger.error(f"[INVALID_JOB_CONTEXT_REJECTED] record_id missing or unknown. id={msg_id}")

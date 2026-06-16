@@ -1575,7 +1575,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     vStatus = 'DUPLICATE';
                 } else if (['READY', 'success', 'SUCCESS', 'found', 'FOUND', 'MATCHED', 'matched', 'EXISTS', 'exists'].includes(backendStatus)) {
                     vStatus = 'READY';
-                } else if (backendStatus === 'VOUCHER_CREATED' || backendStatus === 'Voucher Created' || r.processed === true) {
+                } else if (backendStatus === 'VOUCHER_CREATED' || backendStatus === 'Voucher Created' || (r.processed === true && !['PENDING_PURCHASE', 'GSTIN_CONFLICT', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'].includes(backendStatus))) {
                     vStatus = 'VOUCHER_CREATED';
                 } else if (backendStatus === 'RESOLVED' || backendStatus === 'resolved' || backendStatus === 'MATCHED_VENDOR') {
                     vStatus = 'RESOLVED';

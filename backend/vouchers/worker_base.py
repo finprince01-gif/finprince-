@@ -17,13 +17,14 @@ from core.observability import observability, metrics
 logger = logging.getLogger(__name__)
 
 CONCURRENCY_LIMIT = int(os.getenv('WORKER_CONCURRENCY', '50'))
-LEASE_EXTENSION_INTERVAL = int(os.getenv('SQS_LEASE_EXTEND_INTERVAL', '60'))
+LEASE_EXTENSION_INTERVAL = int(os.getenv('SQS_LEASE_EXTEND_INTERVAL', '10'))
 
 class SqsLeaseExtender:
-    def __init__(self, handle: str, queue_type: str, interval: int = 60, max_duration: int = 900):
+    def __init__(self, handle: str, queue_type: str, interval: int = 10, max_duration: int = 900):
         self.handle = handle
         self.queue_type = queue_type
-        self.interval = interval
+        # Force interval to be at most 10 seconds to guarantee we run well before the 30s SQS visibility timeout.
+        self.interval = min(interval, 10)
         self.max_duration = max_duration
         self.start_time = time.time()
         self.running = True
@@ -33,8 +34,25 @@ class SqsLeaseExtender:
         if self.handle:
             logger.info(f"[VISIBILITY_EXTENDER_START] role={self.queue_type} handle={self.handle[:10]}...")
             logger.debug(f"[SQS_VISIBILITY_START] handle={self.handle[:10]}... queue={self.queue_type}")
-            # Ensure the extender task itself is shielded from cancellation 
-            # if the outer task is cancelled but we are in the middle of a heartbeat.
+            
+            # Immediately extend visibility to 300s to cover the first interval safely
+            loop = asyncio.get_running_loop()
+            try:
+                extended = await loop.run_in_executor(
+                    None,
+                    lambda: queue_service.change_visibility(
+                        self.handle,
+                        timeout=300,
+                        queue_type=self.queue_type
+                    )
+                )
+                if not extended:
+                    logger.critical(f"[LEASE_EXTEND_FAILURE] Initial visibility change failed for role={self.queue_type}")
+                    metrics.increment_counter("sqs:lease_extension_failures", tags={"role": self.queue_type, "stage": "initial"})
+            except Exception as e:
+                logger.error(f"[LEASE_EXTEND_INITIAL_ERR] role={self.queue_type} error={e}")
+                metrics.increment_counter("sqs:lease_extension_failures", tags={"role": self.queue_type, "stage": "initial"})
+            
             self._task = asyncio.create_task(self._extend_loop())
         return self
 
@@ -66,10 +84,9 @@ class SqsLeaseExtender:
 
                 if self.running:
                     loop = asyncio.get_running_loop()
-                    # Shield the heartbeat itself
                     logger.info(f"[QUEUE_VISIBILITY_TIMEOUT] Extending visibility for message handle={self.handle[:10]} queue={self.queue_type}")
                     logger.info(f"[VISIBILITY_TIMEOUT_EXTENDED] Extending visibility for message handle={self.handle[:10]} queue={self.queue_type}")
-                    await asyncio.shield(loop.run_in_executor(
+                    extended = await asyncio.shield(loop.run_in_executor(
                         None,
                         lambda: queue_service.change_visibility(
                             self.handle,
@@ -77,12 +94,15 @@ class SqsLeaseExtender:
                             queue_type=self.queue_type
                         )
                     ))
-                    logger.debug(f"[VISIBILITY_HEARTBEAT] role={self.queue_type} handle={self.handle[:10]}...")
+                    if not extended:
+                        logger.critical(f"[LEASE_EXTEND_FAILURE] Periodic visibility change failed for role={self.queue_type}")
+                        metrics.increment_counter("sqs:lease_extension_failures", tags={"role": self.queue_type, "stage": "periodic"})
             except asyncio.CancelledError:
                 logger.info(f"[VISIBILITY_EXTENDER_CANCEL] role={self.queue_type}")
                 break
             except Exception as e:
-                logger.error(f"[LEASE_EXTEND_ERR] {e}")
+                logger.error(f"[LEASE_EXTEND_ERR] role={self.queue_type} error={e}")
+                metrics.increment_counter("sqs:lease_extension_failures", tags={"role": self.queue_type, "stage": "loop_exception"})
                 break
 
 class BaseWorker(ABC):
