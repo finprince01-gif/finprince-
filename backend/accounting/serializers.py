@@ -174,6 +174,7 @@ class MasterHierarchyRawSerializer(serializers.ModelSerializer):
             'sub_group_2_1',
             'sub_group_3_1',
             'ledger_1',
+            'code',
         ]
 
 

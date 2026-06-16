@@ -176,7 +176,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     id: r.id,
                     name: r.ledger_1 || r.sub_group_3_1 || r.sub_group_2_1 || r.sub_group_1_1 || r.group_1 || r.major_group_1,
                     group: r.group_1,
-                    category: r.major_group_1
+                    category: r.major_group_1,
+                    code: r.code || r.ledger_code
                 });
             }
         }
@@ -252,7 +253,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 name: l.name,
                 group: l.group,
                 category: l.category,
-                type: 'ledger'
+                type: 'ledger',
+                code: l.code
             }));
 
         const custOptions = portalCustomers.map(c => ({
@@ -279,13 +281,14 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
         const ledgerOptions = allLedgers
             .filter(l => {
-                return !isHierarchyHeadingName(l.name, sets);
+                return !isHierarchyHeadingName(l.name, sets) && l.code && l.code !== '00';
             })
             .map(l => ({
                 ...l,
                 type: l.group === 'Sundry Debtors' ? 'customer' :
                     l.group === 'Sundry Creditors' ? 'vendor' : 'ledger',
-                category: l.group === 'Sundry Debtors' ? 'Customer' : l.group === 'Sundry Creditors' ? 'Vendor' : ''
+                category: l.group === 'Sundry Debtors' ? 'Customer' : l.group === 'Sundry Creditors' ? 'Vendor' : '',
+                code: l.code
             }));
 
         // Build a set of portal entity names to suppress duplicate ledger entries
@@ -300,20 +303,30 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         [...custOptions, ...vendOptions].forEach(o => masterMap.set(o.id, o));
 
         // Suppress ledger/hierarchy entries whose name is covered by a portal entity
-        ledgerOptions
-            .filter(o => !portalNames.has((o.name || '').trim().toLowerCase()))
-            .forEach(o => {
-                const key = `ledger-${(o.name || '').toLowerCase()}`;
-                if (!masterMap.has(key)) masterMap.set(key, o);
-            });
+        // Add hierarchy first, then ledger overrides it to prevent duplicates
         hierarchySeedLedgers
             .filter(o => !portalNames.has((o.name || '').trim().toLowerCase()))
             .forEach(o => {
-                const key = `hierarchy-${(o.name || '').toLowerCase()}`;
-                if (!masterMap.has(key)) masterMap.set(key, o);
+                const key = `name-${(o.name || '').trim().toLowerCase()}`;
+                masterMap.set(key, o);
+            });
+        ledgerOptions
+            .filter(o => !portalNames.has((o.name || '').trim().toLowerCase()))
+            .forEach(o => {
+                const key = `name-${(o.name || '').trim().toLowerCase()}`;
+                const existing = masterMap.get(key);
+                masterMap.set(key, {
+                    ...existing,
+                    ...o,
+                    code: o.code || (existing ? existing.code : undefined)
+                });
             });
 
-        const finalList = Array.from(masterMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+        const finalList = Array.from(masterMap.values());
+        finalList.forEach((o: any) => {
+            o.label = o.code && o.code !== '00' ? `${o.name} - ${o.code}` : o.name;
+        });
+        finalList.sort((a, b) => a.name.localeCompare(b.name));
         return finalList;
     }, [allLedgers, portalCustomers, portalVendors, hierarchy]);
 
@@ -1486,15 +1499,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                         setReceiveFrom(val);
                                         handleCustomerSelect(val);
                                     }}
-                                    options={receiveFromOptions.map(l => {
-                                         const typeLabel = l.type ? l.type.charAt(0).toUpperCase() + l.type.slice(1) : '';
-                                         let label = l.name;
-                                         if ((l.type === 'customer' || l.type === 'vendor') && l.code) {
-                                             label = `${l.name} - ${l.code}`;
-                                         }
-                                         if (typeLabel) label = `${label} (${typeLabel})`;
-                                         return { label, value: l.id };
-                                     })}
+                                    options={receiveFromOptions.map(l => ({ label: l.label, value: l.name }))}
                                     placeholder="Select Receive From"
                                     className="flex-1"
                                 />
@@ -1816,13 +1821,11 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                 value={row.receiveFrom}
                                                 onChange={val => handleReceiptRowChange(row.id, 'receiveFrom', val)}
                                                 options={receiveFromOptions.map(l => {
-                                                     const typeLabel = l.type ? l.type.charAt(0).toUpperCase() + l.type.slice(1) : '';
                                                      let lbl = l.name;
-                                                     if ((l.type === 'customer' || l.type === 'vendor') && l.code) {
+                                                     if (l.code) {
                                                          lbl = `${l.name} - ${l.code}`;
                                                      }
-                                                     if (typeLabel) lbl = `${lbl} (${typeLabel})`;
-                                                     return { label: lbl, value: l.id };
+                                                     return { label: lbl, value: l.name };
                                                  })}
                                                 placeholder="Select Receive From"
                                                 className="w-full h-[40px]"
