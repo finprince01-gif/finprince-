@@ -254,7 +254,14 @@ class VoucherExpenseSerializer(serializers.ModelSerializer):
             post_to_val = row.get('postTo')
             
             exp_led_obj = _resolve_ledger(exp_led_val, tenant_id)
+            if exp_led_val and not exp_led_obj:
+                from .utils_ledger import get_standard_ledger
+                exp_led_obj = get_standard_ledger(tenant_id, str(exp_led_val), 'Indirect Expenses', 'Expense')
+
             post_to_led_obj = _resolve_ledger(post_to_val, tenant_id)
+            if post_to_val and not post_to_led_obj:
+                from .utils_ledger import get_standard_ledger
+                post_to_led_obj = get_standard_ledger(tenant_id, str(post_to_val), 'Sundry Creditors', 'Liability')
             
             ExpenseLineItem.objects.create(
                 expense_voucher=expense,

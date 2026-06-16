@@ -476,8 +476,15 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
         data = []
         running_balance = 0.0  # Positive = Dr balance, Negative = Cr balance
 
-        # Build a map: journal_entry_voucher_id (UUID) -> generic Voucher row data
-        # This lets us pass the correct integer PK and reference_id to the frontend
+        # Build a map: journal_entry_voucher_id -> generic Voucher row data
+        # This lets us pass the correct integer PK and reference_id to the frontend.
+        #
+        # IMPORTANT: For Expense vouchers, JournalEntry.voucher_id stores the
+        # VoucherExpense.id (the specific model PK), NOT the generic Voucher.id.
+        # So we must do TWO lookups:
+        #   1. Direct match: Voucher.id IN voucher_ids  (covers Sales/Purchase/Payment/etc.)
+        #   2. reference_id match: Voucher.reference_id IN voucher_ids  (covers Expense/Contra/Journal)
+        # The second lookup maps: VoucherExpense.id (=JE.voucher_id) -> generic Voucher meta.
         voucher_meta_map = {}
         if voucher_ids:
             try:
@@ -494,6 +501,28 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                     }
             except Exception:
                 pass  # Fail silently; just won't enrich the response
+
+            # Fallback: for voucher_ids not yet mapped (e.g. Expense where JE.voucher_id = VoucherExpense.id),
+            # look up by Voucher.reference_id so those entries also get enriched.
+            unmapped_ids = [vid for vid in voucher_ids if vid not in voucher_meta_map]
+            if unmapped_ids:
+                try:
+                    ref_voucher_rows = Voucher.objects.filter(
+                        tenant_id=tenant_id,
+                        reference_id__in=unmapped_ids
+                    ).values('id', 'source', 'reference_id', 'type')
+                    for vrow in ref_voucher_rows:
+                        ref_id = vrow['reference_id']
+                        if ref_id and ref_id not in voucher_meta_map:
+                            # Key by reference_id so JE.voucher_id lookup hits correctly
+                            voucher_meta_map[ref_id] = {
+                                'voucher_pk': vrow['id'],
+                                'source': vrow['source'] or '',
+                                'reference_id': vrow['reference_id'],
+                                'voucher_type_generic': vrow['type'] or '',
+                            }
+                except Exception:
+                    pass  # Fail silently
 
         # ── Enrich with Purchase Voucher payment data (due_status, paid_amount) ──
         # VoucherPurchaseSupplierDetails is the Purchase Voucher header; due details are on
