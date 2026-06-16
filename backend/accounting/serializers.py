@@ -303,6 +303,28 @@ class VoucherSerializer(BranchModelSerializerMixin, serializers.ModelSerializer)
                 for e in entries
             ]
         
+        # Add expense rows for expense vouchers
+        if instance.type and instance.type.lower() in ['expense', 'expense voucher', 'expenses']:
+            from .models_voucher_expense import ExpenseLineItem
+            exp_items = ExpenseLineItem.objects.filter(expense_voucher_id=instance.reference_id)
+            ret['expense_rows'] = [
+                {
+                    'id': e.id,
+                    'expense': e.expense_ledger_name or e.expense_ledger_id,
+                    'postTo': e.post_to_ledger_name or e.post_to_ledger_id,
+                    'totalAmount': e.total_amount,
+                    'billRefNo': e.bill_ref_no,
+                    'entryNote': e.entry_note,
+                    
+                    # Include the original keys expected by Vouchers.tsx
+                    'expense_ledger_name': e.expense_ledger_name,
+                    'post_to_ledger_name': e.post_to_ledger_name,
+                    'amount': e.amount,
+                    'total_amount': e.total_amount,
+                }
+                for e in exp_items
+            ]
+        
         # Auto-resolve voucher_type from prefix configurations for payment/receipt
         v_type_lower = (instance.type or '').lower()
         if v_type_lower in ['payment', 'receipt']:

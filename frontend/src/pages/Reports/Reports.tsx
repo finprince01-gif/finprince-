@@ -96,6 +96,8 @@ const normalizeVoucherType = (raw: string | undefined | null): string => {
     'CONTRA_VOUCHER': 'Contra',
     'JOURNAL_VOUCHER': 'Journal',
     'EXPENSE_VOUCHER': 'Expenses',
+    'EXPENSE': 'Expenses',
+    'expense': 'Expenses',
   };
   return typeMap[raw] || typeMap[raw.toLowerCase()] || raw;
 };
@@ -159,6 +161,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
   }, [endDate]);
   // Drill-down: null = summary view (all ledgers list), string = detail view for that ledger
   const [drillDownLedger, setDrillDownLedger] = useState<string | null>(navParams?.drillDownLedger || null);
+  const [drillDownSourceType, setDrillDownSourceType] = useState<string | null>(null);
 
   useEffect(() => {
     if (navParams) {
@@ -167,6 +170,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     } else {
       setReportType(availableReports.length > 0 ? availableReports[0].id : ('DayBook' as ReportType));
       setDrillDownLedger(null);
+      setDrillDownSourceType(null);
     }
   }, [navParams]);
 
@@ -1246,12 +1250,41 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     return 0;
   };
   const getVoucherParty = (v: any) => {
+    // For Journal and Expense Vouchers, extract multiple party names if available
+    const typeLower = (v.type || '').toLowerCase();
+    if (typeLower === 'journal' || typeLower === 'journal voucher' || typeLower === 'expense' || typeLower === 'expense voucher' || typeLower === 'expenses') {
+      const targetEntries = v.entries || v.expense_rows || v.expenseRows || [];
+      if (Array.isArray(targetEntries) && targetEntries.length > 0) {
+        const uniqueLedgers = Array.from(new Set(targetEntries.map((e: any) => {
+          // Resolve name from ledgers array if it's an ID
+          const partyId = e.ledger || e.postTo || e.post_to || e.party;
+          if (!partyId) return null;
+          const found = ledgers.find((l: any) => String(l.id) === String(partyId) || l.name === partyId);
+          return found ? found.name : partyId;
+        }).filter(Boolean)));
+        if (uniqueLedgers.length > 0) {
+          if (uniqueLedgers.length > 3) {
+            return uniqueLedgers.slice(0, 3).join(', ') + '...';
+          }
+          return uniqueLedgers.join(', ');
+        }
+      }
+    }
+
     let p = v.party;
-    if (p && String(p).trim() !== '') return p;
+    if (p && String(p).trim() !== '') {
+      const found = ledgers.find((l: any) => String(l.id) === String(p));
+      if (found) return found.name;
+      return p;
+    }
 
     // Fallbacks
     p = v.party_name || v.vendor_name || v.customer_name || v.pay_to_ledger || v.pay_to || v.pay_from || v.account;
-    if (p && String(p).trim() !== '') return p;
+    if (p && String(p).trim() !== '') {
+      const found = ledgers.find((l: any) => String(l.id) === String(p));
+      if (found) return found.name;
+      return p;
+    }
 
     return 'Unknown';
   };
@@ -1685,14 +1718,39 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     filteredVouchers.forEach(v => {
       const amt = getVoucherAmount(v);
       const vNo = (v as any).voucher_number || (v as any).voucherNumber || '';
-      if (v.type === 'Payment') { const vn = (v as any).party || 'Vendor', cn = (v as any).account || 'Cash/Bank'; if (vn === name) push(v.date, cn, v.type, vNo, amt, 0); if (cn === name) push(v.date, vn, v.type, vNo, 0, amt); }
-      else if (v.type === 'Receipt') { const cn = (v as any).party || 'Customer', an = (v as any).account || 'Cash/Bank'; if (cn === name) push(v.date, an, v.type, vNo, 0, amt); if (an === name) push(v.date, cn, v.type, vNo, amt, 0); }
-      else if (v.type === 'Contra') { const fa = (v as any).fromAccount || 'Account', ta = (v as any).toAccount || 'Account'; if (fa === name) push(v.date, ta, v.type, vNo, 0, amt); if (ta === name) push(v.date, fa, v.type, vNo, amt, 0); }
-      else if ((v.type as string) === 'debit_note' || v.type === 'Debit Note' || (v.type as string) === 'DEBIT_NOTE') { const p = getVoucherParty(v); if (p === name) push(v.date, 'Purchase Return', 'Debit Note', vNo, amt, 0); }
-      else if ((v.type as string) === 'credit_note' || v.type === 'Credit Note' || (v.type as string) === 'CREDIT_NOTE') { const p = getVoucherParty(v); if (p === name) push(v.date, 'Sales Return', 'Credit Note', vNo, 0, amt); }
+      if (v.type === 'Payment') { const vn = (v as any).party || 'Vendor', cn = (v as any).account || 'Cash/Bank'; if (vn === name) push(v.date, cn, v.type, vNo, amt, 0, '', v); if (cn === name) push(v.date, vn, v.type, vNo, 0, amt, '', v); }
+      else if (v.type === 'Receipt') { const cn = (v as any).party || 'Customer', an = (v as any).account || 'Cash/Bank'; if (cn === name) push(v.date, an, v.type, vNo, 0, amt, '', v); if (an === name) push(v.date, cn, v.type, vNo, amt, 0, '', v); }
+      else if (v.type === 'Contra') { const fa = (v as any).fromAccount || 'Account', ta = (v as any).toAccount || 'Account'; if (fa === name) push(v.date, ta, v.type, vNo, 0, amt, '', v); if (ta === name) push(v.date, fa, v.type, vNo, amt, 0, '', v); }
+      else if ((v.type as string) === 'debit_note' || v.type === 'Debit Note' || (v.type as string) === 'DEBIT_NOTE') { const p = getVoucherParty(v); if (p === name) push(v.date, 'Purchase Return', 'Debit Note', vNo, amt, 0, '', v); }
+      else if ((v.type as string) === 'credit_note' || v.type === 'Credit Note' || (v.type as string) === 'CREDIT_NOTE') { const p = getVoucherParty(v); if (p === name) push(v.date, 'Sales Return', 'Credit Note', vNo, 0, amt, '', v); }
       else if ('entries' in v && Array.isArray((v as any).entries)) {
-        (v as any).entries.forEach((e: any) => { if (e.ledger === name) { const cp = (v as any).entries.filter((x: any) => x !== e).map((x: any) => x.ledger).join(', ') || 'Journal'; push(v.date, cp, v.type, vNo, Number(e.debit) || 0, Number(e.credit) || 0); } });
-      } else { const p = getVoucherParty(v); if (p === name) { const s = v.type === 'Sales'; push(v.date, s ? 'Sales' : 'Purchases', v.type, vNo, s ? amt : 0, s ? 0 : amt); } }
+        let matchedRow = false;
+        (v as any).entries.forEach((e: any) => {
+          if (e.ledger === name) {
+            matchedRow = true;
+            const cp = (v as any).entries.filter((x: any) => x !== e).map((x: any) => x.ledger).join(', ') || 'Journal';
+            push(v.date, cp, v.type, vNo, Number(e.debit) || 0, Number(e.credit) || 0, '', v);
+          }
+        });
+        if (!matchedRow && name.includes(',')) {
+          if (getVoucherParty(v) === name && (!drillDownSourceType || drillDownSourceType === v.type)) {
+            push(v.date, 'Journal', v.type, vNo, amt, 0, '', v);
+          }
+        }
+      } else {
+        // Handle expense vouchers and other types fallback
+        // We strictly match the party name generated for this voucher to the one clicked in the Day Book
+        const p = getVoucherParty(v);
+        if (p === name) {
+          if (name.includes(',') && drillDownSourceType && drillDownSourceType !== v.type) {
+            // Skip if it's a pseudo-ledger and type doesn't match the clicked source
+            return;
+          }
+          const s = v.type === 'Sales';
+          // Pass voucher as raw so reference_id/source are available for View button
+          push(v.date, s ? 'Sales' : 'Purchases', v.type, vNo, s ? amt : 0, s ? 0 : amt, '', v);
+        }
+      }
     });
     return rows;
   }, [drillDownLedger, drillDownData, entries, filteredVouchers, selectedLedger, ledgers]);
@@ -1972,7 +2030,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Reference No</th>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Party</th>
             <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
-            <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
+            <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider print:hidden">Action</th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-100">
@@ -1999,6 +2057,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                     e.stopPropagation();
                     setReportType('LedgerReport');
                     setDrillDownLedger(party);
+                    setDrillDownSourceType(v.type);
                   }}
                   title={`View Ledger Report for ${party}`}
                 >
@@ -2008,7 +2067,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                   </svg>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-right font-semibold text-gray-900">₹{getVoucherAmount(v).toFixed(2)}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-center" onClick={(e) => {
+                <td className="px-6 py-4 whitespace-nowrap text-center print:hidden" onClick={(e) => {
                   e.stopPropagation();
                   if (setViewVoucherData && onNavigate) {
                     setViewVoucherData(v);
@@ -2105,7 +2164,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       <div>
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 mb-4 text-sm">
-          <button onClick={() => setDrillDownLedger(null)} className="flex items-center gap-1 text-indigo-600 hover:text-indigo-900 font-semibold transition-colors">
+          <button onClick={() => { setDrillDownLedger(null); setDrillDownSourceType(null); }} className="flex items-center gap-1 text-indigo-600 hover:text-indigo-900 font-semibold transition-colors">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
             All Ledgers
           </button>
@@ -2247,18 +2306,18 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                           <td className="px-6 py-4 whitespace-nowrap border-r border-gray-50">
                             {st !== '-' && e.voucherType !== 'Opening' ? (
                               <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${st === 'Received' ? 'bg-green-100 text-green-800' :
-                                  st === 'Paid' ? 'bg-green-100 text-green-800' :
-                                    st === 'Utilized' ? 'bg-teal-100 text-teal-800' :
-                                      st === 'Due' ? 'bg-red-100 text-red-800' :
-                                        st === 'Not Due' ? 'bg-blue-100 text-blue-700' :
-                                          st === 'Partially Received' ? 'bg-yellow-100 text-yellow-800' :
-                                            st === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
-                                              st === 'Partially Utilized' ? 'bg-amber-100 text-amber-700' :
-                                                st === 'Advance Applied' ? 'bg-purple-100 text-purple-700' :
-                                                  st === 'Advance' ? 'bg-purple-100 text-purple-700' :
-                                                    st === 'Unutilized' ? 'bg-gray-100 text-gray-600' :
-                                                      st === 'Open' ? 'bg-gray-100 text-gray-600' :
-                                                        'bg-gray-100 text-gray-600'
+                                st === 'Paid' ? 'bg-green-100 text-green-800' :
+                                  st === 'Utilized' ? 'bg-teal-100 text-teal-800' :
+                                    st === 'Due' ? 'bg-red-100 text-red-800' :
+                                      st === 'Not Due' ? 'bg-blue-100 text-blue-700' :
+                                        st === 'Partially Received' ? 'bg-yellow-100 text-yellow-800' :
+                                          st === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
+                                            st === 'Partially Utilized' ? 'bg-amber-100 text-amber-700' :
+                                              st === 'Advance Applied' ? 'bg-purple-100 text-purple-700' :
+                                                st === 'Advance' ? 'bg-purple-100 text-purple-700' :
+                                                  st === 'Unutilized' ? 'bg-gray-100 text-gray-600' :
+                                                    st === 'Open' ? 'bg-gray-100 text-gray-600' :
+                                                      'bg-gray-100 text-gray-600'
                                 }`}>{st}</span>
                             ) : '-'}
                           </td>
@@ -2396,18 +2455,18 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                             <td className="px-6 py-4 whitespace-nowrap border-r border-gray-100">
                               {stFinal !== '-' && e.voucherType !== 'Opening' ? (
                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${stFinal === 'Received' ? 'bg-green-100 text-green-800' :
-                                    stFinal === 'Paid' ? 'bg-green-100 text-green-800' :
-                                      stFinal === 'Utilized' ? 'bg-teal-100 text-teal-800' :
-                                        stFinal === 'Due' ? 'bg-red-100 text-red-800' :
-                                          stFinal === 'Not Due' ? 'bg-blue-100 text-blue-700' :
-                                            stFinal === 'Partially Received' ? 'bg-yellow-100 text-yellow-800' :
-                                              stFinal === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
-                                                stFinal === 'Partially Utilized' ? 'bg-amber-100 text-amber-700' :
-                                                  stFinal === 'Advance Applied' ? 'bg-purple-100 text-purple-700' :
-                                                    stFinal === 'Advance' ? 'bg-purple-100 text-purple-700' :
-                                                      stFinal === 'Unutilized' ? 'bg-gray-100 text-gray-600' :
-                                                        stFinal === 'Open' ? 'bg-gray-100 text-gray-600' :
-                                                          'bg-gray-100 text-gray-600'
+                                  stFinal === 'Paid' ? 'bg-green-100 text-green-800' :
+                                    stFinal === 'Utilized' ? 'bg-teal-100 text-teal-800' :
+                                      stFinal === 'Due' ? 'bg-red-100 text-red-800' :
+                                        stFinal === 'Not Due' ? 'bg-blue-100 text-blue-700' :
+                                          stFinal === 'Partially Received' ? 'bg-yellow-100 text-yellow-800' :
+                                            stFinal === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
+                                              stFinal === 'Partially Utilized' ? 'bg-amber-100 text-amber-700' :
+                                                stFinal === 'Advance Applied' ? 'bg-purple-100 text-purple-700' :
+                                                  stFinal === 'Advance' ? 'bg-purple-100 text-purple-700' :
+                                                    stFinal === 'Unutilized' ? 'bg-gray-100 text-gray-600' :
+                                                      stFinal === 'Open' ? 'bg-gray-100 text-gray-600' :
+                                                        'bg-gray-100 text-gray-600'
                                   }`}>{stFinal}</span>
                               ) : '-'}
                             </td>
