@@ -129,7 +129,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     id: r.id,
                     name: r.ledger_1 || r.sub_group_3_1 || r.sub_group_2_1 || r.sub_group_1_1 || r.group_1 || r.major_group_1,
                     group: r.group_1,
-                    category: r.major_group_1
+                    category: r.major_group_1,
+                    code: r.code || r.ledger_code
                 });
             }
         }
@@ -189,7 +190,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         group: l.group,
                         category: l.category,
                         type: 'ledger',
-                        ledger_id: l.id // Ensure we have a numeric ledger ID
+                        ledger_id: l.id, // Ensure we have a numeric ledger ID
+                        code: l.code
                     }));
 
                 // 2. Real tenant ledgers + portal entities
@@ -218,13 +220,14 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
                 const ledgerOptions = (ledgersData || [])
                     .filter((l: any) => {
-                        return !isHierarchyHeadingName(l.name, sets);
+                        return !isHierarchyHeadingName(l.name, sets) && l.code && l.code !== '00';
                     })
                     .map((l: any) => ({
                         ...l,
                         type: l.group === 'Sundry Debtors' ? 'customer' :
                             l.group === 'Sundry Creditors' ? 'vendor' : 'ledger',
-                        ledger_id: l.id
+                        ledger_id: l.id,
+                        code: l.code
                     }));
 
                 // Build a set of portal entity names (lowercase) so we can suppress
@@ -235,10 +238,18 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 // Only add hierarchy/ledger entries whose name is NOT covered by a portal entity
                 hierarchySeedLedgers
                     .filter((o: any) => !portalNames.has((o.name || '').trim().toLowerCase()))
-                    .forEach((o: any) => masterMap.set(`hierarchy-${o.name.toLowerCase()}`, o));
+                    .forEach((o: any) => masterMap.set(`name-${(o.name || '').trim().toLowerCase()}`, o));
                 ledgerOptions
                     .filter((o: any) => !portalNames.has((o.name || '').trim().toLowerCase()))
-                    .forEach((o: any) => masterMap.set(`ledger-${o.name.toLowerCase()}`, o));
+                    .forEach((o: any) => {
+                        const key = `name-${(o.name || '').trim().toLowerCase()}`;
+                        const existing = masterMap.get(key);
+                        masterMap.set(key, {
+                            ...existing,
+                            ...o,
+                            code: o.code || (existing ? existing.code : undefined)
+                        });
+                    });
                 // Portal entities use their unique ID as key so duplicates are preserved
                 portalEntities.forEach((o: any) => masterMap.set(o.id, o));
 
@@ -1443,12 +1454,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                     value={payTo}
                                     onChange={(val) => setPayTo(val)}
                                     options={payToOptions.map(l => {
-                                        const typeLabel = l.type ? l.type.charAt(0).toUpperCase() + l.type.slice(1) : '';
                                         let label = l.name;
-                                        if ((l.type === 'customer' || l.type === 'vendor') && l.code) {
+                                        if (l.code && l.code !== '00') {
                                             label = `${l.name} - ${l.code}`;
                                         }
-                                        if (typeLabel) label = `${label} (${typeLabel})`;
                                         return { label, value: l.name };
                                     })}
                                     placeholder="Select Pay To"
@@ -1801,12 +1810,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                     value={row.payTo}
                                                     onChange={val => handlePaymentRowChange(row.id, 'payTo', val)}
                                                     options={payToOptions.map(l => {
-                                                        const typeLabel = l.type ? l.type.charAt(0).toUpperCase() + l.type.slice(1) : '';
                                                         let label = l.name;
-                                                        if ((l.type === 'customer' || l.type === 'vendor') && l.code) {
+                                                        if (l.code && l.code !== '00') {
                                                             label = `${l.name} - ${l.code}`;
                                                         }
-                                                        if (typeLabel) label = `${label} (${typeLabel})`;
                                                         return { label, value: l.name };
                                                     })}
                                                     placeholder="Select Pay To"
