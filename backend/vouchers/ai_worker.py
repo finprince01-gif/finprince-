@@ -143,6 +143,7 @@ class AIWorker(BaseWorker):
         correlation_id = task['correlation_id']
         page_idx = payload.get('page_number') or payload.get('page_index') or task.get('page_number')
         job_id = payload.get('job_id', task.get('job_id', 'unknown'))
+        file_hash = payload.get('file_hash')
 
         logger.info(f"[CONTEXT_TRACE_AI_RECEIVE] job_id={job_id} record_id={record_id} session_id={session_id} tenant_id={tenant_id} trace_id={task.get('trace_id')} page={page_idx}")
         logger.info(f"[SESSION_FORENSIC] stage='ai_worker_receive' record={record_id} session={session_id} tenant={tenant_id} page={page_idx}")
@@ -153,10 +154,11 @@ class AIWorker(BaseWorker):
         try:
             from ocr_pipeline.models import InvoicePageResult
             loop = asyncio.get_running_loop()
+            is_rescan = payload.get('is_rescan', False)
             already_processed = await loop.run_in_executor(
                 None, 
                 lambda: InvoicePageResult.objects.filter(record_id=record_id, page_number=page_idx, is_failed=False).exists()
-            )
+            ) if not is_rescan else False
             if already_processed:
                 logger.info(f"[IDEMPOTENCY_SKIP] record={record_id} page={page_idx} already successfully processed. Forwarding to assembly to prevent barrier deadlock.")
                 
@@ -227,7 +229,6 @@ class AIWorker(BaseWorker):
             # ── [PHASE 4: OCR RESPONSE CACHE] ──
             # Check if we have a cached extraction for this exact (file_hash, page_number).
             # If so, skip Gemini entirely and reuse the prior result.
-            file_hash = payload.get('file_hash') or ''
             if file_hash:
                 try:
                     from ocr_pipeline.ocr_cache import OCRResponseCache

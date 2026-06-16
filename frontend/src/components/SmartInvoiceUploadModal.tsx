@@ -827,6 +827,8 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const [scanCurrentFile, setScanCurrentFile] = useState('');
     const [finalizeResult, setFinalizeResult] = useState<FinalizeResult | null>(null);
     const [groupPages, setGroupPages] = useState(true);
+    const [rescanningRowId, setRescanningRowId] = useState<string | null>(null);
+    const [rescanningAll, setRescanningAll] = useState(false);
     const [showOnlyPending, setShowOnlyPending] = useState(true);
     const [finalizing, setFinalizing] = useState(false);
     const [resizing, setResizing] = useState<number | null>(null);
@@ -1426,7 +1428,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     const result = {
                         ...inv, // Preserve mapped fields from backend (vendor_status, status, etc)
                         id: String(inv.id || `snap_${idx}`),
-                        file_hash: inv.file_hash || `snap_${sid}`,
+                        file_hash: inv.file_hash || inv.file_path || String(inv.id) || `snap_${sid}_${idx}`,
                         file_path: inv.file_path || 'Finalized Result',
                         invoice_number: inv.invoice_number || inv.invoice_no || '—',
                         invoice_date: inv.invoice_date || '—',
@@ -1694,10 +1696,6 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 const normalize = (s: any) => String(s || '').replace(/[^A-Z0-9]/g, '').trim().toUpperCase();
 
                 const getResumeKey = (r: ScanResult) => {
-                    const gstin = normalize(r.vendor_gstin || getCellValue(r, 'vendor_gstin'));
-                    const invNo = normalize(r.invoice_number || getCellValue(r, 'invoice_no') || r.invoice_number);
-                    const branch = normalize(r.branch || getCellValue(r, 'branch') || '');
-                    if (gstin && invNo) return `RES_${gstin}_${branch}_${invNo}`;
                     return r.file_hash || String(r.id);
                 };
 
@@ -2084,32 +2082,59 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     };
 
     const handleRescan = async (row: ScanResult) => {
-        const oldStatus = row.validationStatus;
-        // Show loading state for the specific row
+        if (rescanningRowId) return; // Prevent double-click
+        const rowNumericId = String(row.id).replace(/^snap_/, '');
+        if (!rowNumericId || isNaN(Number(rowNumericId))) {
+            showError('Cannot rescan: record ID is invalid. Please re-upload the file.');
+            return;
+        }
+
+        setRescanningRowId(row.id);
         setScanResults(prev => prev.map(r =>
-            r.file_hash === row.file_hash ? { ...r, validationStatus: 'processing' as ValidationStatus } : r
+            r.id === row.id ? { ...r, validationStatus: 'PROCESSING' as ValidationStatus } : r
         ));
 
         try {
-            const res: any = await httpClient.post('/api/ocr-staging-rescan/', {
-                file_hash: row.file_hash
-            });
-
+            const res: any = await httpClient.post(`/api/ocr-staging/${rowNumericId}/rescan/`, {});
             if (res.success) {
-                showSuccess(`Rescan initiated for ${row.file_path}`);
-                // Fresh pull from DB
-                fetchStagedInvoices();
+                showSuccess(`🔄 Rescan queued for ${row.file_path?.split('/').pop() || row.invoice_number || 'invoice'}`);
+                // Restart polling so the grid refreshes as reprocessing progresses
+                await new Promise(r => setTimeout(r, 800));
+                fetchStagedInvoices(uploadSessionId || undefined);
             } else {
-                showError(res.error || 'Rescan failed');
-                setScanResults(prev => prev.map(r =>
-                    r.file_hash === row.file_hash ? { ...r, validationStatus: oldStatus } : r
-                ));
+                showError(res.error || 'Rescan could not be initiated');
+                fetchStagedInvoices(uploadSessionId || undefined);
             }
         } catch (err: any) {
             showError(err?.response?.data?.error || 'Network error during rescan');
-            setScanResults(prev => prev.map(r =>
-                r.file_hash === row.file_hash ? { ...r, validationStatus: oldStatus } : r
-            ));
+            fetchStagedInvoices(uploadSessionId || undefined);
+        } finally {
+            setRescanningRowId(null);
+        }
+    };
+
+    const handleRescanAll = async () => {
+        if (rescanningAll || !uploadSessionId) return;
+        if (!window.confirm(`Re-run full AI extraction for all ${scanResults.length} invoice(s) in this session?\n\nExisting data will be cleared and re-extracted. This cannot be undone.`)) return;
+
+        setRescanningAll(true);
+        setScanResults(prev => prev.map(r => ({ ...r, validationStatus: 'PROCESSING' as ValidationStatus })));
+
+        try {
+            const res: any = await httpClient.post(`/api/ocr-staging/session/${uploadSessionId}/rescan/`, {});
+            if (res.success) {
+                showSuccess(`🔄 Rescan All queued: ${res.triggered_count} invoice(s) reprocessing.`);
+                await new Promise(r => setTimeout(r, 1000));
+                fetchStagedInvoices(uploadSessionId);
+            } else {
+                showError(res.error || 'Session rescan failed');
+                fetchStagedInvoices(uploadSessionId);
+            }
+        } catch (err: any) {
+            showError(err?.response?.data?.error || 'Network error during session rescan');
+            fetchStagedInvoices(uploadSessionId);
+        } finally {
+            setRescanningAll(false);
         }
     };
 
@@ -3070,37 +3095,54 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                     }}
                                                                 >
 
-                                                                    {/* Revalidate button — triggers a fresh vendor check without opening edit modal */}
-                                                                    {!['PENDING', 'VOUCHER_CREATED'].includes(row.validationStatus) && (
+                                                                    {/* Revalidate button — triggers a fresh vendor check without opening edit modal.
+                                                                         Always shown; the outer container dims it while the row is in-flight. */}
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            setScanResults(prev => prev.map(r => r.file_hash === row.file_hash ? { ...r, validationStatus: 'PENDING' } : r));
+                                                                            try {
+                                                                                const result: any = await httpClient.patch(`/api/ocr-staging/${row.file_hash}/`, { extracted_data: row.extracted_data });
+                                                                                setScanResults(prev => prev.map(r => {
+                                                                                    if (r.file_hash !== row.file_hash) return r;
+                                                                                    let newStatus: ValidationStatus = 'VENDOR_MISSING';
+                                                                                    const s = result.status || '';
+                                                                                    if (s === 'READY' || s === 'found' || s === 'FOUND') newStatus = 'READY';
+                                                                                    else if (s === 'DUPLICATE' || s === 'duplicate') newStatus = 'DUPLICATE';
+                                                                                    else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found' || s === 'CREATE_VENDOR') newStatus = 'VENDOR_MISSING';
+                                                                                    else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') newStatus = 'GSTIN_CONFLICT';
+                                                                                    const updated = {
+                                                                                        ...r,
+                                                                                        validationStatus: newStatus,
+                                                                                        vendor_id: result.vendor_id ?? r.vendor_id,
+                                                                                        vendor_name: result.vendor_name || r.vendor_name,
+                                                                                        vendor_status: ((result.vendor_id ?? r.vendor_id) ? 'EXISTS' : (result.vendor_status || 'NEW')) as VendorStatus,
+                                                                                    };
+                                                                                    if (newStatus === 'VENDOR_MISSING') setTimeout(() => openCreateVendorModal(updated), 150);
+                                                                                    return updated;
+                                                                                }));
+                                                                            } catch { fetchStagedInvoices(); }
+                                                                        }}
+                                                                        className="p-1 hover:bg-indigo-100 rounded text-indigo-400 hover:text-indigo-700 transition-colors"
+                                                                        title="Revalidate vendor"
+                                                                    >
+                                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                                                    </button>
+
+                                                                    {/* Rescan button — re-runs full OCR + AI extraction pipeline for this row.
+                                                                         Always shown for all statuses (ALREADY EXIST, DUPLICATE, VOUCHER_CREATED, NEED TO SAVE, etc).
+                                                                         Only snap_N orphan rows (no real backend PK) are excluded. */}
+                                                                    {!String(row.id).startsWith('snap_') && (
                                                                         <button
-                                                                            onClick={async () => {
-                                                                                setScanResults(prev => prev.map(r => r.file_hash === row.file_hash ? { ...r, validationStatus: 'PENDING' } : r));
-                                                                                try {
-                                                                                    const result: any = await httpClient.patch(`/api/ocr-staging/${row.file_hash}/`, { extracted_data: row.extracted_data });
-                                                                                    setScanResults(prev => prev.map(r => {
-                                                                                        if (r.file_hash !== row.file_hash) return r;
-                                                                                        let newStatus: ValidationStatus = 'VENDOR_MISSING';
-                                                                                        const s = result.status || '';
-                                                                                        if (s === 'READY' || s === 'found' || s === 'FOUND') newStatus = 'READY';
-                                                                                        else if (s === 'DUPLICATE' || s === 'duplicate') newStatus = 'DUPLICATE';
-                                                                                        else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found' || s === 'CREATE_VENDOR') newStatus = 'VENDOR_MISSING';
-                                                                                        else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') newStatus = 'GSTIN_CONFLICT';
-                                                                                        const updated = {
-                                                                                            ...r,
-                                                                                            validationStatus: newStatus,
-                                                                                            vendor_id: result.vendor_id ?? r.vendor_id,
-                                                                                            vendor_name: result.vendor_name || r.vendor_name,
-                                                                                            vendor_status: ((result.vendor_id ?? r.vendor_id) ? 'EXISTS' : (result.vendor_status || 'NEW')) as VendorStatus,
-                                                                                        };
-                                                                                        if (newStatus === 'VENDOR_MISSING') setTimeout(() => openCreateVendorModal(updated), 150);
-                                                                                        return updated;
-                                                                                    }));
-                                                                                } catch { fetchStagedInvoices(); }
-                                                                            }}
-                                                                            className="p-1 hover:bg-indigo-100 rounded text-indigo-400 hover:text-indigo-700 transition-colors"
-                                                                            title="Revalidate vendor"
+                                                                            onClick={() => handleRescan(row)}
+                                                                            disabled={rescanningRowId === row.id}
+                                                                            className="p-1 hover:bg-violet-100 rounded text-violet-400 hover:text-violet-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                            title="Rescan — re-run OCR & AI extraction for this invoice"
                                                                         >
-                                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                                                            {rescanningRowId === row.id ? (
+                                                                                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707" /></svg>
+                                                                            ) : (
+                                                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18" /></svg>
+                                                                            )}
                                                                         </button>
                                                                     )}
 
@@ -3317,6 +3359,27 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                 </svg>
                                                 Download Excel
                                             </button>
+                                            {/* Rescan All — re-runs full pipeline for every invoice in this upload session */}
+                                            {uploadSessionId && !scanResults.every(r => String(r.id).startsWith('snap_')) && (
+                                                <button
+                                                    onClick={handleRescanAll}
+                                                    disabled={rescanningAll || finalizing}
+                                                    title="Re-run OCR & AI extraction for all invoices in this session"
+                                                    className="px-5 py-2.5 bg-violet-50 text-violet-700 border border-violet-200 rounded-xl text-sm font-bold shadow-sm hover:bg-violet-100 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                >
+                                                    {rescanningAll ? (
+                                                        <>
+                                                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3" /></svg>
+                                                            Rescanning…
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                                            Rescan All
+                                                        </>
+                                                    )}
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={handleFinalize}
                                                 disabled={isExportDisabled || !canFinalize}

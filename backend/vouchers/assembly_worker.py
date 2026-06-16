@@ -208,9 +208,11 @@ class AssemblyWorker(BaseWorker):
         else:
             logger.error(f"[ASSEMBLY_TERMINAL_FAILURE] record={record_id} status={res_status}")
             logger.error(f"[FILE_TERMINAL_FAILED] record={record_id} status=FAILED reason={res_status}")
-            # Use a direct SQL update to transition the record status, bypassing model save() mutation guards
             def _safe_save_failed():
-                InvoiceTempOCR.objects.filter(id=record_id).update(status=PipelineStatus.FAILED)
+                InvoiceTempOCR.objects.filter(id=record_id).update(
+                    status=PipelineStatus.FAILED,
+                    validation_status='ERROR'
+                )
             await asyncio.shield(loop.run_in_executor(
                 None,
                 _safe_save_failed

@@ -369,6 +369,24 @@ def process_ai_request(request_data: dict) -> dict:
                 "currency": "INR",
                 "items": [{"description": "Mock Item", "quantity": 1, "rate": 1234.56, "amount": 1234.56}]
             }
+
+            # Save to AIUsageAccounting
+            record_id = request_data.get('record_id') or request_data.get('metadata', {}).get('record_id')
+            if record_id:
+                try:
+                    rescan_history_id = request_data.get('rescan_history_id') or request_data.get('metadata', {}).get('rescan_history_id')
+                    from ocr_pipeline.models import AIUsageAccounting
+                    AIUsageAccounting.objects.create(
+                        invoice_temp_ocr_id=record_id,
+                        rescan_history_id=rescan_history_id,
+                        prompt_tokens=600,
+                        completion_tokens=200,
+                        total_tokens=800,
+                        cost=0.00014
+                    )
+                except Exception as _ae:
+                    logger.warning(f"[MOCK_USAGE_SAVE_ERR] {_ae}")
+
             return {'reply': json.dumps(mock_reply)}
 
         if circuit_breaker.is_open(): return {'error': 'AI service temporarily unavailable.', 'code': 'CIRCUIT_BREAKER'}
@@ -427,7 +445,22 @@ def _call_gemini_single(prompt: Any, request_data: dict, api_key: str, model_nam
             cost = (usage.prompt_token_count * 0.10 / 1_000_000) + (usage.candidates_token_count * 0.40 / 1_000_000)
             metrics.increment_counter("ai:tokens", usage.total_token_count)
             metrics.record_latency("ai:cost", cost)
-    except: pass
+
+            # Save to AIUsageAccounting
+            record_id = request_data.get('record_id') or request_data.get('metadata', {}).get('record_id')
+            if record_id:
+                rescan_history_id = request_data.get('rescan_history_id') or request_data.get('metadata', {}).get('rescan_history_id')
+                from ocr_pipeline.models import AIUsageAccounting
+                AIUsageAccounting.objects.create(
+                    invoice_temp_ocr_id=record_id,
+                    rescan_history_id=rescan_history_id,
+                    prompt_tokens=usage.prompt_token_count,
+                    completion_tokens=usage.candidates_token_count,
+                    total_tokens=usage.total_token_count,
+                    cost=cost
+                )
+    except Exception as e:
+        logger.error(f"[AIUsageAccounting_SAVE_ERR] {e}")
 
     return response.text
 

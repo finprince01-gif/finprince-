@@ -8,7 +8,8 @@ from ocr_pipeline.views import (
     CleanOCRStagingView, OCRStagingFinalizeView, OCRStagingRescanView, 
     OCRStagingRescanUploadView, ZohoAdapterView, ZohoReconstructView, 
     OCRJobStatusView, S3UploadPolicyView, PipelineStatusSSEView,
-    OperationalDashboardView, OCRStagingCancelView, OCRStagingMatchItemView
+    OperationalDashboardView, OCRStagingCancelView, OCRStagingMatchItemView,
+    OCRStagingRowRescanView, OCRStagingSessionRescanView
 )
 from core.auth_views import CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView
 from core.token import MyTokenObtainPairSerializer
@@ -102,6 +103,8 @@ urlpatterns = [
     path('api/ocr-staging-cancel/', OCRStagingCancelView.as_view(), name='ocr-staging-cancel'),
     path('api/ocr-staging-rescan/', OCRStagingRescanView.as_view(), name='ocr-staging-rescan'),
     path('api/ocr-staging-rescan-upload/', OCRStagingRescanUploadView.as_view(), name='ocr-staging-rescan-upload'),
+    path('api/ocr-staging/<int:pk>/rescan/', OCRStagingRowRescanView.as_view(), name='ocr-staging-row-rescan'),
+    path('api/ocr-staging/session/<str:session_id>/rescan/', OCRStagingSessionRescanView.as_view(), name='ocr-staging-session-rescan'),
     path('api/zoho-adapter/', ZohoAdapterView.as_view(), name='zoho-adapter'),
     path('api/zoho-reconstruct/', ZohoReconstructView.as_view(), name='zoho-reconstruct'),
     path('api/ops-dashboard/', OperationalDashboardView.as_view(), name='ops-dashboard'),

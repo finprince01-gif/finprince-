@@ -258,7 +258,7 @@ def _set_cached_ai_result(ocr_text: str, payload: dict):
     except Exception as e:
         logger.error(f"[CACHE_SAVE_ERR] {e}")
 
-def extract_invoice(client, file_bytes=None, voucher_type='Purchase', upload_type='UNKNOWN', public_ip="0.0.0.0", user_id='system', tenant_id='system', wait_for_result=True, record_id=None, item_id=None, upload_session_id=None, job_id=None, file_path=None, start_page=0, limit=None):
+def extract_invoice(client, file_bytes=None, voucher_type='Purchase', upload_type='UNKNOWN', public_ip="0.0.0.0", user_id='system', tenant_id='system', wait_for_result=True, record_id=None, item_id=None, upload_session_id=None, job_id=None, file_path=None, start_page=0, limit=None, is_rescan=False, rescan_history_id=None):
     """
     Extracts invoice data using the central AI Proxy service with fallbacks.
     Returns a unified JSON object matching the internal schema.
@@ -303,7 +303,7 @@ def extract_invoice(client, file_bytes=None, voucher_type='Purchase', upload_typ
     else:
         batch_size = 10
 
-    def _call_ai_batch(batch_data, item_id, job_id=None, wait_for_result=True, tenant_id=None):
+    def _call_ai_batch(batch_data, item_id, job_id=None, wait_for_result=True, tenant_id=None, is_rescan=False, rescan_history_id=None):
         """
         PHASE 9: 1 CALL -> MANY PAGES.
         batch_data: list of {'img_bytes': ..., 'ocr_text': ..., 'idx': ...}
@@ -313,7 +313,7 @@ def extract_invoice(client, file_bytes=None, voucher_type='Purchase', upload_typ
         count = len(batch_data)
         if count == 1:
             p = batch_data[0]
-            return {p['idx']: _call_ai_for_page(p['img_bytes'], p['ocr_text'], p['idx'], page_count, item_id, job_id, wait_for_result, tenant_id)}
+            return {p['idx']: _call_ai_for_page(p['img_bytes'], p['ocr_text'], p['idx'], page_count, item_id, job_id, wait_for_result, tenant_id, is_rescan=is_rescan, rescan_history_id=rescan_history_id)}
 
         # 1. Build Batch Prompt
         batch_prompt = f"""
@@ -350,7 +350,9 @@ Return a JSON object with a "pages" key containing a list of {count} results in 
             'tenant_id': tenant_id,
             'upload_type': upload_type,  # [UPLOAD_TYPE ISOLATION FIX]
             'batch_indices': [p['idx'] for p in batch_data],
-            'file_hash': parent_hash
+            'file_hash': parent_hash,
+            'is_rescan': is_rescan,
+            'rescan_history_id': rescan_history_id
         }
 
         if not wait_for_result:
@@ -361,7 +363,7 @@ Return a JSON object with a "pages" key containing a list of {count} results in 
                 logger.warning(f"[BATCH_TOO_LARGE] size={total_size} -> Splitting batch of {count}")
                 results = {}
                 for p in batch_data:
-                    results[p['idx']] = _call_ai_for_page(p['img_bytes'], p['ocr_text'], p['idx'], page_count, item_id, job_id, wait_for_result, tenant_id)
+                    results[p['idx']] = _call_ai_for_page(p['img_bytes'], p['ocr_text'], p['idx'], page_count, item_id, job_id, wait_for_result, tenant_id, is_rescan=is_rescan, rescan_history_id=rescan_history_id)
                 return results
             
             logger.info(f"[BATCH_ENQUEUE] record={record_id} count={count}")
@@ -516,7 +518,7 @@ Failure to extract ANY field that is visible on the document is unacceptable.
 * NO hallway citations or placeholders.
 """
 
-    def _call_ai_for_page(segment_bytes, page_ocr_text, page_idx, total_pages, item_id, job_id=None, wait_for_result=True, tenant_id=None):
+    def _call_ai_for_page(segment_bytes, page_ocr_text, page_idx, total_pages, item_id, job_id=None, wait_for_result=True, tenant_id=None, is_rescan=False, rescan_history_id=None):
         """
         HARD ISOLATION RULE: ONE PAGE -> ONE OCR TEXT -> ONE IMAGE -> ONE REQUEST
         PHASE 9: CACHE AWARE.
@@ -571,7 +573,9 @@ Failure to extract ANY field that is visible on the document is unacceptable.
             'upload_session_id': upload_session_id,
             'tenant_id': tenant_id,
             'upload_type': upload_type,  # [UPLOAD_TYPE ISOLATION FIX]
-            'correlation_id': corr_id
+            'correlation_id': corr_id,
+            'is_rescan': is_rescan,
+            'rescan_history_id': rescan_history_id
         }
         
         logger.info(f"[AI_PAYLOAD_VALID] record={record_id} page={page_idx+1} item={item_id} cid={corr_id}")
@@ -590,7 +594,9 @@ Failure to extract ANY field that is visible on the document is unacceptable.
             'upload_session_id': upload_session_id,
             'page_index': page_idx + 1,
             'total_pages': total_pages,
-            'id': f"ai_{record_id}_{page_idx+1}_{int(time.time())}" # Unique AI Task ID
+            'id': f"ai_{record_id}_{page_idx+1}_{int(time.time())}", # Unique AI Task ID
+            'is_rescan': is_rescan,
+            'rescan_history_id': rescan_history_id
         }
         
         logger.info(
@@ -841,7 +847,7 @@ Failure to extract ANY field that is visible on the document is unacceptable.
                     logger.info(f"[MULTI_INVOICE_DETECTED] page={i+1} GST_count={gst_matches}")
 
             # 3. Call Gemini
-            res = _call_ai_for_page(img_bytes, page_text, i, page_count, item_id, job_id=job_id, wait_for_result=wait_for_result, tenant_id=tenant_id)
+            res = _call_ai_for_page(img_bytes, page_text, i, page_count, item_id, job_id=job_id, wait_for_result=wait_for_result, tenant_id=tenant_id, is_rescan=is_rescan, rescan_history_id=rescan_history_id)
             
             # ── [PHASE 4] RELAXED VALIDATION & STATUS ──
             final_status = "EXTRACTED"
@@ -945,7 +951,7 @@ Failure to extract ANY field that is visible on the document is unacceptable.
             })
             
         # 2. Call Batch AI
-        batch_results = _call_ai_batch(batch_data, item_id, job_id, wait_for_result, tenant_id)
+        batch_results = _call_ai_batch(batch_data, item_id, job_id, wait_for_result, tenant_id, is_rescan=is_rescan, rescan_history_id=rescan_history_id)
         
         # 3. Format for return
         return [(idx, res) for idx, res in batch_results.items()]

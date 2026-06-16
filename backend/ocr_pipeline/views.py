@@ -10,7 +10,7 @@ import hashlib
 import os
 import time
 
-from .models import InvoiceTempOCR, OCRJob, OCRTask, PipelineStatus, FinalizedSnapshot
+from .models import InvoiceTempOCR, OCRJob, OCRTask, PipelineStatus, FinalizedSnapshot, RescanHistory
 from vouchers.models import UploadSession
 from .zoho_adapter import get_zoho_adapter
 
@@ -652,8 +652,8 @@ class CleanOCRStagingView(views.APIView):
 
         res = {
             "id": getattr(r, 'id', None),
-            "file_hash": getattr(r, 'file_hash', None),
-            "file_path": getattr(r, 'file_path', None),
+            "file_hash": getattr(r, 'file_hash', None) or norm.get("file_hash", None),
+            "file_path": getattr(r, 'file_path', None) or norm.get("file_path", None),
             "tenant_id": getattr(r, 'tenant_id', None),
             "invoice_no": inv_no,
             "page_no": norm.get("_page_no") or norm.get("page_no") or getattr(r, 'page_no', None),
@@ -1112,7 +1112,9 @@ class CleanOCRStagingView(views.APIView):
                             'ack_date': row.get('ack_date'),
                             'created_at': row.get('created_at'),
                             'voucher_type': row.get('voucher_type'),
-                            'branch': row.get('branch')
+                            'branch': row.get('branch'),
+                            'file_hash': row.get('file_hash'),
+                            'file_path': row.get('file_path')
                         })
                         logger.info(
                             f"[SNAPSHOT_HYDRATION_STATE] "
@@ -2475,3 +2477,278 @@ class OperationalDashboardView(views.APIView):
             "ai_latency_slo": "HEALTHY" if ai_latency < 120 else "DEGRADED",
             "queue_lag_slo": "HEALTHY" # Placeholder
         }
+
+
+def _resolve_rescan_file_path(record) -> str | None:
+    """
+    Resolve the actual OS path for a rescan source file.
+    Handles the LOCAL:// virtual path scheme used by StorageService in local/dev deployments,
+    as well as legacy MEDIA_ROOT-relative paths and bare absolute paths.
+    Returns the resolved absolute path string if the file exists, otherwise None.
+    """
+    stored_path = record.file_path or ''
+
+    # ── 1. LOCAL:// virtual path (primary scheme in local dev) ──
+    #    StorageService.upload_file() returns  "LOCAL://<key>"
+    #    pipeline.py resolves it as: storage.local_root + key
+    if stored_path.startswith('LOCAL://'):
+        try:
+            from core.storage import StorageService
+            storage = StorageService()
+            key = stored_path.split('://', 1)[1]
+            actual = os.path.normpath(
+                os.path.join(storage.local_root, key.replace('/', os.sep))
+            )
+            if os.path.exists(actual):
+                return actual
+        except Exception:
+            pass
+
+    # ── 2. Try MEDIA_ROOT / 'ocr_temp' / file_hash (legacy upload cache) ──
+    candidate = os.path.join(settings.MEDIA_ROOT, 'ocr_temp', record.file_hash)
+    if os.path.exists(candidate):
+        return candidate
+
+    # ── 3. Try MEDIA_ROOT joined with the raw stored path ──
+    candidate = os.path.normpath(os.path.join(settings.MEDIA_ROOT, stored_path.lstrip('/')))
+    if os.path.exists(candidate):
+        return candidate
+
+    # ── 4. Treat stored_path as a bare absolute path ──
+    if stored_path and os.path.exists(stored_path):
+        return stored_path
+
+    return None
+
+
+class OCRStagingRowRescanView(views.APIView):
+    """
+    Exposes POST /api/ocr-staging/{id}/rescan to trigger row-level rescan.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        tenant_id = request.user.branch_id
+        record = InvoiceTempOCR.objects.filter(pk=pk, tenant_id=tenant_id).first()
+        if not record:
+            return Response({'error': 'Record not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Confirm the source file exists (handles LOCAL://, MEDIA_ROOT, and bare paths)
+        resolved_path = _resolve_rescan_file_path(record)
+        if not resolved_path:
+            logger.error(
+                f"[ROW_RESCAN_FILE_MISSING] record={record.id} stored_path={record.file_path}"
+            )
+            return Response({
+                'error': (
+                    f'Source file not found for rescan. '
+                    f'Stored path: {record.file_path or "(none)"}. '
+                    f'Please re-upload the invoice to rescan it.'
+                )
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        reason = request.data.get('reason', '')
+
+        with transaction.atomic():
+            rescan_history = RescanHistory.objects.create(
+                invoice_temp_ocr=record,
+                rescan_type='ROW',
+                user=str(request.user.username or request.user.email or request.user.id),
+                reason=reason,
+                cost_impact=0.0
+            )
+
+            # Reset barrier state
+            from ocr_pipeline.models import SessionFinalizationState, InvoicePageResult
+            InvoicePageResult.objects.filter(record_id=record.id).delete()
+            SessionFinalizationState.objects.filter(id=str(record.id)).update(
+                completed_pages=0,
+                failed_pages=0,
+                ai_completed_pages=0,
+                total_pages_completed=0,
+                ai_complete=False,
+                snapshot_created=False,
+                snapshot_complete=False,
+                export_complete=False,
+                materialization_complete=False,
+                status='PROCESSING'
+            )
+
+            # Mark PendingPurchase as active/pending (if exists)
+            from pending_purchases.models import PendingPurchase
+            PendingPurchase.objects.filter(source_scan_row_id=record.id).update(
+                pending_purchase_status='PENDING'
+            )
+
+            # Reset staging record
+            record.status = 'PROCESSING'
+            record.validation_status = 'PENDING'
+            record.processed = False
+            record.extracted_data = None
+            record._bypass_immutability_guard = True
+            record.save()
+
+        # Enqueue the ingestion task
+        try:
+            from vouchers.message_factory import message_factory
+            from copy import deepcopy
+            from core.sqs import queue_service
+
+            rescan_payload = {
+                'item_id': None,
+                'record_id': record.id,
+                'job_id': f"RESCAN_{record.id}_{int(time.time())}",
+                'voucher_type': record.voucher_type,
+                'id': f"rescan_{record.id}_{int(time.time())}",
+                'is_rescan': True,
+                'rescan_history_id': rescan_history.id
+            }
+
+            msg = message_factory.create_message(
+                task_type="INGESTION",
+                tenant_id=tenant_id,
+                session_id=record.upload_session_id,
+                payload=rescan_payload
+            )
+            msg_copy = deepcopy(msg)
+            pushed = queue_service.push(msg_copy, queue_type='ingestion')
+            
+            if pushed:
+                logger.info(f"[ROW_RESCAN_ENQUEUE_SUCCESS] msg_id={msg_copy['id']} record={record.id}")
+            else:
+                logger.error(f"[ROW_RESCAN_ENQUEUE_FAILED] pushed is False for record={record.id}")
+                return Response({'error': 'Failed to enqueue rescan task'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            logger.error(f"Row rescan enqueue failed: {e}")
+            return Response({'error': f"Failed to trigger rescan: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({
+            "success": True,
+            "status": "QUEUED",
+            "message": "Row-level rescan triggered successfully.",
+            "rescan_history_id": rescan_history.id
+        })
+
+
+class OCRStagingSessionRescanView(views.APIView):
+    """
+    Exposes POST /api/ocr-staging/session/{session_id}/rescan to trigger session-level rescan.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, session_id):
+        tenant_id = request.user.branch_id
+        records = list(InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=tenant_id))
+        
+        if not records:
+            return Response({'error': 'No records found for session'}, status=status.HTTP_404_NOT_FOUND)
+
+        reason = request.data.get('reason', '')
+        triggered_count = 0
+
+        # 1. Clean up all InvoicePageResult records for the session atomically
+        with transaction.atomic():
+            from ocr_pipeline.models import InvoicePageResult
+            deleted_count, _ = InvoicePageResult.objects.filter(session_id=session_id).delete()
+            logger.info(f"[SESSION_RESCAN_CLEANUP] Deleted {deleted_count} orphaned/page results for session={session_id}")
+
+            # 2. Reset barrier and record status for ALL records in the session
+            for record in records:
+                from ocr_pipeline.models import SessionFinalizationState
+                SessionFinalizationState.objects.filter(id=str(record.id)).update(
+                    completed_pages=0,
+                    failed_pages=0,
+                    ai_completed_pages=0,
+                    total_pages_completed=0,
+                    ai_complete=False,
+                    snapshot_created=False,
+                    snapshot_complete=False,
+                    export_complete=False,
+                    materialization_complete=False,
+                    status='PROCESSING'
+                )
+
+                # Reset PendingPurchase (if exists)
+                from pending_purchases.models import PendingPurchase
+                PendingPurchase.objects.filter(source_scan_row_id=record.id).update(
+                    pending_purchase_status='PENDING'
+                )
+
+                # Reset staging record
+                record.status = 'PROCESSING'
+                record.validation_status = 'PENDING'
+                record.processed = False
+                record.extracted_data = None
+                record._bypass_immutability_guard = True
+                record.save()
+
+        # 3. Identify unique file paths and trigger rescan for only one record per path
+        unique_file_records = {}
+        for record in records:
+            resolved_path = _resolve_rescan_file_path(record)
+            if not resolved_path:
+                logger.warning(
+                    f"[SESSION_RESCAN_FILE_MISSING] Skipping enqueue for record={record.id} "
+                    f"stored_path={record.file_path}"
+                )
+                continue
+            
+            path = record.file_path
+            # Prefer primary record if multiple records exist for the same file path
+            if path in unique_file_records:
+                if record.is_primary and not unique_file_records[path].is_primary:
+                    unique_file_records[path] = record
+            else:
+                unique_file_records[path] = record
+
+        for record in unique_file_records.values():
+            with transaction.atomic():
+                rescan_history = RescanHistory.objects.create(
+                    invoice_temp_ocr=record,
+                    rescan_type='SESSION',
+                    user=str(request.user.username or request.user.email or request.user.id),
+                    reason=reason,
+                    cost_impact=0.0
+                )
+
+            # Enqueue task
+            try:
+                from vouchers.message_factory import message_factory
+                from copy import deepcopy
+                from core.sqs import queue_service
+
+                rescan_payload = {
+                    'item_id': None,
+                    'record_id': record.id,
+                    'job_id': f"RESCAN_{record.id}_{int(time.time())}",
+                    'voucher_type': record.voucher_type,
+                    'id': f"rescan_{record.id}_{int(time.time())}",
+                    'is_rescan': True,
+                    'rescan_history_id': rescan_history.id
+                }
+
+                msg = message_factory.create_message(
+                    task_type="INGESTION",
+                    tenant_id=tenant_id,
+                    session_id=record.upload_session_id,
+                    payload=rescan_payload
+                )
+                msg_copy = deepcopy(msg)
+                pushed = queue_service.push(msg_copy, queue_type='ingestion')
+                
+                if pushed:
+                    triggered_count += 1
+                    logger.info(f"[SESSION_RESCAN_ENQUEUE_SUCCESS] msg_id={msg_copy['id']} record={record.id}")
+                else:
+                    logger.error(f"[SESSION_RESCAN_ENQUEUE_FAILED] pushed is False for record={record.id}")
+
+            except Exception as e:
+                logger.error(f"Session rescan record={record.id} enqueue failed: {e}")
+
+        return Response({
+            "success": True,
+            "status": "QUEUED",
+            "message": f"Triggered rescan for {triggered_count} records in session.",
+            "triggered_count": triggered_count
+        })

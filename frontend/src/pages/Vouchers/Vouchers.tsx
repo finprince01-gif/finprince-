@@ -3100,16 +3100,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       };
 
       parts.forEach(part => {
-        const lowerPart = part.toLowerCase().replace(/[.\s"]/g, '');
+        let currentPart = part.trim();
+        const pinMatch = currentPart.match(/\b\d{3}\s*[-]?\s*\d{3}\b/);
+        if (pinMatch) {
+          pincode = pinMatch[0].replace(/[^0-9]/g, '');
+          currentPart = currentPart.replace(pinMatch[0], '').replace(/[-\s,]+$/, '').replace(/^[-\s,]+/, '').trim();
+        }
 
-        if (lowerPart === 'india') {
-          country = part;
+        if (!currentPart) {
           return;
         }
 
-        const pinMatch = part.match(/\b\d{6}\b/);
-        if (pinMatch) {
-          pincode = pinMatch[0];
+        const lowerPart = currentPart.toLowerCase().replace(/[.\s"]/g, '');
+
+        if (lowerPart === 'india') {
+          country = currentPart;
           return;
         }
 
@@ -3119,7 +3124,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           return;
         }
 
-        addressLines.push(part);
+        addressLines.push(currentPart);
       });
 
       if (addressLines.length > 0 && !city) {

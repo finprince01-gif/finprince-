@@ -789,3 +789,65 @@ class AICache(models.Model):
         db_table = 'ai_inference_cache'
         verbose_name = "AI Inference Cache"
         verbose_name_plural = "AI Inference Caches"
+
+
+class RescanHistory(models.Model):
+    """
+    Tracks rescan operations performed on InvoiceTempOCR staging records.
+    """
+    invoice_temp_ocr = models.ForeignKey(
+        InvoiceTempOCR, 
+        on_delete=models.CASCADE, 
+        related_name='rescan_history',
+        db_column='invoice_temp_ocr_id'
+    )
+    timestamp = models.DateTimeField(default=timezone.now)
+    rescan_type = models.CharField(max_length=50) # 'ROW' or 'SESSION'
+    user = models.CharField(max_length=255, null=True, blank=True)
+    reason = models.TextField(null=True, blank=True)
+    cost_impact = models.DecimalField(max_digits=10, decimal_places=6, default=0.0)
+
+    class Meta:
+        db_table = 'rescan_history'
+        verbose_name = "Rescan History"
+        verbose_name_plural = "Rescan Histories"
+
+
+class AIUsageAccounting(models.Model):
+    """
+    Tracks token counts and costs associated with Gemini AI extraction calls.
+    Links back to the staging record and optionally the specific rescan run.
+    """
+    invoice_temp_ocr = models.ForeignKey(
+        InvoiceTempOCR,
+        on_delete=models.CASCADE,
+        related_name='ai_usages',
+        db_column='invoice_temp_ocr_id'
+    )
+    rescan_history = models.ForeignKey(
+        RescanHistory,
+        on_delete=models.SET_NULL,
+        related_name='ai_usages',
+        null=True,
+        blank=True,
+        db_column='rescan_history_id'
+    )
+    prompt_tokens = models.IntegerField(default=0)
+    completion_tokens = models.IntegerField(default=0)
+    total_tokens = models.IntegerField(default=0)
+    cost = models.DecimalField(max_digits=10, decimal_places=6, default=0.0)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.rescan_history:
+            from django.db.models import Sum
+            total_cost = AIUsageAccounting.objects.filter(rescan_history=self.rescan_history).aggregate(total=Sum('cost'))['total'] or 0.0
+            self.rescan_history.cost_impact = total_cost
+            self.rescan_history.save(update_fields=['cost_impact'])
+
+    class Meta:
+        db_table = 'ai_usage_accounting'
+        verbose_name = "AI Usage Accounting"
+        verbose_name_plural = "AI Usage Accountings"
+
