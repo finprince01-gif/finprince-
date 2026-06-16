@@ -84,7 +84,31 @@ def evaluate_pending_purchase(record, vendor_status, voucher_status, item_status
     print(trace_msg)
     logger.critical(trace_msg)
 
-    exists_in_queue = PendingPurchase.objects.filter(source_scan_row_id=record.id).exists()
+    # 1. Canonicalize/extract business keys from record and/or ui_row
+    inv_no = (
+        ui_row.get('invoice_no') if ui_row
+        else getattr(record, 'supplier_invoice_no', '')
+    )
+    inv_no = str(inv_no or '').strip().upper()
+
+    gstin_val = (
+        ui_row.get('vendor_gstin') if ui_row
+        else getattr(record, 'gstin', '')
+    )
+    gstin_val = str(gstin_val or '').strip().upper()
+
+    # Search for an active (PENDING) Pending Purchase matching the business keys
+    existing_pp = None
+    if inv_no and gstin_val:
+        existing_pp = PendingPurchase.objects.filter(
+            invoice_number__iexact=inv_no,
+            vendor_gstin__iexact=gstin_val,
+            company_id=tenant_id,
+            branch_id=tenant_id,
+            pending_purchase_status='PENDING'
+        ).first()
+
+    exists_in_queue = (existing_pp is not None) or PendingPurchase.objects.filter(source_scan_row_id=record.id).exists()
 
     if not is_pending and not exists_in_queue:
         logger.info(
@@ -115,40 +139,62 @@ def evaluate_pending_purchase(record, vendor_status, voucher_status, item_status
             or is_duplicate
         ) else 'PENDING'
 
+        # If an existing active Pending Purchase is found for the same business keys, reuse and update it
+        if existing_pp:
+            obj = existing_pp
+            created = False
+            logger.info(f"[PENDING_REUSE] Found existing active PendingPurchase id={obj.id} for invoice={inv_no}. Reusing and linking new staging record={record.id}")
 
-        # ── UPSERT: prevent duplicate queue entries on revalidation ──
-        obj, created = PendingPurchase.objects.update_or_create(
-            source_scan_row_id=record.id,
-            defaults={
-                'company_id': tenant_id,
-                'branch_id': tenant_id,
-                'scan_session_id': record.upload_session_id,
-                'source_document_hash': record.file_hash,
-                'invoice_number': (
-                    ui_row.get('invoice_no') if ui_row
-                    else getattr(record, 'supplier_invoice_no', '')
-                ),
-                'invoice_date': (
-                    ui_row.get('invoice_date') if ui_row
-                    else getattr(record, 'invoice_date', '')
-                ),
-                'vendor_name': (
-                    ui_row.get('vendor_name') if ui_row
-                    else getattr(record, 'vendor_name', '')
-                ),
-                'vendor_gstin': (
-                    ui_row.get('vendor_gstin') if ui_row
-                    else getattr(record, 'gstin', '')
-                ),
-                'amount': ui_row.get('total_amount') if ui_row else None,
-                'vendor_status': vendor_status,
-                'voucher_status': voucher_status,
-                'item_status': item_status,
-                'pending_purchase_status': dynamic_status,
-                'extraction_payload': record.extracted_data,
-                'review_payload': ui_row or {},
-            }
-        )
+            obj.source_scan_row_id = record.id
+            obj.source_document_hash = record.file_hash
+            obj.scan_session_id = record.upload_session_id
+            obj.invoice_number = inv_no
+            obj.invoice_date = (
+                ui_row.get('invoice_date') if ui_row
+                else getattr(record, 'invoice_date', '')
+            )
+            obj.vendor_name = (
+                ui_row.get('vendor_name') if ui_row
+                else getattr(record, 'vendor_name', '')
+            )
+            obj.vendor_gstin = gstin_val
+            obj.amount = ui_row.get('total_amount') if ui_row else getattr(record, 'total_amount', None)
+            obj.vendor_status = vendor_status
+            obj.voucher_status = voucher_status
+            obj.item_status = item_status
+            obj.pending_purchase_status = dynamic_status
+            obj.extraction_payload = record.extracted_data
+            obj.review_payload = ui_row or {}
+            
+            obj.save()
+        else:
+            # Fallback/Default: UPSERT based on source_scan_row_id
+            obj, created = PendingPurchase.objects.update_or_create(
+                source_scan_row_id=record.id,
+                defaults={
+                    'company_id': tenant_id,
+                    'branch_id': tenant_id,
+                    'scan_session_id': record.upload_session_id,
+                    'source_document_hash': record.file_hash,
+                    'invoice_number': inv_no,
+                    'invoice_date': (
+                        ui_row.get('invoice_date') if ui_row
+                        else getattr(record, 'invoice_date', '')
+                    ),
+                    'vendor_name': (
+                        ui_row.get('vendor_name') if ui_row
+                        else getattr(record, 'vendor_name', '')
+                    ),
+                    'vendor_gstin': gstin_val,
+                    'amount': ui_row.get('total_amount') if ui_row else getattr(record, 'total_amount', None),
+                    'vendor_status': vendor_status,
+                    'voucher_status': voucher_status,
+                    'item_status': item_status,
+                    'pending_purchase_status': dynamic_status,
+                    'extraction_payload': record.extracted_data,
+                    'review_payload': ui_row or {},
+                }
+            )
 
         logger.critical(
             f"[PENDING_QUEUE_WRITTEN] "

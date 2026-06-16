@@ -1,0 +1,1406 @@
+--- PENDING PURCHASES ---
+Total PendingPurchase: 35
+ID: 2350
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 1781329211345
+  source_scan_row_id: 1007275
+  source_document_hash: 1693c2402e124b5cfe79341f1463ac60a189b1dcaae3217ec7fb4d648e6c5847
+  invoice_number: UMT25-26/091
+  invoice_date: 29-07-2025
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-13 05:41:23.560149+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_forensic_warning', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', '_integrity_blocked', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2380
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 1781332507785
+  source_scan_row_id: 1007330
+  source_document_hash: 917d31c69b743a675ca78b38339d215afd0da71c6f18cb3bfed58ee6f9a7aedc
+  invoice_number: UMT25-26/091
+  invoice_date: 29-07-2025
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-13 06:36:23.134444+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2404
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: d00ebe9b-2e76-4522-ac56-3237ba2a02bd
+  source_scan_row_id: 1007374
+  source_document_hash: 32199c6220b68819f516f8ea7a53b3981701de7e43d635f30c0708ec45b41206
+  invoice_number: UMT25-26/091
+  invoice_date: 29-07-2025
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-13 10:47:21.047392+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2409
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 62dfeca1-8445-43cc-8ef9-788b9044cfd8
+  source_scan_row_id: 1007379
+  source_document_hash: 6c470921b4e8f6a0137844357e5fea9452a32b454e2ffa7ad3f71a0779350031
+  invoice_number: UMT25-26/091
+  invoice_date: 29-07-2025
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-13 11:09:50.181293+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2412
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 8d3ff71a-9619-484b-947b-2ddeff6c08c1
+  source_scan_row_id: 1007384
+  source_document_hash: 3d2c62a030e07d2ec65c84369af1338f965f622fa3091a6673618a2a21a88c53
+  invoice_number: UMT25-26/091
+  invoice_date: 29-07-2025
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-13 11:11:51.107637+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2470
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: f79f0257-6bd2-42d5-b5d2-f1ece5fa504c
+  source_scan_row_id: 1007452
+  source_document_hash: 10a0aaf0eef0ea659cc30cfe96c41cec8b94f58a0d4f199651699e4e5d3988e8
+  invoice_number: UMT25-26/091
+  invoice_date: 29-07-2025
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 06:43:49.071332+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2489
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: a62186d8-86f2-4fe7-bdfb-4d807bfe4311
+  source_scan_row_id: 1007504
+  source_document_hash: 3c2516ce8194d372b64aff3a13274c91b1e212fd1d9281873b32fdf93fa930df
+  invoice_number: UMT25-26/091
+  invoice_date: 29-07-2025
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 07:52:19.758034+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2491
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 0a4e7876-51b6-477e-b0f5-b1aba361efe6
+  source_scan_row_id: 1007508
+  source_document_hash: 75d496796a0685203ad6b0cbcb87d2b2d887e19414a4d60659d9ac15c7af0789
+  invoice_number: UMT25-26/091
+  invoice_date: 29-07-2025
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 07:55:54.093603+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2493
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 1b016aec-0d8c-4beb-9552-ec616afd706a
+  source_scan_row_id: 1007513
+  source_document_hash: f53f79df21ccbdfb5009fbb65336b698985caeb8630af96e2591117881d7ed88
+  invoice_number: UMT25-26/091
+  invoice_date: 29-07-2025
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 08:04:32.792196+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2495
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: e9af21d5-b509-4c6c-87db-9909011a747a
+  source_scan_row_id: 1007518
+  source_document_hash: 83fb2f510091cc79b6134943c9faacc96e59220b69ae55b41e8c01e9d029705a
+  invoice_number: UMT25-26/091
+  invoice_date: 29-07-2025
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 08:06:37.449964+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2497
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: df710f9e-1b0c-4efd-85d3-abb4955158fd
+  source_scan_row_id: 1007523
+  source_document_hash: eb300da889a1f47ab8933194646cba7c1ca4de50e01f75c9a3c3be96488dd785
+  invoice_number: UMT25-26/091
+  invoice_date: 29-07-2025
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 08:23:15.427708+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2499
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 26982bcc-7b69-4e2c-bd8e-0071c161aa9f
+  source_scan_row_id: 1007528
+  source_document_hash: ab5e5e6948363d2d10269b1085ce0d0c933df8537d4d13e396d8743282804c96
+  invoice_number: UMT25-26/091
+  invoice_date: 29-07-2025
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 08:37:38.272207+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', '_integrity_blocked', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2249
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: c20e24cd-e8b1-4f6b-b79d-65b13fa2a831
+  source_scan_row_id: 1006982
+  source_document_hash: c920c29cbcf22a65c13a5a09559dc302e3a1981a9914b37aa45bfaeda3275d61
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-10 07:17:40.070831+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', '_integrity_blocked', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2342
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 1781328319907
+  source_scan_row_id: 1007266
+  source_document_hash: 92c0c0eebc4ca3175c1e5d74b9676097468b34a1c9f31da6a448728bd0b79a33
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-13 05:26:15.247327+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', '_integrity_blocked', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2347
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 1781329133393
+  source_scan_row_id: 1007271
+  source_document_hash: 575b38a8940fca140f19278827db30fa340537ce51e26a3b0b8756dc2df95133
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-13 05:39:12.751039+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', '_integrity_blocked', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2352
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 1781329211345
+  source_scan_row_id: 1007277
+  source_document_hash: 7b9b79f5ff0884bb39df35cf6019f5d970d4f09b3491ce0a54b96401ab2b300c
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-13 05:41:23.793965+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', '_integrity_blocked', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2382
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 1781332507785
+  source_scan_row_id: 1007332
+  source_document_hash: 8c2b42fce755b4b24dfcaed0f7fa8441c63060f2089a32944648b516252e49c5
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-13 06:36:24.274077+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', '_integrity_blocked', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2406
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: d00ebe9b-2e76-4522-ac56-3237ba2a02bd
+  source_scan_row_id: 1007376
+  source_document_hash: 01df5365819b1d2ff9c5c72b78001faae93764823100ff32eb581434574ffd9a
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-13 10:47:21.286123+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', '_integrity_blocked', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2410
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 62dfeca1-8445-43cc-8ef9-788b9044cfd8
+  source_scan_row_id: 1007381
+  source_document_hash: 0c4264643e953a29f3bef0ca9876e4ca60b80eb818be87c684be80ca7f450cb2
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-13 11:09:52.022353+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', '_integrity_blocked', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2413
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 8d3ff71a-9619-484b-947b-2ddeff6c08c1
+  source_scan_row_id: 1007386
+  source_document_hash: 25a1a96a6ef82b1f8f13acc7fb620357f954befb27977bee7fc6f743a7a0fb16
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-13 11:11:52.308013+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', '_integrity_blocked', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2471
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: f79f0257-6bd2-42d5-b5d2-f1ece5fa504c
+  source_scan_row_id: 1007454
+  source_document_hash: 809747346fbdd223407069d16c8ffb6ec265cdc207cc21102d374276eb3b1c12
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 06:43:49.434433+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2473
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 0a4e7876-51b6-477e-b0f5-b1aba361efe6
+  source_scan_row_id: 1007459
+  source_document_hash: 8df412aec9086e28ef592b4d9fc2a991227b24b2b98f02e138fb44046d8c75e8
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 06:45:17.331486+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2476
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 4e03a497-9ae5-4bae-8f09-de1d89a2bf90
+  source_scan_row_id: 1007470
+  source_document_hash: 7e5d7b4686adaabb1cd0a5558563e8d189288e76fc6a83c6ebb3c34f7632b755
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 07:02:54.434134+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2478
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 4e9182c9-f00e-4a9d-b826-95f33759e46f
+  source_scan_row_id: 1007475
+  source_document_hash: b460eecc591a7f45876a62eccdb5ed6184a927e5dd541d5b89a0f5e3dea810c6
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 07:03:13.952317+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2480
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 094371b6-7840-446f-92f1-bf2c1418dd35
+  source_scan_row_id: 1007480
+  source_document_hash: 7ab0fca72de89385f6097be748892328b73e597e8fd43970c8e517b6e5d66da5
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 07:07:49.627669+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2482
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: f091328d-69de-4146-bd24-a03e606f583b
+  source_scan_row_id: 1007485
+  source_document_hash: 277c586505283f347cd414d5414f4b30578c34e1a89c8b251f6be51c3e4b44d7
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 07:11:23.304681+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2484
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 28c9ba2d-bf66-4118-8b70-543e2458ff38
+  source_scan_row_id: 1007490
+  source_document_hash: f59704be791aece3123275e8c0fc1ff514f655350912488db14db018cda4363b
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 07:21:08.343765+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2486
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 0a4e7876-51b6-477e-b0f5-b1aba361efe6
+  source_scan_row_id: 1007495
+  source_document_hash: 752755a12c9cd46350feb6387e9056bca463f748098f7e3441743c1ba2aee46a
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 07:38:21.126526+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2488
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 0f6a519b-6013-4756-8623-35d39cd979f4
+  source_scan_row_id: 1007500
+  source_document_hash: d5d26828b4dace2c89cc4b85bd347197ba016710ce15848aba6abf69a48ca574
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 07:38:49.495957+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2490
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: a62186d8-86f2-4fe7-bdfb-4d807bfe4311
+  source_scan_row_id: 1007506
+  source_document_hash: afe7e9ceba83fe2aee437c799d6e3886948d704283938024ef28e273c658abc1
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 07:52:20.235782+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2492
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 0a4e7876-51b6-477e-b0f5-b1aba361efe6
+  source_scan_row_id: 1007510
+  source_document_hash: 14c0d1a9ed9be4bff333af6e305454146ee9859ff564e7f34ece6874c3d5348e
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 07:55:54.618302+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2494
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 1b016aec-0d8c-4beb-9552-ec616afd706a
+  source_scan_row_id: 1007515
+  source_document_hash: 826e8eb2f24fa24e21dbfdbf3491983a60355797b05c4ea8781cd3c0a88ba521
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 08:04:33.175107+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2496
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: e9af21d5-b509-4c6c-87db-9909011a747a
+  source_scan_row_id: 1007520
+  source_document_hash: 54fce304a3a9de6558ef2f5962b9394c31d5814c395d42b9441f4a524f609040
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 08:06:37.963230+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2498
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: df710f9e-1b0c-4efd-85d3-abb4955158fd
+  source_scan_row_id: 1007525
+  source_document_hash: feac3f3172b62e778814200c7acffe0f940be791039967ba1c26e3be1625f28f
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 08:23:16.413940+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+ID: 2500
+  company_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  branch_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  scan_session_id: 26982bcc-7b69-4e2c-bd8e-0071c161aa9f
+  source_scan_row_id: 1007530
+  source_document_hash: e1e184651a9e2323eda27f2e287fcc595430b2e32d2dd4a1813098e960d22c64
+  invoice_number: UMT25-26/251
+  invoice_date: 26-02-2026
+  vendor_name: ULTRA MACHINE TOOLS AND SERVICE
+  vendor_gstin: 33BTPPM6743D1ZF
+  amount: None
+  vendor_status: VENDOR_STATUS_EXISTING
+  voucher_status: VOUCHER_STATUS_NEW
+  item_status: ITEM_STATUS_CREATE
+  pending_purchase_status: PENDING
+  created_at: 2026-06-16 08:37:41.689431+00:00
+  extraction_payload keys: ['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', '_integrity_blocked', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+  review_payload keys: ['invoice_no', 'vendor_name', 'invoice_date', 'total_amount', 'vendor_gstin']
+----------------------------------------
+
+--- INVOICE TEMP OCR ---
+Total InvoiceTempOCR: 46
+ID: 1004441
+  file_hash: f8fe36dd40d4b5d10d6d168b43a8a3d59c976a2f58d5cf75e6b5b8e190788b9f
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: jobs/638/8d05065c---IMG_20260319_0013.pdf
+  upload_session_id: 1780298492778
+  status: FINALIZED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: PENDING
+  vendor_id: None
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTTPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-01 07:22:31.172609+00:00
+----------------------------------------
+ID: 1004443
+  file_hash: 6ee0619bdad17567d6378b77d72ae8ce54b15390b72809e8145a39b2b6f29baf
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: jobs/638/8d05065c---IMG_20260319_0013.pdf
+  upload_session_id: 1780298492778
+  status: FINALIZED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: PENDING
+  vendor_id: None
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTTPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-01 07:22:31.172609+00:00
+----------------------------------------
+ID: 1006375
+  file_hash: 9adaff0249ce031390cd78aa5ec3924a67f86c247c9018d7fb24cc4da05d799e
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/d3cffab9-6290-4633-bec1-c39a9b0ec176/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: audit_run_1_72b5b5_IMG_20260319_0013_pdf
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: PENDING
+  vendor_id: None
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTTPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-08 06:39:47.583081+00:00
+----------------------------------------
+ID: 1006437
+  file_hash: 70b1154ce35b5c07a59c6a2cee86a5b77c485a1e65053eecc61eb78ac8b70c6a
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/83a179f3-4523-4b94-a2c5-a4321ba62d52/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: audit_run_2_3733b7_IMG_20260319_0013_pdf
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: PENDING
+  vendor_id: None
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTTPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-08 06:41:33.688891+00:00
+----------------------------------------
+ID: 1006621
+  file_hash: 100ac89fa99c5890a8ddf8945289c1374cb36a068e7b2c518ae2d8f050294d53
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/f9e0ee54-4ce1-4f2b-a7d1-c2578ae00e8d/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: audit_run_3_3906dd_IMG_20260319_0013_pdf
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: PENDING
+  vendor_id: None
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTTPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-08 06:45:06.125306+00:00
+----------------------------------------
+ID: 1006982
+  file_hash: c920c29cbcf22a65c13a5a09559dc302e3a1981a9914b37aa45bfaeda3275d61
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/8f9f35e6-0ed5-46b8-9824-f64bbf70e146/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: c20e24cd-e8b1-4f6b-b79d-65b13fa2a831
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-10 07:17:38.064568+00:00
+----------------------------------------
+ID: 1007266
+  file_hash: 92c0c0eebc4ca3175c1e5d74b9676097468b34a1c9f31da6a448728bd0b79a33
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: jobs/749/5fd0f0ce---IMG_20260319_0013.pdf
+  upload_session_id: 1781328319907
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 05:26:11.083082+00:00
+----------------------------------------
+ID: 1007271
+  file_hash: 575b38a8940fca140f19278827db30fa340537ce51e26a3b0b8756dc2df95133
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: jobs/750/c778f88c---IMG_20260319_0013.pdf
+  upload_session_id: 1781329133393
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 05:39:06.772984+00:00
+----------------------------------------
+ID: 1007275
+  file_hash: 1693c2402e124b5cfe79341f1463ac60a189b1dcaae3217ec7fb4d648e6c5847
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: jobs/752/ee0c0a11---IMG_20260319_0013.pdf
+  upload_session_id: 1781329211345
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 05:41:21.763813+00:00
+----------------------------------------
+ID: 1007277
+  file_hash: 7b9b79f5ff0884bb39df35cf6019f5d970d4f09b3491ce0a54b96401ab2b300c
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: jobs/752/ee0c0a11---IMG_20260319_0013.pdf
+  upload_session_id: 1781329211345
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 05:41:21.763813+00:00
+----------------------------------------
+ID: 1007298
+  file_hash: 93e1603afa7d37298e2a1797050bdc072158df790696c16823c504f7cd692acc
+  tenant_id: parity-test-tenant
+  file_path: parity_test/IMG_20260319_0013.pdf
+  upload_session_id: forensic-run-1781329705
+  status: FINALIZED
+  processed: False
+  validation_status: NEED_TO_SAVE
+  vendor_status: PENDING
+  vendor_id: None
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTTMPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 05:49:38.495629+00:00
+----------------------------------------
+ID: 1007300
+  file_hash: 642d94680f8e94b226018bb561337aff718cbd9c9fabe5617fe43ef89824e0a5
+  tenant_id: parity-test-tenant
+  file_path: parity_test/IMG_20260319_0013.pdf
+  upload_session_id: forensic-run-1781329705
+  status: FINALIZED
+  processed: False
+  validation_status: NEED_TO_SAVE
+  vendor_status: PENDING
+  vendor_id: None
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTTMPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 05:49:38.495629+00:00
+----------------------------------------
+ID: 1007303
+  file_hash: 260b64222c10b27352a4c8252ceb7f340107d50ae50e2cb0e462161243a05125
+  tenant_id: parity-test-tenant
+  file_path: parity_test/IMG_20260319_0013.pdf
+  upload_session_id: forensic-run-1781329806
+  status: FINALIZED
+  processed: False
+  validation_status: NEED_TO_SAVE
+  vendor_status: PENDING
+  vendor_id: None
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTTMPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 05:51:17.228256+00:00
+----------------------------------------
+ID: 1007305
+  file_hash: da1bd39c0dbfaf2f95fa1de7c46b7e3316b94cedfa6a6e4e2fa8f33d20f6392e
+  tenant_id: parity-test-tenant
+  file_path: parity_test/IMG_20260319_0013.pdf
+  upload_session_id: forensic-run-1781329806
+  status: FINALIZED
+  processed: False
+  validation_status: NEED_TO_SAVE
+  vendor_status: PENDING
+  vendor_id: None
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTTMPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 05:51:17.228256+00:00
+----------------------------------------
+ID: 1007319
+  file_hash: 2c326e599c90bf64ca2505631a591d6693ee2449ab7afb14ed8441e9ca9eb7e6
+  tenant_id: parity-test-tenant
+  file_path: parity_test/IMG_20260319_0013.pdf
+  upload_session_id: forensic-run-1781330420
+  status: FINALIZED
+  processed: False
+  validation_status: NEED_TO_SAVE
+  vendor_status: PENDING
+  vendor_id: None
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTTMPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 06:01:33.824443+00:00
+----------------------------------------
+ID: 1007321
+  file_hash: 88bd1db6ac7e8cd0114ba6e3fd36e2ca893ed19a0fbbdda20d29d85bc99d3677
+  tenant_id: parity-test-tenant
+  file_path: parity_test/IMG_20260319_0013.pdf
+  upload_session_id: forensic-run-1781330420
+  status: FINALIZED
+  processed: False
+  validation_status: NEED_TO_SAVE
+  vendor_status: PENDING
+  vendor_id: None
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTTMPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 06:01:33.824443+00:00
+----------------------------------------
+ID: 1007325
+  file_hash: bbe1a33c2b7eaf72969913139cf69c05c6f852280970cb027b5f11e88f49a81a
+  tenant_id: parity-test-tenant
+  file_path: parity_test/IMG_20260319_0013.pdf
+  upload_session_id: forensic-run-1781332046
+  status: FINALIZED
+  processed: False
+  validation_status: NEED_TO_SAVE
+  vendor_status: PENDING
+  vendor_id: None
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTTPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 06:28:38.060488+00:00
+----------------------------------------
+ID: 1007327
+  file_hash: 7b1d1dc52e80d3d41500c9b3677c4fb0ec11e593dba8cba952b8d9b3d0c518a5
+  tenant_id: parity-test-tenant
+  file_path: parity_test/IMG_20260319_0013.pdf
+  upload_session_id: forensic-run-1781332046
+  status: FINALIZED
+  processed: False
+  validation_status: NEED_TO_SAVE
+  vendor_status: PENDING
+  vendor_id: None
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTTPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 06:28:38.060488+00:00
+----------------------------------------
+ID: 1007330
+  file_hash: 917d31c69b743a675ca78b38339d215afd0da71c6f18cb3bfed58ee6f9a7aedc
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: jobs/753/e57aca15---IMG_20260319_0013.pdf
+  upload_session_id: 1781332507785
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 06:36:16.226257+00:00
+----------------------------------------
+ID: 1007332
+  file_hash: 8c2b42fce755b4b24dfcaed0f7fa8441c63060f2089a32944648b516252e49c5
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: jobs/753/e57aca15---IMG_20260319_0013.pdf
+  upload_session_id: 1781332507785
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 06:36:16.226257+00:00
+----------------------------------------
+ID: 1007374
+  file_hash: 32199c6220b68819f516f8ea7a53b3981701de7e43d635f30c0708ec45b41206
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/a9611bdc-6115-444b-a24b-a9afae7ae79c/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: d00ebe9b-2e76-4522-ac56-3237ba2a02bd
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 10:47:19.289971+00:00
+----------------------------------------
+ID: 1007376
+  file_hash: 01df5365819b1d2ff9c5c72b78001faae93764823100ff32eb581434574ffd9a
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/a9611bdc-6115-444b-a24b-a9afae7ae79c/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: d00ebe9b-2e76-4522-ac56-3237ba2a02bd
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 10:47:19.289971+00:00
+----------------------------------------
+ID: 1007379
+  file_hash: 6c470921b4e8f6a0137844357e5fea9452a32b454e2ffa7ad3f71a0779350031
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/a6c0ca6a-1e21-42df-9e45-4ce972390a14/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: 62dfeca1-8445-43cc-8ef9-788b9044cfd8
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 11:09:46.094936+00:00
+----------------------------------------
+ID: 1007381
+  file_hash: 0c4264643e953a29f3bef0ca9876e4ca60b80eb818be87c684be80ca7f450cb2
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/a6c0ca6a-1e21-42df-9e45-4ce972390a14/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: 62dfeca1-8445-43cc-8ef9-788b9044cfd8
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 11:09:46.094936+00:00
+----------------------------------------
+ID: 1007384
+  file_hash: 3d2c62a030e07d2ec65c84369af1338f965f622fa3091a6673618a2a21a88c53
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/020a2855-ffad-4fbf-801a-5491c6131767/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: 8d3ff71a-9619-484b-947b-2ddeff6c08c1
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 11:11:47.177053+00:00
+----------------------------------------
+ID: 1007386
+  file_hash: 25a1a96a6ef82b1f8f13acc7fb620357f954befb27977bee7fc6f743a7a0fb16
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/020a2855-ffad-4fbf-801a-5491c6131767/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: 8d3ff71a-9619-484b-947b-2ddeff6c08c1
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-13 11:11:47.178066+00:00
+----------------------------------------
+ID: 1007452
+  file_hash: 10a0aaf0eef0ea659cc30cfe96c41cec8b94f58a0d4f199651699e4e5d3988e8
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/0e4cdf54-9378-4a4d-b903-a1c7c2a5ef29/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: f79f0257-6bd2-42d5-b5d2-f1ece5fa504c
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 06:43:47.378458+00:00
+----------------------------------------
+ID: 1007454
+  file_hash: 809747346fbdd223407069d16c8ffb6ec265cdc207cc21102d374276eb3b1c12
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/0e4cdf54-9378-4a4d-b903-a1c7c2a5ef29/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: f79f0257-6bd2-42d5-b5d2-f1ece5fa504c
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 06:43:47.378458+00:00
+----------------------------------------
+ID: 1007470
+  file_hash: 7e5d7b4686adaabb1cd0a5558563e8d189288e76fc6a83c6ebb3c34f7632b755
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/3094c814-dc84-487c-8d1f-906bfea1141a/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_42541b9304f54b9ebd915b42ab94635f_test.pdf
+  upload_session_id: 4e03a497-9ae5-4bae-8f09-de1d89a2bf90
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 07:02:52.983931+00:00
+----------------------------------------
+ID: 1007475
+  file_hash: b460eecc591a7f45876a62eccdb5ed6184a927e5dd541d5b89a0f5e3dea810c6
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/bfd16d9c-b3fd-4ca8-8096-f6cfb0b6360f/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_6ffcfa46889b4752bdbf9979ef67a499_test.pdf
+  upload_session_id: 4e9182c9-f00e-4a9d-b826-95f33759e46f
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 07:03:12.489651+00:00
+----------------------------------------
+ID: 1007480
+  file_hash: 7ab0fca72de89385f6097be748892328b73e597e8fd43970c8e517b6e5d66da5
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/7742b88d-d6ea-48cd-8734-ad8dc4c58c34/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_ed4767bef5ea477ba90acb5304395147_test.pdf
+  upload_session_id: 094371b6-7840-446f-92f1-bf2c1418dd35
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 07:07:48.168180+00:00
+----------------------------------------
+ID: 1007485
+  file_hash: 277c586505283f347cd414d5414f4b30578c34e1a89c8b251f6be51c3e4b44d7
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/626122ba-efcb-485b-b3ce-baf04070f85b/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_4a61bcaccc2e4edab3fa7aa97620d334_test.pdf
+  upload_session_id: f091328d-69de-4146-bd24-a03e606f583b
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 07:11:21.840365+00:00
+----------------------------------------
+ID: 1007490
+  file_hash: f59704be791aece3123275e8c0fc1ff514f655350912488db14db018cda4363b
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/9ad29fbe-d0d0-4ef2-99ea-34d82c742b0e/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_9a423fd248714d5ea51ddf4187dd7147_test.pdf
+  upload_session_id: 28c9ba2d-bf66-4118-8b70-543e2458ff38
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 07:21:06.978373+00:00
+----------------------------------------
+ID: 1007500
+  file_hash: d5d26828b4dace2c89cc4b85bd347197ba016710ce15848aba6abf69a48ca574
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/07284c86-def5-4e4c-9776-6c4c216ca089/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_08eeb34cfcbc44c08eba06e87437a7d7_test.pdf
+  upload_session_id: 0f6a519b-6013-4756-8623-35d39cd979f4
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 07:38:48.054836+00:00
+----------------------------------------
+ID: 1007504
+  file_hash: 3c2516ce8194d372b64aff3a13274c91b1e212fd1d9281873b32fdf93fa930df
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/de281a6c-35a0-4f5c-abe8-0e79922b6051/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: a62186d8-86f2-4fe7-bdfb-4d807bfe4311
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 07:52:18.320884+00:00
+----------------------------------------
+ID: 1007506
+  file_hash: afe7e9ceba83fe2aee437c799d6e3886948d704283938024ef28e273c658abc1
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/de281a6c-35a0-4f5c-abe8-0e79922b6051/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: a62186d8-86f2-4fe7-bdfb-4d807bfe4311
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 07:52:18.320884+00:00
+----------------------------------------
+ID: 1007508
+  file_hash: 75d496796a0685203ad6b0cbcb87d2b2d887e19414a4d60659d9ac15c7af0789
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/1a14ef08-c0a5-4b90-ba5a-d95f6a17a5c2/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: 0a4e7876-51b6-477e-b0f5-b1aba361efe6
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 07:55:53.284585+00:00
+----------------------------------------
+ID: 1007510
+  file_hash: 14c0d1a9ed9be4bff333af6e305454146ee9859ff564e7f34ece6874c3d5348e
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/1a14ef08-c0a5-4b90-ba5a-d95f6a17a5c2/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: 0a4e7876-51b6-477e-b0f5-b1aba361efe6
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 07:55:53.284585+00:00
+----------------------------------------
+ID: 1007513
+  file_hash: f53f79df21ccbdfb5009fbb65336b698985caeb8630af96e2591117881d7ed88
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/f42ebab0-d3d7-4617-9685-381f60f04302/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_3b4b699a18864015a6faa98dd9584c65_test.pdf
+  upload_session_id: 1b016aec-0d8c-4beb-9552-ec616afd706a
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 08:04:32.112629+00:00
+----------------------------------------
+ID: 1007515
+  file_hash: 826e8eb2f24fa24e21dbfdbf3491983a60355797b05c4ea8781cd3c0a88ba521
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/f42ebab0-d3d7-4617-9685-381f60f04302/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_3b4b699a18864015a6faa98dd9584c65_test.pdf
+  upload_session_id: 1b016aec-0d8c-4beb-9552-ec616afd706a
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 08:04:32.112629+00:00
+----------------------------------------
+ID: 1007518
+  file_hash: 83fb2f510091cc79b6134943c9faacc96e59220b69ae55b41e8c01e9d029705a
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/74a6bdf9-f422-45e6-a3e8-0555eb477e45/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_69952a3a86a6424bb495393fec4bf853_test.pdf
+  upload_session_id: e9af21d5-b509-4c6c-87db-9909011a747a
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 08:06:35.658644+00:00
+----------------------------------------
+ID: 1007520
+  file_hash: 54fce304a3a9de6558ef2f5962b9394c31d5814c395d42b9441f4a524f609040
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/74a6bdf9-f422-45e6-a3e8-0555eb477e45/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_69952a3a86a6424bb495393fec4bf853_test.pdf
+  upload_session_id: e9af21d5-b509-4c6c-87db-9909011a747a
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 08:06:35.659212+00:00
+----------------------------------------
+ID: 1007523
+  file_hash: eb300da889a1f47ab8933194646cba7c1ca4de50e01f75c9a3c3be96488dd785
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/19a9607e-e872-4aad-91ba-36b31b33a95a/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: df710f9e-1b0c-4efd-85d3-abb4955158fd
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 08:23:14.327526+00:00
+----------------------------------------
+ID: 1007525
+  file_hash: feac3f3172b62e778814200c7acffe0f940be791039967ba1c26e3be1625f28f
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/19a9607e-e872-4aad-91ba-36b31b33a95a/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: df710f9e-1b0c-4efd-85d3-abb4955158fd
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 08:23:14.327526+00:00
+----------------------------------------
+ID: 1007528
+  file_hash: ab5e5e6948363d2d10269b1085ce0d0c933df8537d4d13e396d8743282804c96
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/65b9be9f-4ebc-40f8-b43d-86bfdefdb214/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: 26982bcc-7b69-4e2c-bd8e-0071c161aa9f
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/091
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 08:37:34.506140+00:00
+----------------------------------------
+ID: 1007530
+  file_hash: e1e184651a9e2323eda27f2e287fcc595430b2e32d2dd4a1813098e960d22c64
+  tenant_id: 2eda0ac6-6af2-493e-8792-bc973fe946b7
+  file_path: LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/65b9be9f-4ebc-40f8-b43d-86bfdefdb214/44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa_IMG_20260319_0013.pdf
+  upload_session_id: 26982bcc-7b69-4e2c-bd8e-0071c161aa9f
+  status: COMPLETED
+  processed: True
+  validation_status: PENDING_PURCHASE
+  vendor_status: EXISTS
+  vendor_id: 39
+  voucher_id: None
+  supplier_invoice_no: UMT25-26/251
+  gstin: 33BTPPM6743D1ZF
+  branch: COIMBATORE
+  created_at: 2026-06-16 08:37:34.507731+00:00
+----------------------------------------
