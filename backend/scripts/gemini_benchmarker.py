@@ -8,7 +8,7 @@ import statistics
 import json
 
 # Setup Django
-sys.path.append(os.getcwd())
+sys.path.append(os.path.join(os.getcwd(), 'backend'))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
 

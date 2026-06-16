@@ -148,8 +148,42 @@ class CircuitBreaker:
         if self.failures > 0: self.failures -= 1
 
 class RateLimiter:
+    def _get_redis(self):
+        from core.redis_orchestrator import orchestrator
+        if not orchestrator.redis:
+            orchestrator._connect()
+        return orchestrator.redis
+
     def check_rate_limit(self, key: str, limit: int = None, window: float = 1.0) -> Dict[str, Any]:
-        return {'allowed': True, 'retry_after': 0}
+        r = self._get_redis()
+        if not r:
+            return {'allowed': True, 'retry_after': 0}
+        
+        if limit is None:
+            limit = int(os.getenv('AI_MAX_RPS', '10'))
+
+        now = time.time()
+        clear_before = now - window
+        
+        try:
+            pipe = r.pipeline()
+            pipe.zremrangebyscore(key, 0, clear_before)
+            pipe.zcard(key)
+            pipe.zadd(key, {str(now): now})
+            pipe.expire(key, int(window * 2) or 1)
+            
+            res = pipe.execute()
+            count = res[1]
+            
+            if count >= limit:
+                r.zrem(key, str(now))
+                retry_after = max(0.1, window - (now - clear_before))
+                return {'allowed': False, 'retry_after': retry_after}
+                
+            return {'allowed': True, 'retry_after': 0}
+        except Exception as e:
+            logger.error(f"[RATE_LIMIT_ERROR] {e}")
+            return {'allowed': True, 'retry_after': 0}
 
 class DistributedConcurrencyManager:
     """
@@ -299,6 +333,24 @@ def process_ai_request(request_data: dict) -> dict:
         metrics.increment_counter("ai:throttled", tags={"tenant": tenant_id})
         logger.warning(f"[QUEUE_MESSAGE_DEADLOCK] [AI_METRIC] TENANT_THROTTLED tenant_id={tenant_id} - AI system is at capacity.")
         raise ProviderSaturatedError('AI system is at capacity.')
+
+    # ── [AI PROVIDER RPS LIMITING WITH BACK-PRESSURE] ──
+    max_rps = int(os.getenv('AI_MAX_RPS', '10'))
+    rate_limit_key = "ai_rate_limit:global"
+    
+    acquired_rate_limit = False
+    # Retry up to 300 times with 100ms sleeps (max 30 seconds back-pressure)
+    for attempt in range(300):
+        res = rate_limiter.check_rate_limit(rate_limit_key, limit=max_rps, window=1.0)
+        if res.get('allowed'):
+            acquired_rate_limit = True
+            break
+        sleep_time = res.get('retry_after') or 0.1
+        time.sleep(min(sleep_time, 1.0))
+        
+    if not acquired_rate_limit:
+        logger.error(f"[RATE_LIMIT_EXCEEDED] Global AI RPS limit of {max_rps} exceeded after 30s back-pressure.")
+        raise ProviderSaturatedError('AI provider rate limit reached.')
 
     try:
         if os.getenv('MOCK_EXTRACTION_MODE', 'false').lower() == 'true':

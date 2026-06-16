@@ -634,11 +634,8 @@ class InventoryItemValidationService:
         if not items_dto:
             voucher_status = None
         else:
-            has_already_exist = any(i.get("item_status") in ("ALREADY EXIST", "ALREADY_EXIST") for i in items_dto)
             has_create_item = any(i.get("item_status") in ("CREATE ITEM", "CREATE_ITEM") for i in items_dto)
-            if has_already_exist and has_create_item:
-                voucher_status = "PARTIAL"
-            elif has_create_item:
+            if has_create_item:
                 voucher_status = "CREATE ITEM"
             else:
                 voucher_status = "ALREADY EXIST"

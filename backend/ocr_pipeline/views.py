@@ -482,7 +482,7 @@ class CleanOCRStagingView(views.APIView):
                  }
 
         ui_status = v_status or "PENDING"
-        if v_status == 'DUPLICATE':
+        if v_status in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
             ui_status = 'DUPLICATE'
         elif is_failed: 
             ui_status = 'EXTRACTION_FAILED'
@@ -540,10 +540,7 @@ class CleanOCRStagingView(views.APIView):
             child_statuses = [s for s in child_statuses if s]  # Filter None/empty
             if child_statuses:
                 has_create = any(s in ("CREATE ITEM", "CREATE_ITEM") for s in child_statuses)
-                has_exists = any(s in ("ALREADY EXIST", "ALREADY_EXIST") for s in child_statuses)
-                if has_create and has_exists:
-                    item_status = "PARTIAL"
-                elif has_create:
+                if has_create:
                     item_status = "CREATE ITEM"
                 else:
                     item_status = "ALREADY EXIST"
@@ -552,6 +549,9 @@ class CleanOCRStagingView(views.APIView):
                     f"child_count={len(child_statuses)} child_statuses={child_statuses} "
                     f"derived_aggregate={item_status}"
                 )
+
+        if ui_status == 'DUPLICATE':
+            item_status = 'ALREADY EXIST'
 
         # PHASE 2: PRINT REAL STRUCTURES - after hydration
         logger.critical(
@@ -916,10 +916,17 @@ class CleanOCRStagingView(views.APIView):
                     raw_rows = snapshot_data.get('data', [])
                     for row in raw_rows:
                         inv_no = row.get('invoice_no')
-                        db_record = InvoiceTempOCR.objects.filter(
-                            upload_session_id=session_id,
-                            supplier_invoice_no=inv_no
-                        ).first()
+                        db_record = None
+                        if row.get('file_hash'):
+                            db_record = InvoiceTempOCR.objects.filter(
+                                upload_session_id=session_id,
+                                file_hash=row.get('file_hash')
+                            ).first()
+                        if not db_record and inv_no:
+                            db_record = InvoiceTempOCR.objects.filter(
+                                upload_session_id=session_id,
+                                supplier_invoice_no__iexact=inv_no
+                            ).first()
                         if not db_record and row.get('id'):
                             db_record = InvoiceTempOCR.objects.filter(id=row.get('id')).first()
                         
@@ -1002,11 +1009,17 @@ class CleanOCRStagingView(views.APIView):
                     inv_no = row.get('invoice_no')
                     gstin_val = row.get('gstin')
 
-                    db_record = InvoiceTempOCR.objects.filter(
-                        upload_session_id=session_id,
-                        supplier_invoice_no=inv_no
-                    ).first()
-
+                    db_record = None
+                    if row.get('file_hash'):
+                        db_record = InvoiceTempOCR.objects.filter(
+                            upload_session_id=session_id,
+                            file_hash=row.get('file_hash')
+                        ).first()
+                    if not db_record and inv_no:
+                        db_record = InvoiceTempOCR.objects.filter(
+                            upload_session_id=session_id,
+                            supplier_invoice_no__iexact=inv_no
+                        ).first()
                     if not db_record and row.get('id'):
                         db_record = InvoiceTempOCR.objects.filter(id=row.get('id')).first()
 
@@ -1501,10 +1514,7 @@ class OCRStagingMatchItemView(views.APIView):
 
             # Recompute overall item_status based on all items
             has_create = any(itm.get('item_status') in ('CREATE ITEM', 'CREATE_ITEM') for itm in items)
-            has_exist = any(itm.get('item_status') in ('ALREADY EXIST', 'ALREADY_EXIST') for itm in items)
-            if has_create and has_exist:
-                overall_item_status = 'PARTIAL'
-            elif has_create:
+            if has_create:
                 overall_item_status = 'CREATE ITEM'
             else:
                 overall_item_status = 'ALREADY EXIST'
