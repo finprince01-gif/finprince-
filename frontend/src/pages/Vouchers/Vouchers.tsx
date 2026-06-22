@@ -115,6 +115,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const isExistingVoucherRef = useRef(!!viewVoucherData);
   const [drillDownDetails, setDrillDownDetails] = useState<any>(null);
   const [drillDownLoading, setDrillDownLoading] = useState(false);
+  const [amendedVoucherDetails, setAmendedVoucherDetails] = useState<any>(null);
+  const [isViewingAmended, setIsViewingAmended] = useState(false);
   const [activeOcrSessionId, setActiveOcrSessionId] = useState<string | null>(null);
   const [activeOcrFileHash, setActiveOcrFileHash] = useState<string | null>(null);
   const [activeOcrFileName, setActiveOcrFileName] = useState<string | null>(null);
@@ -1093,7 +1095,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     // Attempt to find the most accurate ledger ID
     const findLedgerId = (name: string) => {
       if (!name) return null;
-      
+
       let matchedVendor: any = null;
 
       if (name.startsWith('vend-')) {
@@ -1106,12 +1108,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
       if (matchedVendor) {
         if (matchedVendor.ledger_id || matchedVendor.ledger) {
-            return matchedVendor.ledger_id || matchedVendor.ledger;
+          return matchedVendor.ledger_id || matchedVendor.ledger;
         }
         // Fallback: look up by vendor_name in ledgers
         if (matchedVendor.vendor_name) {
-            const vendorLedger = ledgers.find(l => (l.name || '').toLowerCase().trim() === (matchedVendor.vendor_name || '').toLowerCase().trim());
-            if (vendorLedger?.id) return vendorLedger.id;
+          const vendorLedger = ledgers.find(l => (l.name || '').toLowerCase().trim() === (matchedVendor.vendor_name || '').toLowerCase().trim());
+          if (vendorLedger?.id) return vendorLedger.id;
         }
       }
 
@@ -1140,7 +1142,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         const vendorLedger = ledgers.find(l => (l.name || '').toLowerCase().trim() === (vendor.vendor_name || '').toLowerCase().trim());
         if (vendorLedger?.id) return vendorLedger.id;
       }
-      
+
       return null;
     };
 
@@ -4982,6 +4984,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       setIsReadOnlyMode(false);
       isExistingVoucherRef.current = false; // Reset: no existing voucher loaded
       setDrillDownDetails(null);
+      setIsViewingAmended(false);
       return;
     }
 
@@ -5028,9 +5031,31 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
 
     setDrillDownLoading(true);
-    apiService.getVoucher(voucherId, {}, source).then(details => {
-      if (details) {
-        setDrillDownDetails({ ...details, _mappedType: mappedType, _rawEntry: viewVoucherData });
+    apiService.getVoucher(voucherId, {}, source).then(apiDetails => {
+      if (apiDetails) {
+        const viewAsGSTFiled = viewVoucherData?._viewAsGSTFiled === true && !isViewingAmended;
+        
+        let displayData = apiDetails;
+        if (viewAsGSTFiled && apiDetails.original_voucher_snapshot) {
+          displayData = apiDetails.original_voucher_snapshot;
+          // Store the amended version for the "View Amendmented" toggle
+          setAmendedVoucherDetails({ ...apiDetails, _mappedType: mappedType, _rawEntry: viewVoucherData });
+        } else if (viewAsGSTFiled) {
+          // Forced GST filed view, no snapshot
+          displayData = { ...apiDetails, amendment_date: null };
+          setAmendedVoucherDetails(null);
+        } else {
+          // Normal view (from Daybook/Vouchers) - shows CURRENT state (Amended if it is)
+          displayData = apiDetails;
+          if (!isViewingAmended) {
+            setAmendedVoucherDetails(null);
+          }
+        }
+
+        setDrillDownDetails({ ...displayData, _mappedType: mappedType, _rawEntry: viewVoucherData });
+        
+        // Shadow details so the entire hydration block below reads from displayData (which may be the snapshot)
+        const details = displayData;
         // Also hydrate form fields for when user clicks Edit
         setDate(details.date ? new Date(details.date).toISOString().split('T')[0] : getTodayDate());
         setNarration(details.narration || '');
@@ -5134,6 +5159,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             voucher_name: details.voucher_name || details.voucher_series || details.sales_series || details.sales_voucher_series || '',
             branch: details.branch || '',
             gstin: details.gstin || '',
+            gst_registered: details.gst_registered,
             invoiceDate: details.date ? new Date(details.date).toISOString().split('T')[0] : getTodayDate(),
             sellerName: details.party || details.customer_name || '',
             placeOfSupply: details.place_of_supply || details.placeOfSupply || '',
@@ -5492,7 +5518,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     }).finally(() => setDrillDownLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewVoucherData]);
+  }, [viewVoucherData, isViewingAmended]);
 
   // Resolve vendorId from party name once richVendors finishes loading
   useEffect(() => {
@@ -12129,9 +12155,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       setLocalPrefilledData(null);
 
       if (returnToPage && onNavigate) {
-         onNavigate(returnToPage as Page);
-         setReturnToPage(null);
-         return;
+        onNavigate(returnToPage as Page);
+        setReturnToPage(null);
+        return;
       }
 
       // Restore the OCR workflow step to 'review' so the modal re-opens to the scan list
@@ -12148,7 +12174,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     setDrillDownDetails(null);
     if (clearViewVoucherData) clearViewVoucherData();
     if (onNavigate) {
-      if (viewVoucherData?.ledgerName) {
+      if (viewVoucherData?.source === 'b2b_drilldown') {
+        onNavigate('GST');
+      } else if (viewVoucherData?.ledgerName) {
         onNavigate('Reports', { reportType: 'LedgerReport', drillDownLedger: viewVoucherData.ledgerName });
       } else {
         onNavigate('Reports', { reportType: 'DayBook' });
@@ -12233,6 +12261,43 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 {subscriptionUsage && (
                   <div className={`px-3 py-1 rounded-full text-xs font-medium ${isLimitReached ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
                     Usage: {subscriptionUsage.used} / {subscriptionUsage.limit}
+                  </div>
+                )}
+                {/* GST Status Badges */}
+                {isReadOnlyMode && !isViewingAmended && amendedVoucherDetails && (
+                  <div className="flex items-center space-x-2">
+                    <div className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[11px] font-bold uppercase tracking-wider flex items-center shadow-sm">
+                      <Icon name="check-circle" className="w-3.5 h-3.5 mr-1.5" />
+                      GST Filed
+                    </div>
+                    <button
+                      onClick={() => setIsViewingAmended(true)}
+                      className="px-3 py-1 bg-red-50 text-red-700 border border-red-200 rounded-full text-[11px] font-bold uppercase tracking-wider flex items-center shadow-sm cursor-pointer hover:bg-red-100 transition-colors"
+                    >
+                      <Icon name="eye" className="w-3.5 h-3.5 mr-1.5" />
+                      View Amended Version
+                    </button>
+                  </div>
+                )}
+                {isReadOnlyMode && isViewingAmended && amendedVoucherDetails && (
+                  <div className="flex items-center space-x-2">
+                    <div className="px-3 py-1 bg-red-50 text-red-700 border border-red-200 rounded-full text-[11px] font-bold uppercase tracking-wider flex items-center shadow-sm">
+                      <Icon name="edit-3" className="w-3.5 h-3.5 mr-1.5" />
+                      Amended Version
+                    </div>
+                    <button
+                      onClick={() => setIsViewingAmended(false)}
+                      className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[11px] font-bold uppercase tracking-wider flex items-center shadow-sm cursor-pointer hover:bg-emerald-100 transition-colors"
+                    >
+                      <Icon name="eye" className="w-3.5 h-3.5 mr-1.5" />
+                      View Original Snapshot
+                    </button>
+                  </div>
+                )}
+                {isReadOnlyMode && !amendedVoucherDetails && drillDownDetails?.gst_registered === 'Yes' && !drillDownDetails?.amendment_date && (
+                  <div className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[11px] font-bold uppercase tracking-wider flex items-center shadow-sm">
+                    <Icon name="check-circle" className="w-3.5 h-3.5 mr-1.5" />
+                    GST Filed
                   </div>
                 )}
               </div>
@@ -13381,4 +13446,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 };
 
 export default VouchersPage;
+
+
 

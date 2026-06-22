@@ -1,25 +1,25 @@
-   /**
- * ============================================================================
- * MAIN APPLICATION COMPONENT (App.tsx)
- * ============================================================================
- * This is the heart of the application. It manages:
- * - User authentication (login/logout)
- * - Application routing (which page to show)
- * - Global state (ledgers, vouchers, stock items, etc.)
- * - Data synchronization with backend API
- * - AI features (invoice extraction, AI agent)
- * 
- * ARCHITECTURE:
- * - Uses React hooks for state management (useState, useEffect, useCallback)
- * - Communicates with Django backend via REST API
- * - Stores authentication tokens in HttpOnly cookies (secure)
- * - Supports multi-tenancy (each company has isolated data)
- * 
- * FOR NEW DEVELOPERS:
- * - Start by understanding the state variables (lines 80-115)
- * - Then review the data handlers (lines 437-835)
- * - Finally, look at the render logic (lines 840-973)
- */
+/**
+* ============================================================================
+* MAIN APPLICATION COMPONENT (App.tsx)
+* ============================================================================
+* This is the heart of the application. It manages:
+* - User authentication (login/logout)
+* - Application routing (which page to show)
+* - Global state (ledgers, vouchers, stock items, etc.)
+* - Data synchronization with backend API
+* - AI features (invoice extraction, AI agent)
+* 
+* ARCHITECTURE:
+* - Uses React hooks for state management (useState, useEffect, useCallback)
+* - Communicates with Django backend via REST API
+* - Stores authentication tokens in HttpOnly cookies (secure)
+* - Supports multi-tenancy (each company has isolated data)
+* 
+* FOR NEW DEVELOPERS:
+* - Start by understanding the state variables (lines 80-115)
+* - Then review the data handlers (lines 437-835)
+* - Finally, look at the render logic (lines 840-973)
+*/
 
 // ============================================================================
 // REACT IMPORTS
@@ -1355,7 +1355,7 @@ const App: React.FC = () => {
       case 'Customer Portal': return <CustomerPortalPage onNavigate={handleNavigate} setPrefilledVoucherData={setPrefilledVoucherData} />;
       case 'Payroll': return <PayrollPage />;
       case 'Service': return <ServicePage />;
-      case 'GST': return <GSTPage />;
+      case 'GST': return <GSTPage onNavigate={handleNavigate} setViewVoucherData={setViewVoucherData} vouchers={vouchers} />;
       case 'Dashboard Builder': return <DashboardBuilderPage vouchers={vouchers} ledgers={ledgers} onNavigate={handleNavigate} />;
       default: return <div>Page not found</div>;
     }

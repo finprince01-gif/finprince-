@@ -10,6 +10,12 @@ from django.db.models import Sum, Q, Count, Min, Max
 from accounting.models_voucher_sales import VoucherSalesInvoiceDetails, VoucherSalesItems
 from core.mixins import IsBranchMember
 
+def get_payment_details(v):
+    try:
+        return v.payment_details
+    except Exception:
+        return None
+
 class GSTR1ViewSet(viewsets.ViewSet):
     """
     ViewSet for generating GSTR1 return data.
@@ -23,8 +29,7 @@ class GSTR1ViewSet(viewsets.ViewSet):
         tenant_id = getattr(user, 'tenant_id', None)
         
         if tenant_id:
-            # queryset = VoucherSalesInvoiceDetails.objects.filter(tenant_id=tenant_id)
-            queryset = VoucherSalesInvoiceDetails.objects.all() # Temporary Bypass for local dev
+            queryset = VoucherSalesInvoiceDetails.objects.filter(tenant_id=tenant_id)
         else:
             # Fallback
             queryset = VoucherSalesInvoiceDetails.objects.all()
@@ -57,12 +62,12 @@ class GSTR1ViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'])
     def b2b(self, request):
-        """Get B2B invoices (Registered Customers)"""
-        vouchers = self.get_queryset().exclude(gstin__isnull=True).exclude(gstin__exact='')
+        """Get B2B invoices (Registered Customers) - excludes amended vouchers (those move to B2BA)"""
+        vouchers = self.get_queryset().exclude(gstin__isnull=True).exclude(gstin__exact='').filter(amendment_date__isnull=True)
         
         data = []
         for v in vouchers:
-            pay = getattr(v, 'payment_details', None)
+            pay = get_payment_details(v)
             val = pay.payment_invoice_value if pay else 0
             taxable = pay.payment_taxable_value if pay else 0
             igst = pay.payment_igst if pay else 0
@@ -77,6 +82,7 @@ class GSTR1ViewSet(viewsets.ViewSet):
             elif v.state_type == 'other': pos = '27'
 
             data.append({
+                'id': v.id,
                 'gstin': v.gstin,
                 'recipient_name': v.customer_name,
                 'invoice_no': v.sales_invoice_no,
@@ -88,8 +94,98 @@ class GSTR1ViewSet(viewsets.ViewSet):
                 'igst': igst,
                 'cgst': cgst,
                 'sgst': sgst,
-                'rate': 0, 
+                'rate': 0,
+                'gst_registered': v.gst_registered,
+                'amendment_date': v.amendment_date,
             })
+        return Response(data)
+
+    @action(detail=False, methods=['get'])
+    def b2ba(self, request):
+        """Get B2BA invoices - shows original GST filed values for amended vouchers"""
+        print("B2BA ENDPOINT HIT!")
+        # Filter for registered customers AND has an amendment_date
+        vouchers = self.get_queryset().exclude(gstin__isnull=True).exclude(gstin__exact='').exclude(amendment_date__isnull=True)
+        print("VOUCHERS COUNT FOR B2BA:", vouchers.count())
+        
+        data = []
+        for v in vouchers:
+            snap = v.original_voucher_snapshot or {}
+            pay = get_payment_details(v)
+
+            # --- Original (GST Filed) values from snapshot ---
+            orig_pay = snap.get('payment_details', {})
+            if orig_pay:
+                orig_val = orig_pay.get('payment_invoice_value', 0)
+                orig_taxable = orig_pay.get('payment_taxable_value', 0)
+                orig_igst = orig_pay.get('payment_igst', 0)
+                orig_cgst = orig_pay.get('payment_cgst', 0)
+                orig_sgst = orig_pay.get('payment_sgst', 0)
+            else:
+                # Fallback to current payment details if no snapshot
+                pay_fallback = get_payment_details(v)
+                orig_val = pay_fallback.payment_invoice_value if pay_fallback else 0
+                orig_taxable = pay_fallback.payment_taxable_value if pay_fallback else 0
+                orig_igst = pay_fallback.payment_igst if pay_fallback else 0
+                orig_cgst = pay_fallback.payment_cgst if pay_fallback else 0
+                orig_sgst = pay_fallback.payment_sgst if pay_fallback else 0
+
+            # Original date and invoice number from snapshot
+            orig_invoice_no = snap.get('sales_invoice_no', v.sales_invoice_no)
+            orig_date = snap.get('date', str(v.date))
+            orig_gstin = snap.get('gstin', v.gstin)
+            orig_customer = snap.get('customer_name', v.customer_name)
+            orig_pos = orig_gstin[:2] if orig_gstin and len(orig_gstin) >= 2 else pos
+
+            # Determine current POS
+            pos = ''
+            if v.gstin and len(v.gstin) >= 2:
+                pos = v.gstin[:2]
+            elif v.state_type == 'within': pos = '29' 
+            elif v.state_type == 'other': pos = '27'
+
+            # --- Amended (current) values ---
+            amended_val = pay.payment_invoice_value if pay else 0
+            amended_taxable = pay.payment_taxable_value if pay else 0
+            amended_igst = pay.payment_igst if pay else 0
+            amended_cgst = pay.payment_cgst if pay else 0
+            amended_sgst = pay.payment_sgst if pay else 0
+
+            data.append({
+                'id': v.id,
+                # Original (GST Filed) values shown in the table
+                'gstin': orig_gstin,
+                'recipient_name': orig_customer,
+                'original_invoice_no': orig_invoice_no,
+                'original_invoice_date': orig_date,
+                'revised_invoice_no': v.sales_invoice_no,
+                'revised_invoice_date': str(v.amendment_date),
+                'invoice_value': orig_val,
+                'taxable_value': orig_taxable,
+                'igst': orig_igst,
+                'cgst': orig_cgst,
+                'sgst': orig_sgst,
+                'place_of_supply': orig_pos,
+                'reverse_charge': 'N',
+                'applicable_tax_rate': '',
+                'invoice_type': snap.get('invoice_type', 'Regular'),
+                'ecommerce_gstin': '',
+                'cess_amount': 0,
+                'rate': 0,
+                'has_snapshot': bool(snap),
+                # Amended values for the modal
+                'amended_invoice_no': v.sales_invoice_no,
+                'amended_invoice_date': str(v.date),
+                'amended_invoice_value': amended_val,
+                'amended_taxable_value': amended_taxable,
+                'amended_igst': amended_igst,
+                'amended_cgst': amended_cgst,
+                'amended_sgst': amended_sgst,
+                'amended_gstin': v.gstin,
+                'amended_recipient_name': v.customer_name,
+                'amended_place_of_supply': pos,
+            })
+            
         return Response(data)
 
     @action(detail=False, methods=['get'])
@@ -100,7 +196,7 @@ class GSTR1ViewSet(viewsets.ViewSet):
         
         data = []
         for v in all_vouchers:
-            pay = getattr(v, 'payment_details', None)
+            pay = get_payment_details(v)
             val = pay.payment_invoice_value if pay else 0
             if val <= 250000: continue # Skip if not large
             if v.state_type != 'other': continue # Skip if not interstate
@@ -132,7 +228,7 @@ class GSTR1ViewSet(viewsets.ViewSet):
         agg_map = {} # POS -> {taxable, igst...}
 
         for v in all_vouchers:
-            pay = getattr(v, 'payment_details', None)
+            pay = get_payment_details(v)
             val = pay.payment_invoice_value if pay else 0
             
             # Filter condition: Small (<2.5L) OR Intra-state
@@ -177,7 +273,7 @@ class GSTR1ViewSet(viewsets.ViewSet):
         
         data = []
         for v in vouchers:
-            pay = getattr(v, 'payment_details', None)
+            pay = get_payment_details(v)
             val = pay.payment_invoice_value if pay else 0
             taxable = pay.payment_taxable_value if pay else 0
 
@@ -199,8 +295,11 @@ class GSTR1ViewSet(viewsets.ViewSet):
         """Returns counts for each GSTR1 category for the selected period"""
         queryset = self.get_queryset()
         
-        # B2B
-        b2b_count = queryset.exclude(gstin__isnull=True).exclude(gstin__exact='').count()
+        # B2B (excludes amended vouchers)
+        b2b_count = queryset.exclude(gstin__isnull=True).exclude(gstin__exact='').filter(amendment_date__isnull=True).count()
+        
+        # B2BA (amended registered vouchers)
+        b2ba_count = queryset.exclude(gstin__isnull=True).exclude(gstin__exact='').exclude(amendment_date__isnull=True).count()
         
         # Unregistered (conceptually B2C)
         unreg = queryset.filter(Q(gstin__isnull=True) | Q(gstin__exact=''))
@@ -217,18 +316,28 @@ class GSTR1ViewSet(viewsets.ViewSet):
         
         exp_count = queryset.filter(state_type='export').count()
 
+        # ATADJ count
+        atadj_count = 0
+        for v in queryset:
+            pay = get_payment_details(v)
+            if pay and pay.payment_advance > 0:
+                atadj_count += 1
+
+        doc_count = queryset.count() if queryset.exists() else 0
+
         return Response({
             'B2B': b2b_count,
+            'B2BA': b2ba_count,
             'B2CL': b2cl_count,
             'B2CS': b2cs_count,
             'EXP': exp_count,
+            'ATADJ': atadj_count,
+            'DOC': doc_count,
             # Placeholder for others
             'CDNR': 0,
             'CDNUR': 0,
             'AT': 0,
-            'ATADJ': 0,
             'HSN': 0,
-            'DOC': 0
         })
 
     @action(detail=False, methods=['get'])
@@ -261,7 +370,7 @@ class GSTR1ViewSet(viewsets.ViewSet):
         data = []
         
         for v in queryset:
-            pay = getattr(v, 'payment_details', None)
+            pay = get_payment_details(v)
             if pay and pay.payment_advance > 0: # Adjusted advance
                 # Determine POS
                 pos = ''
@@ -664,7 +773,7 @@ class GSTR1ViewSet(viewsets.ViewSet):
         
         for v in queryset:
              # Access related payment details
-             pay = getattr(v, 'payment_details', None)
+             pay = get_payment_details(v)
              
              # Default values
              val = pay.payment_invoice_value if pay else 0
@@ -736,3 +845,80 @@ class GSTR1ViewSet(viewsets.ViewSet):
         response = HttpResponse(json.dumps(data, default=str), content_type='application/json')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+
+    @action(detail=False, methods=['post'])
+    def file_return(self, request):
+        """
+        Mark all sales vouchers in a given month/year as GST-filed (gst_registered=True).
+        
+        Restrictions:
+        - Cannot file for the current month (only previous months allowed).
+        - Returns count of vouchers updated.
+        """
+        from django.utils import timezone
+
+        year_str = request.data.get('year')
+        month_str = request.data.get('month')
+
+        if not year_str or not month_str:
+            return Response({'error': 'year and month are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Resolve month number and year from fiscal year string
+        months_map = {
+            'April': (4, 0), 'May': (5, 0), 'June': (6, 0),
+            'July': (7, 0), 'August': (8, 0), 'September': (9, 0),
+            'October': (10, 0), 'November': (11, 0), 'December': (12, 0),
+            'January': (1, 1), 'February': (2, 1), 'March': (3, 1)
+        }
+
+        try:
+            start_year = int(year_str.split('-')[0])
+        except Exception:
+            return Response({'error': 'Invalid year format. Use e.g. 2025-26.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        month_info = months_map.get(month_str)
+        if not month_info:
+            return Response({'error': f'Invalid month: {month_str}.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        month_num, year_offset = month_info
+        filter_year = start_year + year_offset
+
+        # --- Restriction: Cannot file for current month ---
+        today = timezone.now().date()
+        if filter_year == today.year and month_num == today.month:
+            return Response(
+                {'error': 'GST return cannot be filed for the current month. Only previous months are allowed.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get tenant
+        user = request.user
+        tenant_id = getattr(user, 'tenant_id', None)
+
+        # Build queryset for that month
+        qs = VoucherSalesInvoiceDetails.objects.filter(
+            date__year=filter_year,
+            date__month=month_num,
+            gst_registered=''
+        )
+        if tenant_id:
+            qs = qs.filter(tenant_id=tenant_id)
+
+        count = qs.count()
+        if count == 0:
+            return Response({
+                'message': f'No unfiled vouchers found for {month_str} {filter_year}.',
+                'updated_count': 0
+            })
+
+        # Mark as GST-registered
+        qs.update(gst_registered='Yes')
+
+        return Response({
+            'message': f'Successfully filed GST return for {month_str} {filter_year}.',
+            'updated_count': count,
+            'month': month_str,
+            'year': year_str,
+            'filter_year': filter_year,
+            'month_num': month_num
+        })

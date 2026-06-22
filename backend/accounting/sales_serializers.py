@@ -139,6 +139,7 @@ class SalesVoucherSerializer(serializers.ModelSerializer):
             # GST-Compliant Fields
             'place_of_supply', 'reverse_charge', 'invoice_type', 'export_type',
             'port_code', 'shipping_bill_number', 'shipping_bill_date', 'ecommerce_gstin',
+            'gst_registered', 'amendment_date',
             # Status and Totals
             'status', 'current_step', 
             # 'total_taxable_amount', 'total_cgst', ... # Missing
@@ -149,8 +150,27 @@ class SalesVoucherSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = [
-            'id', 'sales_invoice_number', 'tax_type', 'grand_total', 'created_at', 'updated_at'
+            'id', 'sales_invoice_number', 'tax_type', 'grand_total', 'created_at', 'updated_at', 'amendment_date'
         ]
+
+    def update(self, instance, validated_data):
+        # --- Amendment Tracking ---
+        # If this voucher was already GST-filed and is now being updated, record amendment_date
+        if instance.gst_registered == 'Yes' and not instance.amendment_date:
+            from django.utils import timezone
+            # Capture the original snapshot FIRST (before setting amendment_date)
+            # so the snapshot reflects the original GST-filed state
+            from accounting.serializers_voucher_sales import VoucherSalesInvoiceDetailsSerializer
+            snapshot_data = VoucherSalesInvoiceDetailsSerializer(instance).data
+            # Explicitly clear amendment_date in snapshot so it shows as GST Filed, not Amendment
+            snapshot_dict = dict(snapshot_data)
+            snapshot_dict['amendment_date'] = None
+            instance.original_voucher_snapshot = snapshot_dict
+            # Now set amendment_date on the live record
+            instance.amendment_date = timezone.now().date()
+            print(f"[SalesVoucherSerializer] Amendment recorded for GST-filed voucher {instance.sales_invoice_no}")
+        
+        return super().update(instance, validated_data)
 
 
 class SalesVoucherCreateSerializer(serializers.Serializer):

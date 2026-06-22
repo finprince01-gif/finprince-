@@ -1834,8 +1834,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     drillDownEntries.forEach(entry => {
       if (entry.voucherType === 'Opening') return;
       const vt = (entry.voucherType || '').toLowerCase();
-      const isSource = vt.includes('sales') || vt.includes('purchase') || vt.includes('journal') || vt.includes('opening');
       const isApplication = vt.includes('receipt') || vt.includes('payment') || vt.includes('contra') || vt.includes('debit') || vt.includes('credit');
+      const isSource = !isApplication;
 
       let ref = entry.referenceNo?.trim() || entry.rawVoucher?.reference_number?.trim() || '-';
 
@@ -1983,7 +1983,11 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
         });
       } else {
         let lastPending = totalSourceAmt;
-        const totalAppAmt = applications.reduce((sum, a) => sum + (isDr ? (a.credit || 0) : (a.debit || 0)), 0);
+        const totalAppAmt = applications.reduce((sum, a) => {
+          const expectedAmt = isDr ? (a.credit || 0) : (a.debit || 0);
+          const amt = expectedAmt > 0 ? expectedAmt : Math.max(a.debit || 0, a.credit || 0);
+          return sum + amt;
+        }, 0);
 
         let calcStatus = getAgingStatus(firstSource.date);
         if (Math.round(totalSourceAmt * 100) <= Math.round(totalAppAmt * 100)) {
@@ -1998,7 +2002,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
         }
 
         applications.forEach((app, appIdx) => {
-          const appAmt = isDr ? (app.credit || 0) : (app.debit || 0);
+          const expectedAmt = isDr ? (app.credit || 0) : (app.debit || 0);
+          const appAmt = expectedAmt > 0 ? expectedAmt : Math.max(app.debit || 0, app.credit || 0);
           const currentPending = Math.max(0, lastPending - appAmt);
           rows.push({
             date: firstSource.date,
@@ -2764,6 +2769,10 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                     if (!isPmt) return false;
                     const isAdv = e.is_advance || e.rawVoucher?.is_advance || (e.referenceNo === '-' || !e.referenceNo || e.referenceNo.trim() === '');
                     if (!isAdv) return false;
+                    
+                    // If the voucher is already linked to a specific invoice, do not show it as available
+                    if (e.referenceNo && !['ADVANCE', '', '-', 'N/A'].includes(e.referenceNo.toUpperCase().trim())) return false;
+                    if (e.allocation_status === 'Utilized' || e.allocationStatus === 'Utilized') return false;
                     const total = parseFloat(e.rawVoucher?.total_amount || e.rawVoucher?.amount || e.rawVoucher?.total || 0) || (e.debit > 0 ? e.debit : e.credit);
                     const paid = parseFloat(e.rawVoucher?.paid_amount || e.rawVoucher?.used_amount || 0);
                     const pending = Math.max(0, total - paid);
@@ -2861,7 +2870,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                         // Refresh drill-down data to reflect changes
                         if (drillDownLedger) {
                           const ledgerName = drillDownLedger.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
-                          apiService.getJournalEntriesReport(ledgerName, undefined, undefined)
+                          apiService.getJournalEntriesReport(ledgerName, ledgerFilters.dateFrom || undefined, ledgerFilters.dateTo || undefined)
                             .then(data => setDrillDownData(Array.isArray(data) ? data : []))
                             .catch(() => { });
                         }
