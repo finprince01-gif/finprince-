@@ -76,7 +76,7 @@ class GSTReconciliationViewSet(viewsets.ViewSet):
 
         return Response({"message": "Upload complete", "created": created_count, "duplicates": duplicate_count})
 
-    def _threaded_reconciliation(self, job_id, month, year):
+    def _threaded_reconciliation(self, job_id, month, year, tenant_id=None):
         """Background worker for reconciliation."""
         job = GSTJobStatus.objects.get(id=job_id)
         job.status = 'RUNNING'
@@ -84,7 +84,10 @@ class GSTReconciliationViewSet(viewsets.ViewSet):
 
         try:
             invoices_2b = GSTR2BInvoice.objects.all() # In production: filter by date
-            vouchers_books = VoucherPurchaseSupplierDetails.objects.all()
+            if tenant_id:
+                vouchers_books = VoucherPurchaseSupplierDetails.objects.filter(tenant_id=tenant_id)
+            else:
+                vouchers_books = VoucherPurchaseSupplierDetails.objects.all()
             total = invoices_2b.count()
             
             for index, inv_2b in enumerate(invoices_2b):
@@ -140,14 +143,15 @@ class GSTReconciliationViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'])
     def run_reconciliation(self, request):
-        """Phase D: Trigger Reconciliation Job."""
+        """Module 3: Matching Engine execution."""
         month = request.data.get('month')
         year = request.data.get('year')
+        tenant_id = getattr(request.user, 'tenant_id', None)
         
         job = GSTJobStatus.objects.create(job_type='RECO', status='PENDING')
         
         # Start background thread
-        thread = threading.Thread(target=self._threaded_reconciliation, args=(job.id, month, year))
+        thread = threading.Thread(target=self._threaded_reconciliation, args=(job.id, month, year, tenant_id))
         thread.start()
         
         return Response({"job_id": job.id, "status": "PENDING"})
@@ -201,9 +205,13 @@ class GSTReconciliationViewSet(viewsets.ViewSet):
         """Module 4: GSTR-3B Computation."""
         month = request.query_params.get('month')
         year = request.query_params.get('year')
+        tenant_id = getattr(request.user, 'tenant_id', None)
 
         # Liability (READ ONLY)
-        sales = VoucherSalesInvoiceDetails.objects.all()
+        if tenant_id:
+            sales = VoucherSalesInvoiceDetails.objects.filter(tenant_id=tenant_id)
+        else:
+            sales = VoucherSalesInvoiceDetails.objects.all()
         output_tax = {'igst': 0, 'cgst': 0, 'sgst': 0}
         for v in sales:
             pay = getattr(v, 'payment_details', None)

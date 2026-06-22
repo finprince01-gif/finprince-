@@ -113,6 +113,11 @@ class VoucherSalesInvoiceDetails(BaseModel):
     )
     current_step = models.IntegerField(default=1, help_text="Current creation step (1-5)")
 
+    # GST Filing & Amendment Tracking
+    gst_registered = models.CharField(max_length=3, default='', blank=True, help_text="'Yes' if this voucher has been filed in GST, empty otherwise")
+    amendment_date = models.DateField(null=True, blank=True, help_text="Date when this voucher was amended after being GST filed")
+    original_voucher_snapshot = models.JSONField(null=True, blank=True, help_text="Snapshot of the original voucher before amendment")
+
     # Posting Status Tracking
     posting_status = models.CharField(
         max_length=20, 

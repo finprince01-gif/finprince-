@@ -248,6 +248,10 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 setEditingVoucherId(null);
             }
 
+            // ── GST Filing & Amendment ─────────────────────────────────────
+            setGstRegistered((prefilledData as any).gst_registered === 'Yes');
+            setAmendmentDate((prefilledData as any).amendment_date || null);
+
             // ── Sales Invoice Series (drill-down) ─────────────────────────
             const vNameFromPrefill = (prefilledData as any).voucher_name || (prefilledData as any).voucher_series || '';
             if (vNameFromPrefill) {
@@ -350,6 +354,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     const [salesInvoiceNo, setSalesInvoiceNo] = useState('');
     // Track existing voucher ID when editing (drill-down mode)
     const [editingVoucherId, setEditingVoucherId] = useState<number | null>(null);
+    const [gstRegistered, setGstRegistered] = useState<boolean>(false);
+    const [amendmentDate, setAmendmentDate] = useState<string | null>(null);
     const [voucherName, setVoucherName] = useState('');
     const [salesVoucherConfigs, setSalesVoucherConfigs] = useState<any[]>([]);
     const [selectedSeriesId, setSelectedSeriesId] = useState<number | null>(null);
@@ -3038,7 +3044,25 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                     setShowAddCustomerModal(false);
                 }}
             />
-            {/* Tabs Section - Underline Style */}
+        {/* Tabs Section - Underline Style */}
+
+            {/* GST Status Badges (shown in read-only mode) */}
+            {isReadOnlyMode && (gstRegistered || amendmentDate) && (
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                    {gstRegistered && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+                            GST Registered: Yes
+                        </span>
+                    )}
+                    {amendmentDate && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800 border border-orange-200">
+                            <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>
+                            Amended on: {amendmentDate}
+                        </span>
+                    )}
+                </div>
+            )}
 
             <div className="border-b border-gray-200 mb-6">
                 <div className="flex flex-wrap gap-8">
@@ -3084,7 +3108,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                     value={date}
                                     max={new Date().toISOString().split('T')[0]}
                                     onChange={(e) => setDate(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                    className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 ${gstRegistered ? 'bg-gray-100 opacity-70 cursor-not-allowed' : ''}`}
+                                    disabled={gstRegistered}
                                     required
                                 />
                             </div>
@@ -3109,7 +3134,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                     type="text"
                                     value={salesInvoiceNo}
                                     onChange={(e) => setSalesInvoiceNo(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                    className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 ${gstRegistered ? 'bg-gray-100 opacity-70 cursor-not-allowed' : ''}`}
+                                    disabled={gstRegistered}
                                     placeholder="Enter invoice number"
                                     required
                                 />
@@ -3126,6 +3152,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                         options={customerOptions}
                                         onFocus={onRefreshCustomers}
                                         placeholder="Search or select customer"
+                                        disabled={gstRegistered}
                                         required
                                     />
                                     <button
@@ -3718,7 +3745,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                 type="checkbox"
                                                                 checked={isSelected}
                                                                 onChange={(e) => handleForeignItemRowChange(row.id, 'selected', e.target.checked)}
-                                                                className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
+                                                                className={`w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 ${gstRegistered ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                disabled={gstRegistered}
                                                             />
                                                         </td>
                                                         <td className="px-3 py-2 border-r border-gray-200">
@@ -3727,6 +3755,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                 value={row.itemName}
                                                                 onChange={(val) => handleForeignItemRowChange(row.id, 'itemName', val)}
                                                                 placeholder="Select item description"
+                                                                disabled={gstRegistered}
                                                             />
                                                         </td>
                                                         <td className="px-3 py-2 border-r border-gray-200">
@@ -3734,7 +3763,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                 type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                 value={row.qty}
                                                                 onChange={(e) => handleForeignItemRowChange(row.id, 'qty', e.target.value)}
-                                                                className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
+                                                                className={`w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center ${gstRegistered ? 'bg-gray-100 opacity-70 cursor-not-allowed' : 'bg-transparent'}`}
+                                                                disabled={gstRegistered}
                                                                 placeholder="0"
                                                             />
                                                         </td>
@@ -3744,6 +3774,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                 value={row.uom}
                                                                 onChange={(val) => handleForeignItemRowChange(row.id, 'uom', val)}
                                                                 placeholder="UQC"
+                                                                disabled={gstRegistered}
                                                             />
                                                         </td>
                                                         <td className="px-3 py-2 border-r border-gray-200">
@@ -3787,7 +3818,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                     type="text"
                                                                     value={row.description}
                                                                     onChange={(e) => handleForeignItemRowChange(row.id, 'description', e.target.value)}
-                                                                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white bg-opacity-80"
+                                                                    className={`flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 ${gstRegistered ? 'bg-gray-100 opacity-70 cursor-not-allowed' : 'bg-white bg-opacity-80'}`}
+                                                                    disabled={gstRegistered}
                                                                     placeholder="Enter ledger narration"
                                                                 />
                                                             </div>
@@ -3816,7 +3848,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                     <button
                                         type="button"
                                         onClick={handleAddForeignItemRow}
-                                        className="px-4 py-2 text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-2 transition-colors"
+                                        disabled={gstRegistered}
+                                        className={`px-4 py-2 text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-2 transition-colors ${gstRegistered ? 'opacity-40 cursor-not-allowed' : ''}`}
                                     >
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -3841,7 +3874,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                 <button
                                     type="button"
                                     onClick={handleDeleteSelectedForeignItems}
-                                    className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-[4px] transition-colors font-medium flex items-center gap-2"
+                                    disabled={gstRegistered}
+                                    className={`px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-[4px] transition-colors font-medium flex items-center gap-2 ${gstRegistered ? 'opacity-40 cursor-not-allowed' : ''}`}
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -4000,7 +4034,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                 type="checkbox"
                                                                 checked={isSelected}
                                                                 onChange={(e) => handleItemRowChange(row.id, 'selected', e.target.checked)}
-                                                                className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
+                                                                className={`w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 ${gstRegistered ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                disabled={gstRegistered}
                                                             />
                                                             <span className="ml-2">{index + 1}</span>
                                                         </td>
@@ -4015,6 +4050,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                 value={row.itemCode}
                                                                 onChange={(val) => handleItemRowChange(row.id, 'itemCode', val)}
                                                                 placeholder="Item code"
+                                                                disabled={gstRegistered}
                                                             />
                                                         </td>
                                                         <td className="px-2 py-2 border-r border-gray-200">
@@ -4023,6 +4059,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                 value={row.itemName}
                                                                 onChange={(val) => handleItemRowChange(row.id, 'itemName', val)}
                                                                 placeholder="Item name"
+                                                                disabled={gstRegistered}
                                                             />
                                                         </td>
                                                         <td className="px-2 py-2 border-r border-gray-200">
@@ -4030,7 +4067,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                 type="text"
                                                                 value={row.hsnSac}
                                                                 onChange={(e) => handleItemRowChange(row.id, 'hsnSac', e.target.value)}
-                                                                className="w-full px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
+                                                                className={`w-full px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center ${gstRegistered ? 'bg-gray-100 opacity-70 cursor-not-allowed' : 'bg-transparent'}`}
+                                                                disabled={gstRegistered}
                                                                 placeholder="HSN/SAC"
                                                             />
                                                         </td>
@@ -4040,7 +4078,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                 value={row.qty}
                                                                 min="0"
                                                                 onChange={(e) => handleItemRowChange(row.id, 'qty', e.target.value)}
-                                                                className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
+                                                                className={`w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center ${gstRegistered ? 'bg-gray-100 opacity-70 cursor-not-allowed' : 'bg-transparent'}`}
+                                                                disabled={gstRegistered}
                                                                 placeholder="Qty"
                                                             />
                                                         </td>
@@ -4050,6 +4089,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                 value={row.uom}
                                                                 onChange={(val) => handleItemRowChange(row.id, 'uom', val)}
                                                                 placeholder="UOM"
+                                                                disabled={gstRegistered}
                                                             />
                                                         </td>
                                                         <td className="px-2 py-2 border-r border-gray-200">
@@ -4144,7 +4184,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleDeleteItemRow(row.id)}
-                                                                className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
+                                                                disabled={gstRegistered}
+                                                                className={`p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors ${gstRegistered ? 'opacity-40 cursor-not-allowed' : ''}`}
                                                                 title="Delete this item"
                                                             >
                                                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4176,7 +4217,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                     value={row.description}
                                                                     onChange={(e) => handleItemRowChange(row.id, 'description', e.target.value)}
                                                                     placeholder="Enter ledger narration"
-                                                                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm bg-white bg-opacity-80 focus:ring-1 focus:ring-indigo-500"
+                                                                    className={`flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 ${gstRegistered ? 'bg-gray-100 opacity-70 cursor-not-allowed' : 'bg-white bg-opacity-80'}`}
+                                                                    disabled={gstRegistered}
                                                                 />
                                                             </div>
                                                         </td>
@@ -4277,7 +4319,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                 <button
                                     type="button"
                                     onClick={handleAddItemRow}
-                                    className="px-4 py-2 text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-2"
+                                    disabled={gstRegistered}
+                                    className={`px-4 py-2 text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-2 ${gstRegistered ? 'opacity-40 cursor-not-allowed' : ''}`}
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

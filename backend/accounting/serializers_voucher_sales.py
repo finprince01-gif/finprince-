@@ -82,11 +82,13 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             'sales_order_no', 'place_of_supply', 'reverse_charge', 'invoice_type',
             'gst_export_type', 'port_code', 'shipping_bill_number', 'shipping_bill_date',
             'ecommerce_gstin', 'irn', 'ack_no', 'created_at', 'updated_at',
-            'posting_status', 'posting_error', 'outward_slip_id', 'status',
+            'posting_status', 'posting_error', 'outward_slip_id', 'status', 'original_voucher_snapshot',
+            # GST Filing & Amendment
+            'gst_registered', 'amendment_date',
             # Nested Fields
             'items', 'foreign_items', 'payment_details', 'dispatch_details', 'eway_bill_details'
         ]
-        read_only_fields = ('id', 'tenant_id', 'created_at', 'updated_at', 'posting_status', 'posting_error')
+        read_only_fields = ('id', 'tenant_id', 'created_at', 'updated_at', 'posting_status', 'posting_error', 'amendment_date', 'original_voucher_snapshot')
     
     def validate_place_of_supply(self, value):
         if not value:
@@ -678,6 +680,22 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
         dispatch_data = validated_data.pop('dispatch_details', None)
         eway_bill_details_data = validated_data.pop('eway_bill_details', None)
 
+        # --- Amendment Tracking ---
+        # If this voucher was already GST-filed and is now being updated, record amendment_date
+        if instance.gst_registered == 'Yes' and not instance.amendment_date:
+            from django.utils import timezone
+            # Capture the original snapshot FIRST (before setting amendment_date)
+            # so the snapshot reflects the original GST-filed state
+            from accounting.serializers_voucher_sales import VoucherSalesInvoiceDetailsSerializer
+            snapshot_data = VoucherSalesInvoiceDetailsSerializer(instance).data
+            # Explicitly clear amendment_date in snapshot so it shows as GST Filed, not Amendment
+            snapshot_dict = dict(snapshot_data)
+            snapshot_dict['amendment_date'] = None
+            instance.original_voucher_snapshot = snapshot_dict
+            # Now set amendment_date on the live record
+            instance.amendment_date = timezone.now().date()
+            print(f"[SalesSerializer] Amendment recorded for GST-filed voucher {instance.sales_invoice_no}")
+
         # Update custom mapped fields from frontend
         if 'party' in self.initial_data:
             instance.customer_name = self.initial_data.get('party', '')
@@ -782,6 +800,9 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             update_sales_invoice_payment_status(instance.tenant_id, str(instance.id))
         except Exception as e:
             print(f"!!! Status Sync Error in Update: {str(e)}")
+
+        return instance
+
 
         return instance
 

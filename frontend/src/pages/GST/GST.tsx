@@ -4,7 +4,7 @@ import GSTR2Reconciliation from './GSTR2Reconciliation';
 import GSTR3BPreview from './GSTR3BPreview';
 import { usePermissions } from '../../hooks/usePermissions';
 
-export default function GSTPage() {
+export default function GSTPage({ onNavigate, setViewVoucherData, vouchers }: { onNavigate?: (page: string, params?: any) => void, setViewVoucherData?: (data: any) => void, vouchers?: any[] }) {
     const { hasTabAccess, isSuperuser } = usePermissions();
 
     const allTabs = [
@@ -51,7 +51,7 @@ export default function GSTPage() {
             {/* Tab Content */}
             <div className="animate-in fade-in duration-300">
                 {activeTab === 'GSTR1' && (
-                    <GSTR1Page />
+                    <GSTR1Page onNavigate={onNavigate} setViewVoucherData={setViewVoucherData} vouchers={vouchers} />
                 )}
 
                 {activeTab === 'GSTR2' && (

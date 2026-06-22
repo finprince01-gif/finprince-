@@ -654,7 +654,11 @@ class ApiService {
         const normalizedSource = source?.toLowerCase() || '';
 
         try {
-            if (normalizedSource === 'sales_invoice' || normalizedSource === 'sales') {
+            if (normalizedSource === 'b2b_drilldown' || normalizedSource === 'voucher_sales_new') {
+                response = await httpClient.get<any>(`/api/voucher-sales-new/${id}/`, undefined, options);
+                response.type = 'Sales';
+                fetchedAsDetail = true;
+            } else if (normalizedSource === 'sales_invoice' || normalizedSource === 'sales') {
                 try {
                     response = await httpClient.get<any>(`/api/invoices/${id}/`, undefined, { ...options, skipErrorNotification: true } as any);
                 } catch (e) {
@@ -1137,6 +1141,8 @@ class ApiService {
                         tax_type: detail.tax_type || '',
                         place_of_supply: detail.place_of_supply || '',
                         invoice_type: detail.invoice_type || '',
+                        gst_registered: detail.gst_registered || '',
+                        amendment_date: detail.amendment_date || '',
                         supply_inr_details: detail.supply_inr_details || null,
                         supply_foreign_details: detail.supply_foreign_details || null,
                         transit_details: detail.transit_details || null,

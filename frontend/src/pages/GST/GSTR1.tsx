@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { httpClient } from '../../services/httpClient';
 
-export default function GSTR1Page() {
+export default function GSTR1Page({ onNavigate, setViewVoucherData, vouchers }: { onNavigate?: (page: string, params?: any) => void, setViewVoucherData?: (data: any) => void, vouchers?: any[] }) {
     const [activeSubTab, setActiveSubTab] = useState('B2B');
     const [period, setPeriod] = useState(() => {
         const today = new Date();
@@ -14,6 +14,14 @@ export default function GSTR1Page() {
         };
     });
     const [isLoading, setIsLoading] = useState(false);
+    const [b2baData, setB2baData] = useState<any[]>([]);
+    const [isFilingReturn, setIsFilingReturn] = useState(false);
+    const [filingStatus, setFilingStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [showAmendmentModal, setShowAmendmentModal] = useState(false);
+    const [viewAmendmentData, setViewAmendmentData] = useState<any>(null);
+    const [amendmentForm, setAmendmentForm] = useState<any>({});
+    const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
     // Data states
     const [b2bData, setB2bData] = useState<any[]>([]);
@@ -42,6 +50,27 @@ export default function GSTR1Page() {
         'EXEMP', 'HSNB2B', 'HSNB2C', 'DOC'
     ];
 
+    useEffect(() => {
+        const saved = localStorage.getItem('gstr1_b2ba_data');
+        if (saved) {
+            try {
+                setB2baData(JSON.parse(saved));
+            } catch (e) { }
+        }
+    }, []);
+
+    useEffect(() => {
+        if (b2baData.length > 0) {
+            localStorage.setItem('gstr1_b2ba_data', JSON.stringify(b2baData));
+        }
+    }, [b2baData]);
+
+    useEffect(() => {
+        // B2BA now comes from backend which already excludes amended from B2B
+        // No manual frontend filtering needed
+    }, []);
+
+
     const fetchData = async () => {
         setIsLoading(true);
         try {
@@ -53,6 +82,7 @@ export default function GSTR1Page() {
             // Mapping tab names to API endpoints
             const endpointMap: Record<string, string> = {
                 'B2B': '/api/gst/gstr1/b2b/',
+                'B2BA': '/api/gst/gstr1/b2ba/',
                 'B2CL': '/api/gst/gstr1/b2cl/',
                 'B2CS': '/api/gst/gstr1/b2cs/',
                 'CDNR': '/api/gst/gstr1/cdnr/',
@@ -73,6 +103,7 @@ export default function GSTR1Page() {
                 // Clear data for tabs that don't have an endpoint
                 switch (activeSubTab) {
                     case 'B2B': setB2bData([]); break;
+                    case 'B2BA': setB2baData([]); break;
                     case 'B2CL': setB2clData([]); break;
                     case 'B2CS': setB2csData([]); break;
                     case 'CDNR': setCdnrData([]); break;
@@ -93,7 +124,10 @@ export default function GSTR1Page() {
             const response = await httpClient.get<any[]>(fullUrl);
 
             switch (activeSubTab) {
-                case 'B2B': setB2bData(response || []); break;
+                case 'B2B':
+                    setB2bData(response || []);
+                    break;
+                case 'B2BA': setB2baData(response || []); break;
                 case 'B2CL': setB2clData(response || []); break;
                 case 'B2CS': setB2csData(response || []); break;
                 case 'CDNR': setCdnrData(response || []); break;
@@ -175,6 +209,47 @@ export default function GSTR1Page() {
         }
     };
 
+    // Check if selected period is the current month (filing not allowed)
+    const isCurrentMonth = (() => {
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth() + 1; // 1-indexed
+        const fyStartYear = parseInt(period.year.split('-')[0]);
+        const monthsMap: Record<string, { num: number; offset: number }> = {
+            'April': { num: 4, offset: 0 }, 'May': { num: 5, offset: 0 }, 'June': { num: 6, offset: 0 },
+            'July': { num: 7, offset: 0 }, 'August': { num: 8, offset: 0 }, 'September': { num: 9, offset: 0 },
+            'October': { num: 10, offset: 0 }, 'November': { num: 11, offset: 0 }, 'December': { num: 12, offset: 0 },
+            'January': { num: 1, offset: 1 }, 'February': { num: 2, offset: 1 }, 'March': { num: 3, offset: 1 }
+        };
+        const info = monthsMap[period.month];
+        if (!info) return false;
+        const filterYear = fyStartYear + info.offset;
+        return filterYear === currentYear && info.num === currentMonth;
+    })();
+
+    const handleFileReturn = async () => {
+        if (isCurrentMonth) return;
+        setIsFilingReturn(true);
+        setFilingStatus(null);
+        try {
+            const res: any = await httpClient.post('/api/gst/gstr1/file_return/', {
+                year: period.year,
+                month: period.month
+            });
+            setFilingStatus({
+                type: 'success',
+                message: res?.message || `GST Return filed successfully for ${period.month} ${period.year}.`
+            });
+            // Refresh data
+            fetchData();
+        } catch (err: any) {
+            const msg = err?.response?.data?.error || err?.message || 'Failed to file GST return.';
+            setFilingStatus({ type: 'error', message: msg });
+        } finally {
+            setIsFilingReturn(false);
+        }
+    };
+
 
     useEffect(() => {
         fetchData();
@@ -241,6 +316,17 @@ export default function GSTR1Page() {
                             {isLoading ? 'Generating...' : 'Generate Return'}
                         </button>
                         <button
+                            onClick={handleFileReturn}
+                            disabled={isCurrentMonth || isFilingReturn || isLoading}
+                            title={isCurrentMonth ? 'Cannot file GST return for the current month. Select a previous month.' : 'Mark all vouchers in this period as GST Filed'}
+                            className={`erp-button-primary ${isCurrentMonth
+                                    ? 'opacity-40 cursor-not-allowed bg-gray-400 border-gray-300 hover:bg-gray-400'
+                                    : 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600'
+                                }`}
+                        >
+                            {isFilingReturn ? 'Filing...' : isCurrentMonth ? '🔒 File GST Return' : '✓ File GST Return'}
+                        </button>
+                        <button
                             onClick={handleDownloadExcel}
                             className="erp-button-secondary"
                             disabled={isLoading}
@@ -256,6 +342,16 @@ export default function GSTR1Page() {
                         </button>
                     </div>
                 </div>
+                {/* Filing Status Banner */}
+                {filingStatus && (
+                    <div className={`mt-4 px-4 py-3 rounded-xl text-sm font-medium flex items-center justify-between gap-4 ${filingStatus.type === 'success'
+                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                            : 'bg-red-50 text-red-800 border border-red-200'
+                        }`}>
+                        <span>{filingStatus.type === 'success' ? '✅' : '❌'} {filingStatus.message}</span>
+                        <button onClick={() => setFilingStatus(null)} className="text-xs opacity-60 hover:opacity-100">✕</button>
+                    </div>
+                )}
             </div>
 
             {/* Sub Tabs */}
@@ -303,7 +399,21 @@ export default function GSTR1Page() {
                                     </thead>
                                     <tbody>
                                         {b2bData.length > 0 ? b2bData.map((row, idx) => (
-                                            <tr key={idx} className="hover:bg-gray-50">
+                                            <tr 
+                                                key={idx} 
+                                                className={`hover:bg-gray-50 cursor-pointer`}
+                                                onClick={() => {
+                                                    if (setViewVoucherData && onNavigate) {
+                                                        setViewVoucherData({
+                                                            ...row,
+                                                            voucherNo: row.invoice_no,
+                                                            type: 'Sales',
+                                                            source: 'b2b_drilldown'
+                                                        });
+                                                        onNavigate('Vouchers');
+                                                    }
+                                                }}
+                                            >
                                                 <td className="px-4 py-2 border text-sm">{row.gstin}</td>
                                                 <td className="px-4 py-2 border text-sm">{row.recipient_name}</td>
                                                 <td className="px-4 py-2 border text-sm">{row.invoice_no}</td>
@@ -318,7 +428,7 @@ export default function GSTR1Page() {
                                             </tr>
                                         )) : (
                                             <tr>
-                                                <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
+                                                <td colSpan={12} className="px-4 py-8 text-center text-gray-500">
                                                     No B2B invoices found for selected period.
                                                 </td>
                                             </tr>
@@ -332,34 +442,67 @@ export default function GSTR1Page() {
                     {!isLoading && activeSubTab === 'B2BA' && (
                         <div>
                             <h3 className="erp-section-title border-none pb-0 mb-4">B2BA - B2B Invoices (Amendment)</h3>
-                            <p className="text-sm text-gray-600 mb-4">Amended details of B2B invoices</p>
+                            <p className="text-sm text-gray-600 mb-4">Shows original GST Filed values.</p>
                             <div className="erp-table-container">
                                 <table className="erp-table">
                                     <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">GSTIN/UIN of Recipient*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Name of Recipient</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Original Invoice number*</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Original Invoice Date*</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Revised Invoice number*</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Revised Invoice Date*</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Invoice value*</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Place of Supply(POS)*</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">Invoice No*</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">Invoice Date*</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">Invoice Value*</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">Place of Supply*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Reverse Charge*</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Applicable % of Tax Rate</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Invoice Type*</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">E-Commerce GSTIN*</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Rate*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Taxable Value*</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Cess Amount</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">IGST</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">CGST</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">SGST</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">GST Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr>
-                                            <td colSpan={15} className="px-4 py-8 text-center text-gray-500">
-                                                No B2BA data available for selected period.
-                                            </td>
-                                        </tr>
+                                        {b2baData.length > 0 ? b2baData.map((row, idx) => (
+                                            <tr 
+                                                key={idx} 
+                                                className={`hover:bg-blue-50 cursor-pointer`}
+                                                onClick={() => {
+                                                    if (setViewVoucherData && onNavigate) {
+                                                        setViewVoucherData({ 
+                                                            ...row, 
+                                                            voucherNo: row.original_invoice_no,
+                                                            type: 'Sales',
+                                                            source: 'b2b_drilldown',
+                                                            _viewAsGSTFiled: true 
+                                                        });
+                                                        onNavigate('Vouchers');
+                                                    }
+                                                }}
+                                            >
+                                                <td className="px-4 py-2 border text-sm">{row.gstin || ''}</td>
+                                                <td className="px-4 py-2 border text-sm">{row.recipient_name || ''}</td>
+                                                <td className="px-4 py-2 border text-sm">{row.original_invoice_no}</td>
+                                                <td className="px-4 py-2 border text-sm">{row.original_invoice_date}</td>
+                                                <td className="px-4 py-2 border text-sm text-right">{Number(row.invoice_value || 0).toFixed(2)}</td>
+                                                <td className="px-4 py-2 border text-sm">{row.place_of_supply || ''}</td>
+                                                <td className="px-4 py-2 border text-sm">{row.reverse_charge || 'N'}</td>
+                                                <td className="px-4 py-2 border text-sm text-right">{Number(row.taxable_value || 0).toFixed(2)}</td>
+                                                <td className="px-4 py-2 border text-sm text-right">{Number(row.igst || 0).toFixed(2)}</td>
+                                                <td className="px-4 py-2 border text-sm text-right">{Number(row.cgst || 0).toFixed(2)}</td>
+                                                <td className="px-4 py-2 border text-sm text-right">{Number(row.sgst || 0).toFixed(2)}</td>
+                                                <td className="px-4 py-2 border text-sm" onClick={(e) => e.stopPropagation()}>
+                                                    <span className="px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
+                                                        ✓ GST Filed
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        )) : (
+                                            <tr>
+                                                <td colSpan={12} className="px-4 py-8 text-center text-gray-500">
+                                                    No B2BA data available for selected period.
+                                                </td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -1309,6 +1452,238 @@ export default function GSTR1Page() {
                     )}
                 </div>
             </div>
+
+            {/* Edit Modal */}
+            {showEditModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Edit Invoice</h3>
+                        <p className="text-sm text-gray-600 mb-6">This is already registered. You can't edit it.</p>
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => setShowEditModal(false)}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (selectedInvoice) {
+                                        setAmendmentForm({
+                                            original_invoice_no: selectedInvoice.invoice_no,
+                                            original_invoice_date: selectedInvoice.invoice_date,
+                                            original_invoice_value: selectedInvoice.invoice_value,
+                                            original_taxable_value: selectedInvoice.taxable_value,
+                                            revised_invoice_no: selectedInvoice.invoice_no,
+                                            revised_invoice_date: selectedInvoice.invoice_date,
+                                            revised_invoice_value: selectedInvoice.invoice_value,
+                                            revised_taxable_value: selectedInvoice.taxable_value,
+                                            recipient_name: selectedInvoice.recipient_name || '',
+                                            place_of_supply: selectedInvoice.place_of_supply || '',
+                                            reverse_charge: selectedInvoice.reverse_charge || 'N',
+                                        });
+                                        setShowAmendmentModal(true);
+                                    }
+                                    setShowEditModal(false);
+                                }}
+                                className="px-4 py-2 bg-[#3b2ddb] text-white rounded-md hover:bg-[#3b2ddb]/90 font-medium text-sm"
+                            >
+                                EDIT ANYWAY
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Amendment Form Modal */}
+            {showAmendmentModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg shadow-xl w-[600px] max-h-[90vh] overflow-y-auto">
+                        <h3 className="text-xl font-bold mb-4 text-[#3b2ddb]">Amend B2B Invoice</h3>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Original Invoice No</label>
+                                <input type="text" className="w-full border rounded p-2 bg-gray-100 text-gray-600 outline-none" readOnly value={amendmentForm.original_invoice_no || ''} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Original Invoice Date</label>
+                                <input type="text" className="w-full border rounded p-2 bg-gray-100 text-gray-600 outline-none" readOnly value={amendmentForm.original_invoice_date || ''} />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Revised Invoice No <span className="text-red-500">*</span></label>
+                                <input type="text" className="w-full border rounded p-2 outline-none" value={amendmentForm.revised_invoice_no || ''} onChange={(e) => setAmendmentForm({ ...amendmentForm, revised_invoice_no: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Revised Invoice Date <span className="text-red-500">*</span></label>
+                                <input type="date" className="w-full border rounded p-2 outline-none" value={amendmentForm.revised_invoice_date || ''} onChange={(e) => setAmendmentForm({ ...amendmentForm, revised_invoice_date: e.target.value })} />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Revised Invoice Value <span className="text-red-500">*</span></label>
+                                <input type="number" step="0.01" className="w-full border rounded p-2 outline-none" value={amendmentForm.revised_invoice_value || ''} onChange={(e) => setAmendmentForm({ ...amendmentForm, revised_invoice_value: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Revised Taxable Value <span className="text-red-500">*</span></label>
+                                <input type="number" step="0.01" className="w-full border rounded p-2 outline-none" value={amendmentForm.revised_taxable_value || ''} onChange={(e) => setAmendmentForm({ ...amendmentForm, revised_taxable_value: e.target.value })} />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Recipient Name <span className="text-red-500">*</span></label>
+                                <input type="text" className="w-full border rounded p-2 outline-none" value={amendmentForm.recipient_name || ''} onChange={(e) => setAmendmentForm({ ...amendmentForm, recipient_name: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Place of Supply <span className="text-red-500">*</span></label>
+                                <input type="text" className="w-full border rounded p-2 outline-none" value={amendmentForm.place_of_supply || ''} onChange={(e) => setAmendmentForm({ ...amendmentForm, place_of_supply: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Reverse Charge <span className="text-red-500">*</span></label>
+                                <select className="w-full border rounded p-2 outline-none" value={amendmentForm.reverse_charge || 'N'} onChange={(e) => setAmendmentForm({ ...amendmentForm, reverse_charge: e.target.value })}>
+                                    <option value="N">N</option>
+                                    <option value="Y">Y</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end space-x-4 mt-6">
+                            <button
+                                className="px-4 py-2 border rounded text-gray-600 hover:bg-gray-50 font-medium text-sm"
+                                onClick={() => setShowAmendmentModal(false)}
+                            >
+                                CANCEL
+                            </button>
+                            <button
+                                className="px-4 py-2 bg-[#3b2ddb] text-white rounded hover:bg-[#3b2ddb]/90 font-medium text-sm"
+                                onClick={() => {
+                                    setB2baData(prev => [...prev, amendmentForm]);
+                                    setB2bData(prev => prev.filter(item => item.invoice_no !== amendmentForm.original_invoice_no));
+                                    setShowAmendmentModal(false);
+                                    setActiveSubTab('B2BA');
+                                }}
+                            >
+                                SAVE AMENDMENT
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {viewAmendmentData && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg shadow-xl w-[700px] max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <div>
+                                <h3 className="text-xl font-bold text-[#3b2ddb]">Amendmented Voucher Details</h3>
+                                <p className="text-xs text-gray-500 mt-1">Showing the revised/amended values of this invoice</p>
+                            </div>
+                            <button onClick={() => setViewAmendmentData(null)} className="text-gray-500 hover:text-gray-700">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+
+                        {/* Original Section */}
+                        <div className="mb-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                            <div className="flex items-center mb-3">
+                                <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full mr-2">✓ GST FILED (Original)</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-500">Invoice No</label>
+                                    <p className="text-sm font-semibold text-gray-800">{viewAmendmentData.original_invoice_no}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-500">Invoice Date</label>
+                                    <p className="text-sm font-semibold text-gray-800">{viewAmendmentData.original_invoice_date}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-500">Invoice Value</label>
+                                    <p className="text-sm font-semibold text-gray-800">{Number(viewAmendmentData.invoice_value || 0).toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-500">Taxable Value</label>
+                                    <p className="text-sm font-semibold text-gray-800">{Number(viewAmendmentData.taxable_value || 0).toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-500">IGST</label>
+                                    <p className="text-sm font-semibold text-gray-800">{Number(viewAmendmentData.igst || 0).toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-500">CGST / SGST</label>
+                                    <p className="text-sm font-semibold text-gray-800">{Number(viewAmendmentData.cgst || 0).toFixed(2)} / {Number(viewAmendmentData.sgst || 0).toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-500">Customer (GSTIN)</label>
+                                    <p className="text-sm font-semibold text-gray-800">{viewAmendmentData.recipient_name} ({viewAmendmentData.gstin})</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-500">Place of Supply</label>
+                                    <p className="text-sm font-semibold text-gray-800">{viewAmendmentData.place_of_supply}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Arrow */}
+                        <div className="flex items-center justify-center my-3">
+                            <div className="flex items-center space-x-2 text-gray-400">
+                                <div className="h-px w-24 bg-gray-300"></div>
+                                <span className="text-sm font-medium text-gray-500">Amended to ↓</span>
+                                <div className="h-px w-24 bg-gray-300"></div>
+                            </div>
+                        </div>
+
+                        {/* Amended Section */}
+                        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                            <div className="flex items-center mb-3">
+                                <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full mr-2">✎ AMENDED (Revised)</span>
+                                <span className="text-xs text-gray-500">Amendment Date: {viewAmendmentData.revised_invoice_date}</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-indigo-500">Invoice No</label>
+                                    <p className="text-sm font-semibold text-indigo-700">{viewAmendmentData.amended_invoice_no || viewAmendmentData.revised_invoice_no}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-indigo-500">Invoice Date</label>
+                                    <p className="text-sm font-semibold text-indigo-700">{viewAmendmentData.amended_invoice_date || viewAmendmentData.revised_invoice_date}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-indigo-500">Invoice Value</label>
+                                    <p className="text-sm font-semibold text-indigo-700">{Number(viewAmendmentData.amended_invoice_value || 0).toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-indigo-500">Taxable Value</label>
+                                    <p className="text-sm font-semibold text-indigo-700">{Number(viewAmendmentData.amended_taxable_value || 0).toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-indigo-500">IGST</label>
+                                    <p className="text-sm font-semibold text-indigo-700">{Number(viewAmendmentData.amended_igst || 0).toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-indigo-500">CGST / SGST</label>
+                                    <p className="text-sm font-semibold text-indigo-700">{Number(viewAmendmentData.amended_cgst || 0).toFixed(2)} / {Number(viewAmendmentData.amended_sgst || 0).toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-indigo-500">Customer (GSTIN)</label>
+                                    <p className="text-sm font-semibold text-indigo-700">{viewAmendmentData.amended_recipient_name || viewAmendmentData.recipient_name} ({viewAmendmentData.amended_gstin || viewAmendmentData.gstin})</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-indigo-500">Place of Supply</label>
+                                    <p className="text-sm font-semibold text-indigo-700">{viewAmendmentData.amended_place_of_supply || viewAmendmentData.place_of_supply}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end mt-6">
+                            <button 
+                                className="px-4 py-2 bg-[#3b2ddb] text-white rounded hover:bg-[#3b2ddb]/90 font-medium text-sm"
+                                onClick={() => setViewAmendmentData(null)}
+                            >
+                                CLOSE
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
