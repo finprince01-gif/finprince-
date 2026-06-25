@@ -1,0 +1,39 @@
+{
+  "_note": "Exact payload structure sent to Qwen via OpenAI-compat API. Image base64 redacted to [BASE64_JPEG_~1.3MB]. API key redacted to [REDACTED].",
+  "_source_file": "core/providers/qwen_provider.py",
+  "_source_function": "call_single()",
+  "_source_lines": "285-310",
+  "_invoice": "IMG_20260406_0006.pdf",
+  "_page": 1,
+
+  "model": "qwen2.5vl:7b",
+  "temperature": 0.0,
+  "max_tokens": 4096,
+  "response_format": null,
+
+  "messages": [
+    {
+      "role": "system",
+      "content": "Expert Indian GST invoice OCR. Return ONLY valid JSON per the given schema. No markdown, no explanation."
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Extract PURCHASE invoice data into this exact JSON schema:\n\n{\"header\":{\"vendor_name\":\"\",\"vendor_address\":\"\",\"billing_address\":\"\",\"vendor_gstin\":\"\",\"vendor_state\":\"\",\"place_of_supply\":\"\",\"invoice_no\":\"\",\"invoice_date\":\"\",\"total_amount\":0,\"taxable_value\":0,\"cgst\":0,\"sgst\":0,\"igst\":0,\"gst_taxability_type\":\"Taxable\",\"gst_nature_of_transaction\":\"\",\"sales_order_no\":\"\",\"irn\":\"\",\"ack_no\":\"\",\"ack_date\":\"\"},\"items\":[{\"description\":\"\",\"hsn_code\":\"\",\"quantity\":0,\"uom\":\"\",\"rate\":0,\"discount_percent\":0,\"taxable_value\":0,\"igst_rate\":0,\"igst_amount\":0,\"cgst_rate\":0,\"cgst_amount\":0,\"sgst_rate\":0,\"sgst_amount\":0,\"cess_rate\":0,\"cess_amount\":0,\"amount\":0}]}\n\nRULES:\n1. header: one entry per invoice; items: one row per line item.\n2. vendor_address = \"Consignee/Ship To\" block; billing_address = \"Buyer/Bill To\" block only. Never mix them. Null if absent.\n3. invoice_no: prefer label \"Invoice No\"/\"Bill No\", near top/date, must have \u22651 digit, 3-25 chars.\n4. place_of_supply: state name or code (e.g. \"33-Tamil Nadu\").\n5. total_amount = taxable_value + cgst + sgst + igst. item amount = taxable_value + taxes.\n6. HSN/SAC and UOM per item if visible.\n7. Continuation page: extract invoice_no and vendor_name from top labels; markers: \"continued\",\"amount chargeable\",\"authorised signatory\",\"rounded off\".\n8. Missing field \u2192 null. No hallucination. All numeric fields must be numbers.\nReturn ONLY valid JSON.\n\n\n### [PAGE 1 OCR DATA]\nTax Invoice | (ORIGINAL FOR RECIPIENT) | e-Invoice IRN | : 57bd9abf89e1d6f519d0b5e49b4175eefbc9206d96c50e1. 2cd721b5541c76642 Ack No. : 152523027902150 Ack Date: 13-Sep-2025 SRI VISHNU HEAT TREATERS | Invoice No. | Dated 4742/25-26 | 13-Sep-2025 BRANCH OFFICE SF NO 75/2 B SITe | 24/1 COSMOFAN FO Delivery Note | Mode/Terms of Payment rUnnatur viLLage annur pin 641107 | 2601/25-26 BRANCH OFI | NO.2/166 SF NO 472/1D | Reference No. & Date. | Other References BALAJ! INDUSTRIAL PARK MGCP VILLAGE SENTHAMPALAYAMGSTIN/UIN: 33ABYI | 4742 dt. 13-Sep-2025 Buyer's Order No. Consignee (Ship to) | JC/043/25-26 | 8-Sep-2025 N.S.SOLUTION | Dispatch Doc No. | Delivery Note Date SF NO: 195, VILANKURICHI RD, SUNDHARAR STREET, | Dispatched through | Destination COIMBATORE I State NameGSTIN/UIN | Tamil Nadu, Code : 33 33CKJPS6256F1ZW | Terms of Delivery Buyer (Bill to) Accuturn Machiners Private Limited 13 A,THUDIYALUR-KANUVAI ROAD APPANAICKENPALAYAM K.VADAMADURAI POST Coimbatore | 33ABACA5718R1ZD State Name Place of Supply .Tamil Nadu SI | Description of | HSN/SAC Quantity Rate per | Amount No. | Services 1 SQF - CASEHARDENING & TEMPERING(KGS) 998898 910.740 kgs 60.00kgs | 54,644.40 B65-6008 PIN 1059-NOS 2 SHOT BLASTINGS(KGS) 12.00kgs | 10,928.88 65,573.28 OUTPUT CGST@6% | 6% | 3,934.39 OUTPUT SgST@6% continued to page number 2 This is a Computer Generated Invoice"
+        },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "data:image/jpeg;base64,[BASE64_JPEG_~1.3MB — REDACTED FOR SIZE]"
+          }
+        }
+      ]
+    }
+  ],
+
+  "_api_endpoint": "QWEN_API_BASE (from .env — e.g. http://localhost:11434/v1)",
+  "_api_key": "[REDACTED — from QWEN_API_KEY env var, falls back to 'EMPTY']",
+  "_client_timeout_s": 1800
+}

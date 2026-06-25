@@ -119,6 +119,32 @@ class VoucherPurchaseViewSet(viewsets.ModelViewSet):
             branch__iexact=branch
         ).exists()
 
+        # Shadow Check
+        from vendors.vendor_validation_logic import normalize_invoice_number, append_shadow_evidence
+        import logging
+        norm_inv_no = normalize_invoice_number(supplier_invoice_no)
+        new_match = False
+        if norm_inv_no:
+            new_match = VoucherPurchaseSupplierDetails.objects.filter(
+                tenant_id=tenant_id,
+                normalized_invoice_no=norm_inv_no,
+                gstin__iexact=gstin,
+                branch__iexact=branch
+            ).exists()
+        
+        old_match = exists
+        
+        logging.getLogger(__name__).info(
+            f"[DUPLICATE_SHADOW_CHECK] "
+            f"record_id=None "
+            f"invoice_no='{supplier_invoice_no}' "
+            f"normalized_invoice_no='{norm_inv_no}' "
+            f"old_match={old_match} "
+            f"new_match={new_match}"
+        )
+        append_shadow_evidence(None, supplier_invoice_no, norm_inv_no, old_match, new_match)
+
+
         if exists:
             return Response({
                 "status": "DUPLICATE",

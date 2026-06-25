@@ -7,7 +7,7 @@ BankStatementTemp — STAGING TABLE ONLY
 ⚠️  Only staging + UI state.
 
 Flow:
-  Upload file → Gemini extraction → Save here → User maps ledger
+  Upload file → AI extraction → Save here → User maps ledger
   → Post to PaymentVoucherSerializer / ReceiptVoucherSerializer
   → Mark status = posted
 """
@@ -30,7 +30,7 @@ class BankStatementStagingFile(models.Model):
     file_name        = models.CharField(max_length=255)
     account_id       = models.BigIntegerField(null=True, blank=True, help_text="Associated bank ledger ID")
     uploaded_at      = models.DateTimeField(auto_now_add=True)
-    transaction_data = models.JSONField(help_text="Full extracted JSON from Gemini")
+    transaction_data = models.JSONField(help_text="Full extracted JSON from AI")
     status           = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     expires_at       = models.DateTimeField(help_text="Timestamp for auto-cleanup")
     file_hash        = models.CharField(max_length=64, null=True, blank=True, help_text="Optional hash for deduplication")
@@ -46,7 +46,7 @@ class BankStatementStagingFile(models.Model):
 
 class BankStatementTemp(models.Model):
     """
-    Temporary staging table for bank statement rows extracted via Gemini.
+    Temporary staging table for bank statement rows extracted via AI.
     One row per transaction line in the uploaded bank statement.
 
     STAGING ONLY — never used for final accounting.
@@ -117,9 +117,9 @@ class BankStatementTemp(models.Model):
     voucher_id    = models.BigIntegerField(null=True, blank=True,
                                            help_text="ID of created voucher after posting")
 
-    # ── Raw Gemini output for traceability ────────────────────────────────────
+    # ── Raw AI output for traceability ────────────────────────────────────
     raw_data    = models.JSONField(null=True, blank=True,
-                                   help_text="Original Gemini row dict, unmodified")
+                                   help_text="Original AI row dict, unmodified")
     raw_text    = models.TextField(null=True, blank=True,
                                    help_text="Raw OCR text line(s) for this transaction")
     allocation_data = models.JSONField(null=True, blank=True,

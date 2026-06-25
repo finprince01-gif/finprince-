@@ -1,0 +1,597 @@
+INFO 2026-06-21 16:32:26,678 views 25856 26276 [SESSION_TRACE_UPLOAD] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 voucher_type=PURCHASE file_count=1
+INFO 2026-06-21 16:32:27,221 message_factory 25856 26276 [CANONICAL_MESSAGE_EMITTED] task_type=INGESTION ver=v1 corr=43c167db-86ac-4788-abe5-8ed4e743981b trace_id=trace-348a907c1cb8-1782039747 dedupe_key=4b7051058942f1bd6364a00f9b6e152d319e5d6369b688855d6a186b021cff59 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:32:27,222 message_factory 25856 26276 [JOB_CONTEXT_PROPAGATED] task_type=INGESTION job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:32:27,222 views 25856 26276 [RECORD_CREATED] id=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 file=IMG_20260406_0006.pdf
+INFO 2026-06-21 16:32:27,222 views 25856 26276 [DISTRIBUTED_PIPELINE_ACTIVE] session_id='fdce9a70-4459-4f99-85bb-e7fe14ab95e1' status='ACTIVE'
+INFO 2026-06-21 16:32:27,222 views 25856 26276 [REDIS_COORDINATION_ACTIVE] session_id='fdce9a70-4459-4f99-85bb-e7fe14ab95e1' coordinator='redis'
+INFO 2026-06-21 16:32:27,288 views 25856 26276 [SQS_DISPATCH_SUCCESS] session_id='fdce9a70-4459-4f99-85bb-e7fe14ab95e1' msg_id='bb7b15df-725c-4904-885a-dd60bf6c72fb' queue='ingestion'
+INFO 2026-06-21 16:32:27,319 message_parser 8720 15128 [CONTEXT_TRACE_SCHEMA_VALIDATE] msg_id=bb7b15df-725c-4904-885a-dd60bf6c72fb job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 payload_keys=['record_id', 'job_id', 'file_url', 'file_hash', 'voucher_type', 'attempt', 'upload_type']
+INFO 2026-06-21 16:32:27,320 message_parser 8720 15128 [JOB_CONTEXT_VALIDATED] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:27,320 message_parser 8720 15128 [JOB_CONTEXT_PROPAGATED] type=INGESTION job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:32:27,321 worker_base 8720 15128 [QUEUE_MESSAGE_RECEIVED] correlation_id=43c167db-86ac-4788-abe5-8ed4e743981b session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 page_number=1 worker_name=INGESTION
+INFO 2026-06-21 16:32:27,322 worker_base 8720 15128 [WORKER_MESSAGE_RECEIVED] correlation_id=43c167db-86ac-4788-abe5-8ed4e743981b upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=ingestion worker_id=INGESTION worker_pid=8720 hostname=LAPTOP-601O6S3T retry_count=1 visibility_timeout=1800
+INFO 2026-06-21 16:32:27,322 worker_base 8720 15128 [WORKER_PICKUP] role='INGESTION' task_id='bb7b15df-725c-4904-885a-dd60bf6c72fb' session_id='fdce9a70-4459-4f99-85bb-e7fe14ab95e1' job_id='e1ca4245-2a81-42d6-a8bf-f71aff34d1c3' correlation_id='43c167db-86ac-4788-abe5-8ed4e743981b'
+INFO 2026-06-21 16:32:27,813 worker_base 8720 15128 [QUEUE_MESSAGE_PROCESSING] correlation_id=43c167db-86ac-4788-abe5-8ed4e743981b session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 worker_name=INGESTION
+INFO 2026-06-21 16:32:27,813 worker_base 8720 15128 [PIPELINE_STAGE_ENTER] stage=INGESTION correlation_id=43c167db-86ac-4788-abe5-8ed4e743981b upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown
+INFO 2026-06-21 16:32:27,813 ingestion_worker 8720 15128 [CONTEXT_TRACE_INGESTION] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 trace_id=None
+INFO 2026-06-21 16:32:27,813 ingestion_worker 8720 15128 [INGESTION_TASK_START] id=bb7b15df-725c-4904-885a-dd60bf6c72fb record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:27,814 ingestion_worker 8720 15128 [INGESTION_TASK_EXECUTE] id=bb7b15df-725c-4904-885a-dd60bf6c72fb record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:27,814 ingestion_worker 8720 15128 [INGESTION_RECORD_VERIFIED] id=bb7b15df-725c-4904-885a-dd60bf6c72fb record=1007711
+INFO 2026-06-21 16:32:27,814 redis_orchestrator 8720 15128 [REDIS_STATE_MUTATION_ENTER] record=1007711
+INFO 2026-06-21 16:32:27,815 redis_orchestrator 8720 15128 [REDIS_STATE_MUTATION_INPUT] record=1007711 raw_input_status=INGESTING
+INFO 2026-06-21 16:32:27,815 redis_orchestrator 8720 15128 [REDIS_STATUS_ASSIGN] record=1007711 assigned_status=INGESTING
+INFO 2026-06-21 16:32:27,816 redis_orchestrator 8720 15128 [LIFECYCLE_STATE_NORMALIZED] raw_state=INGESTING normalized_state=INGESTION_STARTED record=1007711
+INFO 2026-06-21 16:32:27,816 redis_orchestrator 8720 15128 [LIFECYCLE_TRANSITION_ATTEMPT] record=1007711 previous_state=None requested_state=INGESTION_STARTED
+INFO 2026-06-21 16:32:27,816 redis_orchestrator 8720 15128 [REDIS_STATE_WRITE] record=1007711 status=INGESTION_STARTED
+INFO 2026-06-21 16:32:27,817 redis_orchestrator 8720 15128 [REDIS_STATE_COMMIT] record=1007711 status=INGESTION_STARTED
+INFO 2026-06-21 16:32:27,817 redis_orchestrator 8720 15128 [STATUS_SYNC_OK] record=1007711 status=INGESTION_STARTED progress=5.0%
+INFO 2026-06-21 16:32:27,817 pipeline 8720 20988 [SYNC_INGESTION_START] record=1007711
+INFO 2026-06-21 16:32:27,823 pipeline 8720 20988 [FILE_RESOLVE_START] record=1007711 key=LOCAL://ocr/2eda0ac6-6af2-493e-8792-bc973fe946b7/e1ca4245-2a81-42d6-a8bf-f71aff34d1c3/57da3a2b604c6513ece37079b1dc6b5357a0abeecbd6b8f4a8ebb0572485be3e_IMG_20260406_0006.pdf
+INFO 2026-06-21 16:32:27,823 pipeline 8720 20988 [FILE_RESOLVE_SUCCESS] record=1007711
+INFO 2026-06-21 16:32:27,823 pipeline 8720 20988 [OCR_INPUT_PATH] record=1007711 path=C:\108\AI-accounting-0.03\backend\media\bulk_pipeline\ocr\2eda0ac6-6af2-493e-8792-bc973fe946b7\e1ca4245-2a81-42d6-a8bf-f71aff34d1c3\57da3a2b604c6513ece37079b1dc6b5357a0abeecbd6b8f4a8ebb0572485be3e_IMG_20260406_0006.pdf
+INFO 2026-06-21 16:32:27,823 pipeline 8720 20988 [PIPELINE_STAGE_ENTER] stage=START record=1007711 item=None job=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3
+INFO 2026-06-21 16:32:27,823 pipeline 8720 20988 Processing record 1007711 | item=None | job=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 | wait_for_ai=False | chaos=None | is_rescan=False
+INFO 2026-06-21 16:32:27,834 pipeline 8720 20988 [PIPELINE_TOTAL_PAGES] record=1007711 pages=2
+INFO 2026-06-21 16:32:27,834 pipeline 8720 20988 [PAGE_CREATED] record_id=1007711 page_number=1 expected_total_pages=2 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:27,834 pipeline 8720 20988 [PAGE_CREATED] record_id=1007711 page_number=2 expected_total_pages=2 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:27,840 pipeline 8720 20988 [ASSEMBLY_BARRIER_CREATED] record=1007711 expected=2
+INFO 2026-06-21 16:32:27,845 models 8720 20988 [DUPLICATE_RUNTIME_PROBE] file=C:\108\AI-accounting-0.03\backend\ocr_pipeline\models.py id=1007711 writing validation_status='PENDING'
+INFO 2026-06-21 16:32:27,851 extraction 8720 20988 [FANOUT_EXPECTED] record_id=1007711 expected_pages=2 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:27,851 extraction 8720 20988 [PAGE_FANOUT] record=1007711 pages=2
+INFO 2026-06-21 16:32:27,851 extraction 8720 20988 [BATCH_PLAN] record=1007711 pages=2 batches=2 size=1
+INFO 2026-06-21 16:32:40,750 extraction 8720 3212 [AI_PAYLOAD_VALID] record=1007711 page=1 item=None cid=None
+INFO 2026-06-21 16:32:40,750 extraction 8720 3212 [AI_TASK_ENQUEUED] record=1007711 page=1 task=ai_1007711_1_1782039760 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:40,750 extraction 8720 3212 [AI_EXTRACTION_CALL] record=1007711 page=1 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:40,750 extraction 8720 3212 [PIPELINE_AI_ENQUEUE] record_id=1007711 queue=ai_requests
+INFO 2026-06-21 16:32:40,750 extraction 8720 3212 [SQS_PUSH] record=1007711 page=1 queue=ai_requests
+INFO 2026-06-21 16:32:40,750 message_factory 8720 3212 [CANONICAL_MESSAGE_EMITTED] task_type=AI_EXTRACTION ver=v1 corr=57013f2a-284f-4f63-9fb3-6ce31d5a4991 trace_id=trace-c8c8b93c50c8-1782039760 dedupe_key=dc3911ed7bb95acd7168522911b1e5d1c10cbf86f723242044dffb6c0e91b0c0 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:32:40,750 message_factory 8720 3212 [JOB_CONTEXT_PROPAGATED] task_type=AI_EXTRACTION job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:32:41,314 ai_proxy 8720 3212 [QUEUE_FORWARD_SUCCESS] target_queue=ai msg_id=2d0f34a2-acac-4577-a377-ec365c55469a record=1007711 job=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3
+INFO 2026-06-21 16:32:41,314 ai_proxy 8720 3212 [AI_TASK_EMITTED] id=2d0f34a2-acac-4577-a377-ec365c55469a corr=57013f2a-284f-4f63-9fb3-6ce31d5a4991 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:41,315 extraction 8720 20988 [FANOUT_QUEUED] record_id=1007711 page_number=1 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:41,531 extraction 8720 1072 [AI_PAYLOAD_VALID] record=1007711 page=2 item=None cid=None
+INFO 2026-06-21 16:32:41,531 extraction 8720 1072 [AI_TASK_ENQUEUED] record=1007711 page=2 task=ai_1007711_2_1782039761 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:41,531 extraction 8720 1072 [AI_EXTRACTION_CALL] record=1007711 page=2 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:41,531 extraction 8720 1072 [PIPELINE_AI_ENQUEUE] record_id=1007711 queue=ai_requests
+INFO 2026-06-21 16:32:41,531 extraction 8720 1072 [SQS_PUSH] record=1007711 page=2 queue=ai_requests
+INFO 2026-06-21 16:32:41,531 message_factory 8720 1072 [CANONICAL_MESSAGE_EMITTED] task_type=AI_EXTRACTION ver=v1 corr=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 trace_id=trace-17deb6634808-1782039761 dedupe_key=dc3911ed7bb95acd7168522911b1e5d1c10cbf86f723242044dffb6c0e91b0c0 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:32:41,531 message_factory 8720 1072 [JOB_CONTEXT_PROPAGATED] task_type=AI_EXTRACTION job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:32:41,867 ai_proxy 8720 1072 [QUEUE_FORWARD_SUCCESS] target_queue=ai msg_id=afab6996-07c6-4a38-8701-e53dfcb41870 record=1007711 job=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3
+INFO 2026-06-21 16:32:41,868 ai_proxy 8720 1072 [AI_TASK_EMITTED] id=afab6996-07c6-4a38-8701-e53dfcb41870 corr=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:41,868 extraction 8720 20988 [FANOUT_QUEUED] record_id=1007711 page_number=2 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:41,875 extraction 8720 20988 [BOUNDED_FANOUT_SYNC] record=1007711 newly_enqueued=2
+INFO 2026-06-21 16:32:41,875 extraction 8720 20988 [EXTRACTION_COMPLETE] pages=2 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 record=1007711 units=2
+INFO 2026-06-21 16:32:41,875 pipeline 8720 20988 [PIPELINE ASYNC] Extraction enqueued for record 1007711. Returning early.
+INFO 2026-06-21 16:32:41,875 redis_orchestrator 8720 15128 [REDIS_STATE_MUTATION_ENTER] record=1007711
+INFO 2026-06-21 16:32:41,875 redis_orchestrator 8720 15128 [REDIS_STATE_MUTATION_INPUT] record=1007711 raw_input_status=INGESTED
+INFO 2026-06-21 16:32:41,875 redis_orchestrator 8720 15128 [REDIS_STATUS_ASSIGN] record=1007711 assigned_status=INGESTED
+INFO 2026-06-21 16:32:41,876 redis_orchestrator 8720 15128 [LIFECYCLE_STATE_NORMALIZED] raw_state=INGESTED normalized_state=INGESTION_COMPLETE record=1007711
+INFO 2026-06-21 16:32:41,876 redis_orchestrator 8720 15128 [LIFECYCLE_TRANSITION_ATTEMPT] record=1007711 previous_state=INGESTION_STARTED requested_state=INGESTION_COMPLETE
+INFO 2026-06-21 16:32:41,876 redis_orchestrator 8720 15128 [LIFECYCLE_TRANSITION_ACCEPTED] record=1007711 previous_state=INGESTION_STARTED requested_state=INGESTION_COMPLETE
+INFO 2026-06-21 16:32:41,876 redis_orchestrator 8720 15128 [REDIS_STATE_WRITE] record=1007711 status=INGESTION_COMPLETE
+INFO 2026-06-21 16:32:41,877 redis_orchestrator 8720 15128 [REDIS_STATE_COMMIT] record=1007711 status=INGESTION_COMPLETE
+INFO 2026-06-21 16:32:41,877 redis_orchestrator 8720 15128 [STATUS_SYNC_OK] record=1007711 status=INGESTION_COMPLETE progress=20.0%
+INFO 2026-06-21 16:32:41,877 ingestion_worker 8720 15128 [INGESTION_TASK_SUCCESS] id=bb7b15df-725c-4904-885a-dd60bf6c72fb record=1007711
+INFO 2026-06-21 16:32:41,877 ingestion_worker 8720 15128 [INGESTION_TASK_COMPLETE] id=bb7b15df-725c-4904-885a-dd60bf6c72fb record=1007711
+INFO 2026-06-21 16:32:41,877 worker_base 8720 15128 [PIPELINE_STAGE_EXIT] stage=INGESTION correlation_id=43c167db-86ac-4788-abe5-8ed4e743981b upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown
+INFO 2026-06-21 16:32:41,878 worker_base 8720 15128 [WORKER_STAGE_SUCCESS] correlation_id=43c167db-86ac-4788-abe5-8ed4e743981b upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=ingestion worker_id=INGESTION worker_pid=8720 hostname=LAPTOP-601O6S3T retry_count=1 visibility_timeout=1800 processing_duration_ms=14557 dto_status=COMPLETED
+INFO 2026-06-21 16:32:41,898 message_parser 20408 7088 [CONTEXT_TRACE_SCHEMA_VALIDATE] msg_id=2d0f34a2-acac-4577-a377-ec365c55469a job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 payload_keys=['type', 'prompt', 'image_data', 'mime_type', 'voucher_type', 'page_index', 'page_number', 'total_pages', 'wait_for_result', '_pdf_ocr_text', 'file_hash', 'item_id', 'record_id', 'job_id', 'upload_session_id', 'tenant_id', 'upload_type', 'correlation_id', 'is_rescan', 'rescan_history_id', 'user_id', 'metadata']
+INFO 2026-06-21 16:32:41,898 message_parser 20408 7088 [JOB_CONTEXT_VALIDATED] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:41,898 message_parser 20408 7088 [JOB_CONTEXT_PROPAGATED] type=AI_EXTRACTION job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:32:41,898 worker_base 20408 7088 [QUEUE_MESSAGE_RECEIVED] correlation_id=57013f2a-284f-4f63-9fb3-6ce31d5a4991 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 page_number=1 worker_name=AI
+INFO 2026-06-21 16:32:41,898 worker_base 20408 7088 [WORKER_MESSAGE_RECEIVED] correlation_id=57013f2a-284f-4f63-9fb3-6ce31d5a4991 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=ai worker_id=AI worker_pid=20408 hostname=LAPTOP-601O6S3T retry_count=1 visibility_timeout=1800
+INFO 2026-06-21 16:32:41,898 worker_base 20408 7088 [WORKER_PICKUP] role='AI' task_id='2d0f34a2-acac-4577-a377-ec365c55469a' session_id='fdce9a70-4459-4f99-85bb-e7fe14ab95e1' job_id='e1ca4245-2a81-42d6-a8bf-f71aff34d1c3' correlation_id='57013f2a-284f-4f63-9fb3-6ce31d5a4991'
+INFO 2026-06-21 16:32:41,948 worker_base 8720 15128 [QUEUE_MESSAGE_ACK] id=bb7b15df-725c-4904-885a-dd60bf6c72fb queue=ingestion correlation_id=43c167db-86ac-4788-abe5-8ed4e743981b session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:41,966 worker_base 20408 7088 [QUEUE_MESSAGE_PROCESSING] correlation_id=57013f2a-284f-4f63-9fb3-6ce31d5a4991 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 worker_name=AI
+INFO 2026-06-21 16:32:41,966 worker_base 20408 7088 [PIPELINE_STAGE_ENTER] stage=AI correlation_id=57013f2a-284f-4f63-9fb3-6ce31d5a4991 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown
+INFO 2026-06-21 16:32:41,967 ai_worker 20408 7088 [CONTEXT_TRACE_AI_RECEIVE] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 trace_id=None page=1
+INFO 2026-06-21 16:32:41,967 ai_worker 20408 7088 [SESSION_FORENSIC] stage='ai_worker_receive' record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 page=1
+INFO 2026-06-21 16:32:41,967 ai_worker 20408 7088 [AI_PAGE_START] record=1007711 page=1 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 correlation_id=57013f2a-284f-4f63-9fb3-6ce31d5a4991 worker_role=AI
+INFO 2026-06-21 16:32:41,971 ai_worker 20408 7088 [OCR_RETRY_CHAIN_START] record=1007711 page=1 max_passes=5
+INFO 2026-06-21 16:32:41,972 ai_worker 20408 7088 [OCR_RECOVERY_PASS] pass=1/5 (original image) record=1007711 page=1
+INFO 2026-06-21 16:32:42,131 ai_proxy 20408 7344 [AI_MODEL_SELECTED] provider=Qwen model=qwen2.5vl:7b tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 record_id=1007711 page_number=1
+INFO 2026-06-21 16:32:42,132 qwen_provider 20408 7344 [PREFIX_CACHE_TELEMETRY] PREFIX_HASH=0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390 PROMPT_HASH=d8186a04f0b2d47e8d0f70d9f5a98b9d9deb277f8a5a8509f5207f859ec46523 REQUEST_ID=ai_1007711_1_1782039760 PAGE_NUMBER=1 INVOICE_ID=1007711
+INFO 2026-06-21 16:32:42,758 message_parser 20408 7088 [CONTEXT_TRACE_SCHEMA_VALIDATE] msg_id=afab6996-07c6-4a38-8701-e53dfcb41870 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 payload_keys=['type', 'prompt', 'image_data', 'mime_type', 'voucher_type', 'page_index', 'page_number', 'total_pages', 'wait_for_result', '_pdf_ocr_text', 'file_hash', 'item_id', 'record_id', 'job_id', 'upload_session_id', 'tenant_id', 'upload_type', 'correlation_id', 'is_rescan', 'rescan_history_id', 'user_id', 'metadata']
+INFO 2026-06-21 16:32:42,758 message_parser 20408 7088 [JOB_CONTEXT_VALIDATED] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:32:42,758 message_parser 20408 7088 [JOB_CONTEXT_PROPAGATED] type=AI_EXTRACTION job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:32:42,758 worker_base 20408 7088 [QUEUE_MESSAGE_RECEIVED] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 page_number=1 worker_name=AI
+INFO 2026-06-21 16:32:42,758 worker_base 20408 7088 [WORKER_MESSAGE_RECEIVED] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=ai worker_id=AI worker_pid=20408 hostname=LAPTOP-601O6S3T retry_count=1 visibility_timeout=1800
+INFO 2026-06-21 16:32:42,758 worker_base 20408 7088 [WORKER_PICKUP] role='AI' task_id='afab6996-07c6-4a38-8701-e53dfcb41870' session_id='fdce9a70-4459-4f99-85bb-e7fe14ab95e1' job_id='e1ca4245-2a81-42d6-a8bf-f71aff34d1c3' correlation_id='0ec0c6b3-c503-4d01-be7c-2aec4a82d677'
+INFO 2026-06-21 16:32:42,818 worker_base 20408 7088 [QUEUE_MESSAGE_PROCESSING] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 worker_name=AI
+INFO 2026-06-21 16:32:42,818 worker_base 20408 7088 [PIPELINE_STAGE_ENTER] stage=AI correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown
+INFO 2026-06-21 16:32:42,819 ai_worker 20408 7088 [CONTEXT_TRACE_AI_RECEIVE] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 trace_id=None page=2
+INFO 2026-06-21 16:32:42,819 ai_worker 20408 7088 [SESSION_FORENSIC] stage='ai_worker_receive' record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 page=2
+INFO 2026-06-21 16:32:42,819 ai_worker 20408 7088 [AI_PAGE_START] record=1007711 page=2 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 worker_role=AI
+INFO 2026-06-21 16:32:42,822 ai_worker 20408 7088 [OCR_RETRY_CHAIN_START] record=1007711 page=2 max_passes=5
+INFO 2026-06-21 16:32:42,824 ai_worker 20408 7088 [OCR_RECOVERY_PASS] pass=1/5 (original image) record=1007711 page=2
+INFO 2026-06-21 16:32:42,955 ai_worker 20408 7088 [SLOT_FORCE_RELEASE] record=1007711 page=2 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+DEBUG 2026-06-21 16:32:42,955 redis_orchestrator 20408 7088 [SLOT_RELEASE_SKIP] record=1007711 page=2 — not in active slots
+ERROR 2026-06-21 16:32:42,955 worker_base 20408 7088 [WORKER_STAGE_FAILURE] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=ai worker_id=AI worker_pid=20408 hostname=LAPTOP-601O6S3T retry_count=1 visibility_timeout=1800 processing_duration_ms=196 dto_status=FAILED exception_class=ProviderSaturatedError exception_message='AI system is at capacity.'
+INFO 2026-06-21 16:33:23,419 message_parser 20408 7088 [CONTEXT_TRACE_SCHEMA_VALIDATE] msg_id=afab6996-07c6-4a38-8701-e53dfcb41870 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 payload_keys=['type', 'prompt', 'image_data', 'mime_type', 'voucher_type', 'page_index', 'page_number', 'total_pages', 'wait_for_result', '_pdf_ocr_text', 'file_hash', 'item_id', 'record_id', 'job_id', 'upload_session_id', 'tenant_id', 'upload_type', 'correlation_id', 'is_rescan', 'rescan_history_id', 'user_id', 'metadata']
+INFO 2026-06-21 16:33:23,419 message_parser 20408 7088 [JOB_CONTEXT_VALIDATED] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:33:23,419 message_parser 20408 7088 [JOB_CONTEXT_PROPAGATED] type=AI_EXTRACTION job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:33:23,419 worker_base 20408 7088 [QUEUE_MESSAGE_RECEIVED] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 page_number=1 worker_name=AI
+INFO 2026-06-21 16:33:23,419 worker_base 20408 7088 [WORKER_MESSAGE_RECEIVED] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=ai worker_id=AI worker_pid=20408 hostname=LAPTOP-601O6S3T retry_count=2 visibility_timeout=1800
+INFO 2026-06-21 16:33:23,419 worker_base 20408 7088 [WORKER_PICKUP] role='AI' task_id='afab6996-07c6-4a38-8701-e53dfcb41870' session_id='fdce9a70-4459-4f99-85bb-e7fe14ab95e1' job_id='e1ca4245-2a81-42d6-a8bf-f71aff34d1c3' correlation_id='0ec0c6b3-c503-4d01-be7c-2aec4a82d677'
+INFO 2026-06-21 16:33:23,497 worker_base 20408 7088 [QUEUE_MESSAGE_PROCESSING] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 worker_name=AI
+INFO 2026-06-21 16:33:23,497 worker_base 20408 7088 [PIPELINE_STAGE_ENTER] stage=AI correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown
+INFO 2026-06-21 16:33:23,497 ai_worker 20408 7088 [CONTEXT_TRACE_AI_RECEIVE] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 trace_id=None page=2
+INFO 2026-06-21 16:33:23,498 ai_worker 20408 7088 [SESSION_FORENSIC] stage='ai_worker_receive' record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 page=2
+INFO 2026-06-21 16:33:23,498 ai_worker 20408 7088 [AI_PAGE_START] record=1007711 page=2 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 worker_role=AI
+INFO 2026-06-21 16:33:23,520 ai_worker 20408 7088 [OCR_RETRY_CHAIN_START] record=1007711 page=2 max_passes=5
+INFO 2026-06-21 16:33:23,521 ai_worker 20408 7088 [OCR_RECOVERY_PASS] pass=1/5 (original image) record=1007711 page=2
+INFO 2026-06-21 16:33:23,659 ai_worker 20408 7088 [SLOT_FORCE_RELEASE] record=1007711 page=2 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+DEBUG 2026-06-21 16:33:23,660 redis_orchestrator 20408 7088 [SLOT_RELEASE_SKIP] record=1007711 page=2 — not in active slots
+ERROR 2026-06-21 16:33:23,660 worker_base 20408 7088 [WORKER_STAGE_FAILURE] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=ai worker_id=AI worker_pid=20408 hostname=LAPTOP-601O6S3T retry_count=2 visibility_timeout=1800 processing_duration_ms=241 dto_status=FAILED exception_class=ProviderSaturatedError exception_message='AI system is at capacity.'
+INFO 2026-06-21 16:34:45,001 message_parser 20408 7088 [CONTEXT_TRACE_SCHEMA_VALIDATE] msg_id=afab6996-07c6-4a38-8701-e53dfcb41870 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 payload_keys=['type', 'prompt', 'image_data', 'mime_type', 'voucher_type', 'page_index', 'page_number', 'total_pages', 'wait_for_result', '_pdf_ocr_text', 'file_hash', 'item_id', 'record_id', 'job_id', 'upload_session_id', 'tenant_id', 'upload_type', 'correlation_id', 'is_rescan', 'rescan_history_id', 'user_id', 'metadata']
+INFO 2026-06-21 16:34:45,001 message_parser 20408 7088 [JOB_CONTEXT_VALIDATED] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:34:45,001 message_parser 20408 7088 [JOB_CONTEXT_PROPAGATED] type=AI_EXTRACTION job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:34:45,001 worker_base 20408 7088 [QUEUE_MESSAGE_RECEIVED] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 page_number=1 worker_name=AI
+INFO 2026-06-21 16:34:45,001 worker_base 20408 7088 [WORKER_MESSAGE_RECEIVED] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=ai worker_id=AI worker_pid=20408 hostname=LAPTOP-601O6S3T retry_count=3 visibility_timeout=1800
+INFO 2026-06-21 16:34:45,001 worker_base 20408 7088 [WORKER_PICKUP] role='AI' task_id='afab6996-07c6-4a38-8701-e53dfcb41870' session_id='fdce9a70-4459-4f99-85bb-e7fe14ab95e1' job_id='e1ca4245-2a81-42d6-a8bf-f71aff34d1c3' correlation_id='0ec0c6b3-c503-4d01-be7c-2aec4a82d677'
+INFO 2026-06-21 16:34:45,063 worker_base 20408 7088 [QUEUE_MESSAGE_PROCESSING] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 worker_name=AI
+INFO 2026-06-21 16:34:45,064 worker_base 20408 7088 [PIPELINE_STAGE_ENTER] stage=AI correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown
+INFO 2026-06-21 16:34:45,064 ai_worker 20408 7088 [CONTEXT_TRACE_AI_RECEIVE] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 trace_id=None page=2
+INFO 2026-06-21 16:34:45,064 ai_worker 20408 7088 [SESSION_FORENSIC] stage='ai_worker_receive' record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 page=2
+INFO 2026-06-21 16:34:45,064 ai_worker 20408 7088 [AI_PAGE_START] record=1007711 page=2 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 worker_role=AI
+INFO 2026-06-21 16:34:45,084 ai_worker 20408 7088 [OCR_RETRY_CHAIN_START] record=1007711 page=2 max_passes=5
+INFO 2026-06-21 16:34:45,086 ai_worker 20408 7088 [OCR_RECOVERY_PASS] pass=1/5 (original image) record=1007711 page=2
+INFO 2026-06-21 16:34:45,214 ai_worker 20408 7088 [SLOT_FORCE_RELEASE] record=1007711 page=2 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+DEBUG 2026-06-21 16:34:45,214 redis_orchestrator 20408 7088 [SLOT_RELEASE_SKIP] record=1007711 page=2 — not in active slots
+ERROR 2026-06-21 16:34:45,215 worker_base 20408 7088 [WORKER_STAGE_FAILURE] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=ai worker_id=AI worker_pid=20408 hostname=LAPTOP-601O6S3T retry_count=3 visibility_timeout=1800 processing_duration_ms=213 dto_status=FAILED exception_class=ProviderSaturatedError exception_message='AI system is at capacity.'
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='65573.28' repaired='"65573.28"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='65573.28' repaired='"65573.28"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='910.74' repaired='"910.74"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='60' repaired='"60.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='54644.4' repaired='"54644.40"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='6' repaired='"6.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='6' repaired='"6.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='54644.4' repaired='"54644.40"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='910.74' repaired='"910.74"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,631 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='12' repaired='"12.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,632 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='10928.88' repaired='"10928.88"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,632 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,632 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,632 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='6' repaired='"6.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,632 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,632 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='6' repaired='"6.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,632 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,632 extraction 20408 21620 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='10928.88' repaired='"10928.88"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,632 ai_worker 20408 7088 [REPAIR_SAVED_RETRY] record=1007711 page=1 pass=1 strategy=MARKDOWN_STRIP+ARITHMETIC_REPAIR avoided_qwen_retry=True estimated_saved_seconds=141
+INFO 2026-06-21 16:34:49,635 ai_worker 20408 7088 [PARSER_VARIABLE_INIT] record=1007711 page=1 stage=retries
+INFO 2026-06-21 16:34:49,650 ai_worker 20408 7088 [OCR_RECOVERY_SUCCESS] pass=1 record=1007711 page=1
+INFO 2026-06-21 16:34:49,650 ai_worker 20408 7088 [PAGE_OCR_COMPLETED] record=1007711 page=1
+INFO 2026-06-21 16:34:49,653 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='65573.28' repaired='"65573.28"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,653 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='65573.28' repaired='"65573.28"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,653 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,653 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,653 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,653 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='910.74' repaired='"910.74"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,653 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='60' repaired='"60.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='54644.4' repaired='"54644.40"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='6' repaired='"6.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='6' repaired='"6.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='54644.4' repaired='"54644.40"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='910.74' repaired='"910.74"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='12' repaired='"12.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='10928.88' repaired='"10928.88"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='6' repaired='"6.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='6' repaired='"6.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 extraction 20408 16148 [JSON_REPAIR_APPLIED] record=1007711 page=1 field=<numeric> original='10928.88' repaired='"10928.88"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:34:49,654 ai_worker 20408 7088 [AI_PARSE_START] record=1007711 page=1
+INFO 2026-06-21 16:34:49,654 ai_worker 20408 7088 [GSTIN_RAW_OCR] upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 page_number=1 invoice_no=4742/25-26 vendor_name=SRI VISHNU HEAT TREATERS gstin=33ABYFS6343M1ZC length=15
+INFO 2026-06-21 16:34:49,654 ai_worker 20408 7088 [GSTIN_EXTRACTED] upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 page_number=1 invoice_no=4742/25-26 vendor_name=SRI VISHNU HEAT TREATERS gstin=33ABYFS6343M1ZC length=15
+INFO 2026-06-21 16:34:49,654 ai_worker 20408 7088 [PARSER_VARIABLE_INIT] record=1007711 page=1 stage=process_result
+  "upload_session_id": "fdce9a70-4459-4f99-85bb-e7fe14ab95e1",
+  "physical_file_id": "1007711",
+INFO 2026-06-21 16:34:49,655 ai_worker 20408 7088 [QWEN_ITEM_CLASSIFICATION] record=1007711 page=1 description='SQF - CASEHARDENING & TEMPERING(KGS) B65-6008 PIN 1059-NOS' quantity=910.74 rate=60.00 amount=54644.40
+INFO 2026-06-21 16:34:49,655 ai_worker 20408 7088 [QWEN_ITEM_CLASSIFICATION] record=1007711 page=1 description='SHOT BLASTINGS(KGS) B65-6008 PIN 1059-NOS' quantity=910.74 rate=12.00 amount=10928.88
+INFO 2026-06-21 16:34:49,655 normalize 20408 7344 [NORMALIZATION_START] record_id=1007711 invoice_no=None
+INFO 2026-06-21 16:34:49,655 normalize 20408 7344 [DTO_PRE_VALIDATION] record_id=1007711 keys=['header', 'items', 'record_id', 'job_id', 'upload_session_id', 'tenant_id']
+INFO 2026-06-21 16:34:49,667 normalize 20408 7344 [DTO_POST_VALIDATION] record_id=1007711 status=VALID
+INFO 2026-06-21 16:34:49,667 pipeline 20408 7088 [ITEM_TRACE_EXTRACTED] record_id=1007711 invoice_no=4742/25-26 page_number=1 item_count=2 item_status=None snapshot_item_count=None
+INFO 2026-06-21 16:34:49,667 ai_worker 20408 7088 [DTO_PRE_VALIDATION] record=1007711 keys=['invoice_no', 'invoice_date', 'vendor_name', 'gstin', 'raw_gstin', 'canonical_gstin', 'branch', 'hsn_sac', 'vendor_gstin', 'buyer_gstin', 'consignee_gstin', 'ship_to_gstin', 'bill_to_gstin', 'raw_vendor_gstin', 'raw_buyer_gstin', 'raw_consignee_gstin', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'canonical_vendor_gstin', 'canonical_buyer_gstin', 'canonical_consignee_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'raw_invoice_no', 'canonical_invoice_no', 'raw_invoice_date', 'canonical_invoice_date', 'raw_vendor_name', 'canonical_vendor_name', 'bill_from', 'bill_to', 'place_of_supply', 'total_taxable_value', 'total_igst', 'total_cgst', 'total_sgst', 'total_cess', 'round_off', 'total_invoice_value', 'irn', 'ack_no', 'ack_date', 'items', 'warnings', 'record_id', 'job_id', 'upload_session_id', 'tenant_id', '_pdf_ocr_text', '_raw_text']
+INFO 2026-06-21 16:34:49,668 ai_worker 20408 7088 [DTO_POST_VALIDATION] record=1007711 valid=True
+INFO 2026-06-21 16:34:49,668 ai_worker 20408 7088 [AI_PAGE_SUCCESS] record=1007711 page=1 correlation_id=57013f2a-284f-4f63-9fb3-6ce31d5a4991 worker_role=AI
+INFO 2026-06-21 16:34:49,668 ai_worker 20408 7088 [SESSION_FORENSIC] stage='ai_page_success' record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 page=1
+INFO 2026-06-21 16:34:49,668 coordinator 20408 14960 [FORENSIC_TRACE] event=persist_db_BEFORE record=1007711 ctx=SYNC thread=ThreadPoolExecutor-1_1 (id=14960) | details=page=1 is_failed=False
+INFO 2026-06-21 16:34:49,668 coordinator 20408 14960 [CANONICAL_TERMINALIZATION] record=1007711 page=1 is_failed=False worker=AIWorker queue=ai_queue tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 correlation=57013f2a-284f-4f63-9fb3-6ce31d5a4991 job=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 item=None
+INFO 2026-06-21 16:34:49,675 coordinator 20408 14960 [CANONICAL_BARRIER_REACHED] record=1007711 page=1 expected=2 completed=1 failed=0
+CRITICAL 2026-06-21 16:34:49,675 coordinator 20408 14960 [SESSION_BARRIER_STATE] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 expected=2 completed=1 failed=0 ai_complete=False [POST_TERMINALIZE]
+INFO 2026-06-21 16:34:49,677 coordinator 20408 14960 [FINALIZE_TRIGGER_ENTER] record=1007711 page=1 is_failed=False — evaluating convergence post-commit
+CRITICAL 2026-06-21 16:34:49,677 coordinator 20408 14960 [SESSION_BARRIER_STATE] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 expected=2 completed=1 failed=0 total=1 ai_complete=False [PRE_CONVERGENCE_EVAL]
+INFO 2026-06-21 16:34:49,678 coordinator 20408 14960 [FINALIZE_TRIGGER_EXIT] record=1007711 page=1 barrier_total=1/2 remaining=1 — not yet complete
+INFO 2026-06-21 16:34:49,678 coordinator 20408 14960 [FORENSIC_TRACE] event=persist_db_AFTER record=1007711 ctx=SYNC thread=ThreadPoolExecutor-1_1 (id=14960) | details=page=1 is_failed=False (saved)
+INFO 2026-06-21 16:34:49,678 coordinator 20408 14960 [FORENSIC_TRACE] event=redis_progress_update_BEFORE record=1007711 ctx=SYNC thread=ThreadPoolExecutor-1_1 (id=14960) | details=progress=45.0%
+INFO 2026-06-21 16:34:49,678 redis_orchestrator 20408 14960 [REDIS_STATE_MUTATION_ENTER] record=1007711
+INFO 2026-06-21 16:34:49,678 redis_orchestrator 20408 14960 [REDIS_STATE_MUTATION_INPUT] record=1007711 raw_input_status=PROCESSING
+INFO 2026-06-21 16:34:49,678 redis_orchestrator 20408 14960 [REDIS_STATUS_ASSIGN] record=1007711 assigned_status=PROCESSING
+INFO 2026-06-21 16:34:49,679 redis_orchestrator 20408 14960 [LIFECYCLE_STATE_NORMALIZED] raw_state=PROCESSING normalized_state=AI_PROCESSING record=1007711
+INFO 2026-06-21 16:34:49,679 redis_orchestrator 20408 14960 [LIFECYCLE_TRANSITION_ATTEMPT] record=1007711 previous_state=INGESTION_COMPLETE requested_state=AI_PROCESSING
+INFO 2026-06-21 16:34:49,679 redis_orchestrator 20408 14960 [LIFECYCLE_TRANSITION_ACCEPTED] record=1007711 previous_state=INGESTION_COMPLETE requested_state=AI_PROCESSING
+INFO 2026-06-21 16:34:49,679 redis_orchestrator 20408 14960 [REDIS_STATE_WRITE] record=1007711 status=AI_PROCESSING
+INFO 2026-06-21 16:34:49,680 redis_orchestrator 20408 14960 [REDIS_STATE_COMMIT] record=1007711 status=AI_PROCESSING
+INFO 2026-06-21 16:34:49,680 redis_orchestrator 20408 14960 [STATUS_SYNC_OK] record=1007711 status=AI_PROCESSING progress=45.0%
+INFO 2026-06-21 16:34:49,680 coordinator 20408 14960 [FORENSIC_TRACE] event=redis_progress_update_AFTER record=1007711 ctx=SYNC thread=ThreadPoolExecutor-1_1 (id=14960) | details=progress=45.0%
+DEBUG 2026-06-21 16:34:49,682 pipeline 20408 14960 [FANOUT_COMPLETE] record=1007711 reached limit 2
+INFO 2026-06-21 16:34:49,683 ai_worker 20408 7088 [SLOT_FORCE_RELEASE] record=1007711 page=1 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+DEBUG 2026-06-21 16:34:49,683 redis_orchestrator 20408 7088 [SLOT_RELEASE_SKIP] record=1007711 page=1 — not in active slots
+INFO 2026-06-21 16:34:49,684 worker_base 20408 7088 [PIPELINE_STAGE_EXIT] stage=AI correlation_id=57013f2a-284f-4f63-9fb3-6ce31d5a4991 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown
+INFO 2026-06-21 16:34:49,684 worker_base 20408 7088 [WORKER_STAGE_SUCCESS] correlation_id=57013f2a-284f-4f63-9fb3-6ce31d5a4991 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=ai worker_id=AI worker_pid=20408 hostname=LAPTOP-601O6S3T retry_count=1 visibility_timeout=1800 processing_duration_ms=127785 dto_status=COMPLETED
+INFO 2026-06-21 16:34:49,750 worker_base 20408 7088 [QUEUE_MESSAGE_ACK] id=2d0f34a2-acac-4577-a377-ec365c55469a queue=ai correlation_id=57013f2a-284f-4f63-9fb3-6ce31d5a4991 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:37:25,661 message_parser 20408 7088 [CONTEXT_TRACE_SCHEMA_VALIDATE] msg_id=afab6996-07c6-4a38-8701-e53dfcb41870 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 payload_keys=['type', 'prompt', 'image_data', 'mime_type', 'voucher_type', 'page_index', 'page_number', 'total_pages', 'wait_for_result', '_pdf_ocr_text', 'file_hash', 'item_id', 'record_id', 'job_id', 'upload_session_id', 'tenant_id', 'upload_type', 'correlation_id', 'is_rescan', 'rescan_history_id', 'user_id', 'metadata']
+INFO 2026-06-21 16:37:25,661 message_parser 20408 7088 [JOB_CONTEXT_VALIDATED] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:37:25,661 message_parser 20408 7088 [JOB_CONTEXT_PROPAGATED] type=AI_EXTRACTION job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:37:25,661 worker_base 20408 7088 [QUEUE_MESSAGE_RECEIVED] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 page_number=1 worker_name=AI
+INFO 2026-06-21 16:37:25,661 worker_base 20408 7088 [WORKER_MESSAGE_RECEIVED] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=ai worker_id=AI worker_pid=20408 hostname=LAPTOP-601O6S3T retry_count=4 visibility_timeout=1800
+INFO 2026-06-21 16:37:25,661 worker_base 20408 7088 [WORKER_PICKUP] role='AI' task_id='afab6996-07c6-4a38-8701-e53dfcb41870' session_id='fdce9a70-4459-4f99-85bb-e7fe14ab95e1' job_id='e1ca4245-2a81-42d6-a8bf-f71aff34d1c3' correlation_id='0ec0c6b3-c503-4d01-be7c-2aec4a82d677'
+INFO 2026-06-21 16:37:25,751 worker_base 20408 7088 [QUEUE_MESSAGE_PROCESSING] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 worker_name=AI
+INFO 2026-06-21 16:37:25,751 worker_base 20408 7088 [PIPELINE_STAGE_ENTER] stage=AI correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown
+INFO 2026-06-21 16:37:25,752 ai_worker 20408 7088 [CONTEXT_TRACE_AI_RECEIVE] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 trace_id=None page=2
+INFO 2026-06-21 16:37:25,752 ai_worker 20408 7088 [SESSION_FORENSIC] stage='ai_worker_receive' record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 page=2
+INFO 2026-06-21 16:37:25,752 ai_worker 20408 7088 [AI_PAGE_START] record=1007711 page=2 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 worker_role=AI
+INFO 2026-06-21 16:37:25,767 ai_worker 20408 7088 [OCR_RETRY_CHAIN_START] record=1007711 page=2 max_passes=5
+INFO 2026-06-21 16:37:25,769 ai_worker 20408 7088 [OCR_RECOVERY_PASS] pass=1/5 (original image) record=1007711 page=2
+INFO 2026-06-21 16:37:25,916 ai_proxy 20408 14960 [AI_MODEL_SELECTED] provider=Qwen model=qwen2.5vl:7b tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 record_id=1007711 page_number=2
+INFO 2026-06-21 16:37:25,919 qwen_provider 20408 14960 [PREFIX_CACHE_TELEMETRY] PREFIX_HASH=0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390 PROMPT_HASH=dcdce554a4fd708dc387dd4c9114ddde509707118295fefc5f58ec012f1d2d83 REQUEST_ID=ai_1007711_2_1782039761 PAGE_NUMBER=2 INVOICE_ID=1007711
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='7868.78' repaired='"7868.78"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='65573.28' repaired='"65573.28"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='-0.06' repaired='"-0.06"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,645 extraction 20408 5920 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='-0.06' repaired='"-0.06"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,646 ai_worker 20408 7088 [REPAIR_SAVED_RETRY] record=1007711 page=2 pass=1 strategy=MARKDOWN_STRIP+ARITHMETIC_REPAIR avoided_qwen_retry=True estimated_saved_seconds=141
+INFO 2026-06-21 16:39:30,646 ai_worker 20408 7088 [PARSER_VARIABLE_INIT] record=1007711 page=2 stage=retries
+INFO 2026-06-21 16:39:30,658 ai_worker 20408 7088 [OCR_RECOVERY_SUCCESS] pass=1 record=1007711 page=2
+INFO 2026-06-21 16:39:30,658 ai_worker 20408 7088 [PAGE_OCR_COMPLETED] record=1007711 page=2
+INFO 2026-06-21 16:39:30,661 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='7868.78' repaired='"7868.78"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,661 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='65573.28' repaired='"65573.28"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,661 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,661 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='3934.39' repaired='"3934.39"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,661 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,661 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,661 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='-0.06' repaired='"-0.06"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,661 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,661 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,662 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,662 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,662 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,662 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,662 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,662 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='0' repaired='"0.00"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,662 extraction 20408 19984 [JSON_REPAIR_APPLIED] record=1007711 page=2 field=<numeric> original='-0.06' repaired='"-0.06"' reason=BARE_ARITHMETIC_EXPR
+INFO 2026-06-21 16:39:30,662 ai_worker 20408 7088 [AI_PARSE_START] record=1007711 page=2
+INFO 2026-06-21 16:39:30,662 ai_worker 20408 7088 [GSTIN_RAW_OCR] upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 page_number=2 invoice_no=4742/25-26 vendor_name=SRI VISHNU HEAT TREATERS gstin=33CKJPS6256F1ZW length=15
+INFO 2026-06-21 16:39:30,662 ai_worker 20408 7088 [GSTIN_EXTRACTED] upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 page_number=2 invoice_no=4742/25-26 vendor_name=SRI VISHNU HEAT TREATERS gstin=33CKJPS6256F1ZW length=15
+INFO 2026-06-21 16:39:30,662 ai_worker 20408 7088 [PARSER_VARIABLE_INIT] record=1007711 page=2 stage=process_result
+  "upload_session_id": "fdce9a70-4459-4f99-85bb-e7fe14ab95e1",
+  "physical_file_id": "1007711",
+INFO 2026-06-21 16:39:30,663 ai_worker 20408 7088 [QWEN_ITEM_CLASSIFICATION] record=1007711 page=2 description='Rounded Off' quantity= rate=0.00 amount=-0.06
+INFO 2026-06-21 16:39:30,663 normalize 20408 14960 [NORMALIZATION_START] record_id=1007711 invoice_no=None
+INFO 2026-06-21 16:39:30,663 normalize 20408 14960 [DTO_PRE_VALIDATION] record_id=1007711 keys=['header', 'items', 'record_id', 'job_id', 'upload_session_id', 'tenant_id']
+INFO 2026-06-21 16:39:30,674 normalize 20408 14960 [DTO_POST_VALIDATION] record_id=1007711 status=VALID
+INFO 2026-06-21 16:39:30,674 pipeline 20408 7088 [ITEM_TRACE_EXTRACTED] record_id=1007711 invoice_no=4742/25-26 page_number=2 item_count=1 item_status=None snapshot_item_count=None
+INFO 2026-06-21 16:39:30,675 ai_worker 20408 7088 [DTO_PRE_VALIDATION] record=1007711 keys=['invoice_no', 'invoice_date', 'vendor_name', 'gstin', 'raw_gstin', 'canonical_gstin', 'branch', 'hsn_sac', 'vendor_gstin', 'buyer_gstin', 'consignee_gstin', 'ship_to_gstin', 'bill_to_gstin', 'raw_vendor_gstin', 'raw_buyer_gstin', 'raw_consignee_gstin', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'canonical_vendor_gstin', 'canonical_buyer_gstin', 'canonical_consignee_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'raw_invoice_no', 'canonical_invoice_no', 'raw_invoice_date', 'canonical_invoice_date', 'raw_vendor_name', 'canonical_vendor_name', 'bill_from', 'bill_to', 'place_of_supply', 'total_taxable_value', 'total_igst', 'total_cgst', 'total_sgst', 'total_cess', 'round_off', 'total_invoice_value', 'irn', 'ack_no', 'ack_date', 'items', 'warnings', 'record_id', 'job_id', 'upload_session_id', 'tenant_id', '_pdf_ocr_text', '_raw_text']
+INFO 2026-06-21 16:39:30,675 ai_worker 20408 7088 [CONTINUATION_PAGE_ALLOWED] page=1007711 is a summary-only/footer page, allowed to proceed to assembly staging.
+INFO 2026-06-21 16:39:30,675 ai_worker 20408 7088 [DTO_POST_VALIDATION] record=1007711 valid=True
+INFO 2026-06-21 16:39:30,676 ai_worker 20408 7088 [AI_PAGE_SUCCESS] record=1007711 page=2 correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 worker_role=AI
+INFO 2026-06-21 16:39:30,676 ai_worker 20408 7088 [SESSION_FORENSIC] stage='ai_page_success' record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 page=2
+INFO 2026-06-21 16:39:30,676 coordinator 20408 7344 [FORENSIC_TRACE] event=persist_db_BEFORE record=1007711 ctx=SYNC thread=ThreadPoolExecutor-1_0 (id=7344) | details=page=2 is_failed=False
+INFO 2026-06-21 16:39:30,676 coordinator 20408 7344 [CANONICAL_TERMINALIZATION] record=1007711 page=2 is_failed=False worker=AIWorker queue=ai_queue tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 correlation=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 job=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 item=None
+INFO 2026-06-21 16:39:30,683 coordinator 20408 7344 [CANONICAL_BARRIER_REACHED] record=1007711 page=2 expected=2 completed=2 failed=0
+CRITICAL 2026-06-21 16:39:30,683 coordinator 20408 7344 [SESSION_BARRIER_STATE] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 expected=2 completed=2 failed=0 ai_complete=False [POST_TERMINALIZE]
+INFO 2026-06-21 16:39:30,685 coordinator 20408 7344 [FINALIZE_TRIGGER_ENTER] record=1007711 page=2 is_failed=False — evaluating convergence post-commit
+CRITICAL 2026-06-21 16:39:30,686 coordinator 20408 7344 [SESSION_BARRIER_STATE] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 expected=2 completed=2 failed=0 total=2 ai_complete=False [PRE_CONVERGENCE_EVAL]
+CRITICAL 2026-06-21 16:39:30,686 coordinator 20408 7344 [FINALIZE_BARRIER_CONFIRMED] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 expected=2 completed=2 failed=0 — invoking check_and_trigger_assembly from terminalize
+INFO 2026-06-21 16:39:30,687 coordinator 20408 23168 [FORENSIC_TRACE] event=check_and_trigger_assembly_BEFORE record=1007711 ctx=SYNC thread=conv_eval_1007711_2 (id=23168) | details={'tenant_id': '2eda0ac6-6af2-493e-8792-bc973fe946b7', 'session_id': 'fdce9a70-4459-4f99-85bb-e7fe14ab95e1', 'correlation_id': '0ec0c6b3-c503-4d01-be7c-2aec4a82d677', 'job_id': 'e1ca4245-2a81-42d6-a8bf-f71aff34d1c3'}
+INFO 2026-06-21 16:39:30,688 coordinator 20408 7344 [FORENSIC_TRACE] event=persist_db_AFTER record=1007711 ctx=SYNC thread=ThreadPoolExecutor-1_0 (id=7344) | details=page=2 is_failed=False (saved)
+INFO 2026-06-21 16:39:30,689 coordinator 20408 7344 [FORENSIC_TRACE] event=redis_progress_update_BEFORE record=1007711 ctx=SYNC thread=ThreadPoolExecutor-1_0 (id=7344) | details=progress=70.0%
+INFO 2026-06-21 16:39:30,689 redis_orchestrator 20408 7344 [REDIS_STATE_MUTATION_ENTER] record=1007711
+INFO 2026-06-21 16:39:30,689 redis_orchestrator 20408 7344 [REDIS_STATE_MUTATION_INPUT] record=1007711 raw_input_status=PROCESSING
+INFO 2026-06-21 16:39:30,689 redis_orchestrator 20408 7344 [REDIS_STATUS_ASSIGN] record=1007711 assigned_status=PROCESSING
+INFO 2026-06-21 16:39:30,689 redis_orchestrator 20408 7344 [LIFECYCLE_STATE_NORMALIZED] raw_state=PROCESSING normalized_state=AI_PROCESSING record=1007711
+INFO 2026-06-21 16:39:30,690 redis_orchestrator 20408 7344 [LIFECYCLE_TRANSITION_ATTEMPT] record=1007711 previous_state=AI_PROCESSING requested_state=AI_PROCESSING
+INFO 2026-06-21 16:39:30,690 redis_orchestrator 20408 7344 [REDIS_STATE_WRITE] record=1007711 status=AI_PROCESSING
+INFO 2026-06-21 16:39:30,691 redis_orchestrator 20408 7344 [REDIS_STATE_COMMIT] record=1007711 status=AI_PROCESSING
+INFO 2026-06-21 16:39:30,691 redis_orchestrator 20408 7344 [STATUS_SYNC_OK] record=1007711 status=AI_PROCESSING progress=70.0%
+INFO 2026-06-21 16:39:30,691 coordinator 20408 7344 [FORENSIC_TRACE] event=redis_progress_update_AFTER record=1007711 ctx=SYNC thread=ThreadPoolExecutor-1_0 (id=7344) | details=progress=70.0%
+CRITICAL 2026-06-21 16:39:30,695 coordinator 20408 23168 [SESSION_BARRIER_STATE] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 expected=2 completed=2 failed=0 total=2 ai_complete=False [FINALIZE_TRIGGER_ENTER]
+INFO 2026-06-21 16:39:30,695 coordinator 20408 23168 [FORENSIC_TRACE] event=barrier_counter_check record=1007711 ctx=SYNC thread=conv_eval_1007711_2 (id=23168) | details={'expected': 2, 'db_completed': 2, 'db_failed': 0, 'barrier_total': 2}
+CRITICAL 2026-06-21 16:39:30,695 coordinator 20408 23168 [FINALIZE_BARRIER_CONFIRMED] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 expected=2 completed=2 failed=0 — emitting ASSEMBLY now
+INFO 2026-06-21 16:39:30,695 coordinator 20408 23168 [FORENSIC_TRACE] event=barrier_counter_update_BEFORE record=1007711 ctx=SYNC thread=conv_eval_1007711_2 (id=23168) | details=marking ai_complete=True
+INFO 2026-06-21 16:39:30,697 coordinator 20408 23168 [FORENSIC_TRACE] event=barrier_counter_update_AFTER record=1007711 ctx=SYNC thread=conv_eval_1007711_2 (id=23168) | details=ai_complete=True saved
+INFO 2026-06-21 16:39:30,697 coordinator 20408 23168 [ONE_SHOT_ASSEMBLY_CONFIRMED] record=1007711 expected=2 completed=2 failed=0
+ERROR 2026-06-21 16:39:30,700 coordinator 20408 23168 [JOB_ID_RESOLUTION_ERROR] record=1007711 error=Cannot resolve keyword 'record_id' into field. Choices are: ai_units_consumed, completed_at, created_at, error_message, file_hash, file_path, id, job, job_id, last_heartbeat, last_task_id, page_count, page_number, parent_item_id, processed_pages, result_json, retry_count, staging_record_id, started_at, status, tenant_id, updated_at, worker_id
+INFO 2026-06-21 16:39:30,700 message_factory 20408 23168 [CANONICAL_MESSAGE_EMITTED] task_type=ASSEMBLY ver=v1 corr=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 trace_id=trace-d28548e216d4-1782040170 dedupe_key=9e1169ac569ad6907540c5197c139fdf664e97a76b9f90fc43d021fef7942ef0 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:39:30,700 message_factory 20408 23168 [JOB_CONTEXT_PROPAGATED] task_type=ASSEMBLY job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:39:30,700 coordinator 20408 23168 [FORENSIC_TRACE] event=assembly_enqueue_BEFORE record=1007711 ctx=SYNC thread=conv_eval_1007711_2 (id=23168) | details=msg_id=809030ee-f58c-4f82-a529-1bd3e224bbe6
+INFO 2026-06-21 16:39:30,801 coordinator 20408 23168 [FORENSIC_TRACE] event=assembly_enqueue_AFTER record=1007711 ctx=SYNC thread=conv_eval_1007711_2 (id=23168) | details=msg_id=809030ee-f58c-4f82-a529-1bd3e224bbe6
+INFO 2026-06-21 16:39:30,801 coordinator 20408 23168 [ASSEMBLY_MESSAGE_EMITTED] record=1007711 correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 (Global Coordinator)
+INFO 2026-06-21 16:39:30,801 coordinator 20408 23168 [FINAL_CONVERGENCE_REACHED] record=1007711 expected=2 completed=2 failed=0
+CRITICAL 2026-06-21 16:39:30,801 coordinator 20408 23168 [FINALIZE_SESSION_TERMINALIZED] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 — assembly emitted, hydration will release after finalize
+INFO 2026-06-21 16:39:30,804 coordinator 20408 23168 [FORENSIC_TRACE] event=check_and_trigger_assembly_AFTER record=1007711 ctx=SYNC thread=conv_eval_1007711_2 (id=23168)
+INFO 2026-06-21 16:39:30,804 coordinator 20408 23168 [FINALIZE_TRIGGER_EXIT] record=1007711 page=2 — convergence eval complete
+DEBUG 2026-06-21 16:39:30,805 pipeline 20408 7344 [FANOUT_COMPLETE] record=1007711 reached limit 2
+INFO 2026-06-21 16:39:30,806 ai_worker 20408 7088 [SLOT_FORCE_RELEASE] record=1007711 page=2 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+DEBUG 2026-06-21 16:39:30,806 redis_orchestrator 20408 7088 [SLOT_RELEASE_SKIP] record=1007711 page=2 — not in active slots
+INFO 2026-06-21 16:39:30,807 worker_base 20408 7088 [PIPELINE_STAGE_EXIT] stage=AI correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown
+INFO 2026-06-21 16:39:30,807 worker_base 20408 7088 [WORKER_STAGE_SUCCESS] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=ai worker_id=AI worker_pid=20408 hostname=LAPTOP-601O6S3T retry_count=4 visibility_timeout=1800 processing_duration_ms=125146 dto_status=COMPLETED
+INFO 2026-06-21 16:39:30,847 message_parser 10924 7376 [CONTEXT_TRACE_SCHEMA_VALIDATE] msg_id=809030ee-f58c-4f82-a529-1bd3e224bbe6 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 payload_keys=['record_id', 'item_id', 'job_id', 'result']
+INFO 2026-06-21 16:39:30,847 message_parser 10924 7376 [JOB_CONTEXT_VALIDATED] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:30,847 message_parser 10924 7376 [JOB_CONTEXT_PROPAGATED] type=ASSEMBLY job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:39:30,847 worker_base 10924 7376 [QUEUE_MESSAGE_RECEIVED] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 page_number=2 worker_name=ASSEMBLY
+INFO 2026-06-21 16:39:30,847 worker_base 10924 7376 [WORKER_MESSAGE_RECEIVED] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=assembly worker_id=ASSEMBLY worker_pid=10924 hostname=LAPTOP-601O6S3T retry_count=1 visibility_timeout=1800
+INFO 2026-06-21 16:39:30,847 worker_base 10924 7376 [WORKER_PICKUP] role='ASSEMBLY' task_id='809030ee-f58c-4f82-a529-1bd3e224bbe6' session_id='fdce9a70-4459-4f99-85bb-e7fe14ab95e1' job_id='e1ca4245-2a81-42d6-a8bf-f71aff34d1c3' correlation_id='0ec0c6b3-c503-4d01-be7c-2aec4a82d677'
+INFO 2026-06-21 16:39:30,906 worker_base 20408 7088 [QUEUE_MESSAGE_ACK] id=afab6996-07c6-4a38-8701-e53dfcb41870 queue=ai correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:31,448 worker_base 10924 7376 [QUEUE_MESSAGE_PROCESSING] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 worker_name=ASSEMBLY
+INFO 2026-06-21 16:39:31,448 worker_base 10924 7376 [PIPELINE_STAGE_ENTER] stage=ASSEMBLY correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown
+INFO 2026-06-21 16:39:31,449 assembly_worker 10924 7376 [CONTEXT_TRACE_ASSEMBLY_RECEIVE] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 trace_id=None
+INFO 2026-06-21 16:39:31,449 assembly_worker 10924 7376 [ASSEMBLY_TASK_ENTER] record=1007711 correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7
+INFO 2026-06-21 16:39:31,510 redis_orchestrator 10924 25824 [FINALIZE_OWNER_GRANTED] record=1007711
+INFO 2026-06-21 16:39:31,511 assembly_worker 10924 7376 [FINALIZE_ENQUEUE_ATTEMPT] record=1007711 job=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 item=None
+INFO 2026-06-21 16:39:31,516 assembly_worker 10924 7376 [ASSEMBLY_EXECUTOR_START] role=ASSEMBLY action=MERGE record=1007711
+INFO 2026-06-21 16:39:31,517 pipeline 10924 23624 [PIPELINE_STAGE_ENTER] stage=ASSEMBLY record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:31,518 pipeline 10924 23624 [MERGE_STAGE_ENTER] record=1007711 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3
+INFO 2026-06-21 16:39:31,520 pipeline 10924 23624 [DB_TRANSACTION_BEGIN] scope=barrier_lock record=1007711
+INFO 2026-06-21 16:39:31,524 pipeline 10924 23624 [DB_WRITE] table=PipelineEvent action=STATUS_FINALIZING id=1007711
+INFO 2026-06-21 16:39:31,525 pipeline 10924 23624 [DB_TRANSACTION_COMMIT] scope=barrier_lock record=1007711 duration=0.004s
+INFO 2026-06-21 16:39:31,529 normalize 10924 23624 [NORMALIZATION_START] record_id=1007711 invoice_no=4742/25-26
+INFO 2026-06-21 16:39:31,529 normalize 10924 23624 [DTO_PRE_VALIDATION] record_id=1007711 keys=['irn', 'gstin', 'items', 'ack_no', 'branch', 'job_id', 'bill_to', 'hsn_sac', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'record_id', 'round_off', 'tenant_id', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', 'bill_to_gstin', 'ship_to_gstin', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', 'raw_invoice_date', 'raw_vendor_gstin', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'upload_session_id', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+INFO 2026-06-21 16:39:31,614 normalize 10924 23624 [DTO_POST_VALIDATION] record_id=1007711 status=VALID
+INFO 2026-06-21 16:39:31,618 normalize 10924 23624 [NORMALIZATION_START] record_id=1007711 invoice_no=4742/25-26
+INFO 2026-06-21 16:39:31,618 normalize 10924 23624 [DTO_PRE_VALIDATION] record_id=1007711 keys=['irn', 'gstin', 'items', 'ack_no', 'branch', 'job_id', 'bill_to', 'hsn_sac', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'record_id', 'round_off', 'tenant_id', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', 'bill_to_gstin', 'ship_to_gstin', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', 'raw_invoice_date', 'raw_vendor_gstin', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'upload_session_id', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+INFO 2026-06-21 16:39:31,633 normalize 10924 23624 [DTO_POST_VALIDATION] record_id=1007711 status=VALID
+INFO 2026-06-21 16:39:31,633 pipeline 10924 23624 [GROUPING_START] total_pages=2 record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:31,671 pipeline 10924 23624 [MULTIPAGE_STITCH_COMPLETE] record_id=1007711 total_groups=1
+INFO 2026-06-21 16:39:32,124 pipeline 10924 23624 [ITEM_EXTRACTION_RESULT] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 invoice_no=4742/25-26 item_count=2 item_status=ALREADY EXIST missing_count=0
+INFO 2026-06-21 16:39:32,126 pipeline 10924 23624 [ITEM_TRACE_AFTER_VALIDATION] record_id=1007711 invoice_no=4742/25-26 page_number=1 item_count=2 item_status=ALREADY EXIST snapshot_item_count=None
+INFO 2026-06-21 16:39:32,128 pipeline 10924 23624 [EXPORT_FINAL_ROW] invoice_no='4742/25-26' upload_session_id='fdce9a70-4459-4f99-85bb-e7fe14ab95e1' tenant_id='2eda0ac6-6af2-493e-8792-bc973fe946b7' job_id='e1ca4245-2a81-42d6-a8bf-f71aff34d1c3'
+INFO 2026-06-21 16:39:32,128 pipeline 10924 23624 [ASSEMBLY_PAGE_MERGED] record=1007711 invoices=1
+INFO 2026-06-21 16:39:32,128 pipeline 10924 23624 [ITEM_TRACE_AFTER_ASSEMBLY] record_id=1007711 invoice_no=4742/25-26 page_number=1 item_count=2 item_status=ALREADY EXIST snapshot_item_count=None
+CRITICAL 2026-06-21 16:39:32,129 pipeline 10924 23624 [CANONICAL_ITEM_CHECKPOINT] record_id=1007711 item_count=2 validated_item_count=2 item_status=ALREADY EXIST payload_keys=['invoice_no', 'invoice_date', 'vendor_name', 'gstin', 'raw_gstin', 'canonical_gstin', 'branch', 'hsn_sac', 'vendor_gstin', 'buyer_gstin', 'consignee_gstin', 'ship_to_gstin', 'bill_to_gstin', 'raw_vendor_gstin', 'raw_buyer_gstin', 'raw_consignee_gstin', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'canonical_vendor_gstin', 'canonical_buyer_gstin', 'canonical_consignee_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'raw_invoice_no', 'canonical_invoice_no', 'raw_invoice_date', 'canonical_invoice_date', 'raw_vendor_name', 'canonical_vendor_name', 'bill_from', 'bill_to', 'place_of_supply', 'total_taxable_value', 'total_igst', 'total_cgst', 'total_sgst', 'total_cess', 'round_off', 'total_invoice_value', 'irn', 'ack_no', 'ack_date', 'items', 'warnings', '_raw_text', '_pdf_ocr_text', '_page_no', '_physical_page_no', '_runtime_task_id', '_page_role', '_source_pages', 'item_status', 'missing_items', 'validation_warnings', 'low_confidence', '_lineage', 'is_canonical_frozen', 'validation_revision']
+INFO 2026-06-21 16:39:32,133 pipeline 10924 23624 [ITEM_TRACE_BEFORE_SNAPSHOT] record_id=1007711 invoice_no=4742/25-26 page_number=1 item_count=2 item_status=ALREADY EXIST snapshot_item_count=2
+INFO 2026-06-21 16:39:32,134 validation_gates 10924 23624 [SNAPSHOT_ACCEPTED] record=1007711
+INFO 2026-06-21 16:39:32,134 validation_gates 10924 23624 [STATE_TRANSITION] record=1007711 -> SNAPSHOT
+INFO 2026-06-21 16:39:32,134 pipeline 10924 23624 [SNAPSHOT_STAGE_ENTER] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,136 pipeline 10924 23624 [SNAPSHOT_UPLOAD_STARTED] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 s3_key=snapshots/local/2eda0ac6-6af2-493e-8792-bc973fe946b7/fdce9a70-4459-4f99-85bb-e7fe14ab95e1_1782040172.json.gz
+INFO 2026-06-21 16:39:32,138 pipeline 10924 23624 [SNAPSHOT_UPLOAD_VERIFIED] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 bytes=2517
+INFO 2026-06-21 16:39:32,138 pipeline 10924 23624 [SNAPSHOT_OFFLOADED_COMPRESSED] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 key=snapshots/local/2eda0ac6-6af2-493e-8792-bc973fe946b7/fdce9a70-4459-4f99-85bb-e7fe14ab95e1_1782040172.json.gz original_bytes=8467 compressed_bytes=2517
+INFO 2026-06-21 16:39:32,138 pipeline 10924 23624 [SNAPSHOT_STAGE_EXIT] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,138 pipeline 10924 23624 [DB_TRANSACTION_BEGIN] scope=snapshot_persist session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,138 pipeline 10924 23624 [SNAPSHOT_TX_ENTER] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 invoices=1
+INFO 2026-06-21 16:39:32,138 pipeline 10924 23624 [SNAPSHOT_PERSIST_START] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7
+INFO 2026-06-21 16:39:32,138 pipeline 10924 23624 [STAGING_PERSIST_START] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7
+INFO 2026-06-21 16:39:32,140 pipeline 10924 23624 [MATERIALIZATION_START] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7
+INFO 2026-06-21 16:39:32,164 pipeline 10924 23624 [DUPLICATE_CHECK_START] primary record=1007711 inv_no='4742/25-26' gstin='33ABYFS6343M1ZC' branch='COIMBATORE' tenant_id='2eda0ac6-6af2-493e-8792-bc973fe946b7'
+WARNING 2026-06-21 16:39:32,167 pipeline 10924 23624 [DUPLICATE_MATCH_FOUND] primary record=1007711 inv_no='4742/25-26'
+INFO 2026-06-21 16:39:32,167 pipeline 10924 23624 [DUPLICATE_STATUS_PERSISTED] primary record=1007711 status=DUPLICATE
+INFO 2026-06-21 16:39:32,486 models 10924 23624 [DUPLICATE_RUNTIME_PROBE] file=C:\108\AI-accounting-0.03\backend\ocr_pipeline\models.py id=1007711 writing validation_status='DUPLICATE'
+INFO 2026-06-21 16:39:32,488 pipeline 10924 23624 [HYDRATION_ROWS_CREATED] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 count=1
+INFO 2026-06-21 16:39:32,489 pipeline 10924 23624 [SNAPSHOT_DB_WRITE] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7
+INFO 2026-06-21 16:39:32,489 redis_orchestrator 10924 23624 [REDIS_STATE_MUTATION_ENTER] record=1007711
+INFO 2026-06-21 16:39:32,489 redis_orchestrator 10924 23624 [REDIS_STATE_MUTATION_INPUT] record=1007711 raw_input_status=SNAPSHOTTING
+INFO 2026-06-21 16:39:32,489 redis_orchestrator 10924 23624 [REDIS_STATUS_ASSIGN] record=1007711 assigned_status=SNAPSHOTTING
+INFO 2026-06-21 16:39:32,489 redis_orchestrator 10924 23624 [STATE_NORMALIZED] raw_state=SNAPSHOTTING normalized_state=SNAPSHOTTING record=1007711
+INFO 2026-06-21 16:39:32,489 redis_orchestrator 10924 23624 [LIFECYCLE_TRANSITION_ATTEMPT] record=1007711 previous_state=AI_PROCESSING requested_state=SNAPSHOTTING
+INFO 2026-06-21 16:39:32,489 redis_orchestrator 10924 23624 [LIFECYCLE_TRANSITION_ACCEPTED] record=1007711 previous_state=AI_PROCESSING requested_state=SNAPSHOTTING
+INFO 2026-06-21 16:39:32,489 redis_orchestrator 10924 23624 [REDIS_STATE_WRITE] record=1007711 status=SNAPSHOTTING
+INFO 2026-06-21 16:39:32,490 redis_orchestrator 10924 23624 [REDIS_STATE_COMMIT] record=1007711 status=SNAPSHOTTING
+INFO 2026-06-21 16:39:32,490 redis_orchestrator 10924 23624 [STATUS_SYNC_OK] record=1007711 status=SNAPSHOTTING progress=70.0%
+INFO 2026-06-21 16:39:32,490 pipeline 10924 23624 [SNAPSHOT_PRE_SAVE_VALIDATION] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 invoice_count=1 s3_key=snapshots/local/2eda0ac6-6af2-493e-8792-bc973fe946b7/fdce9a70-4459-4f99-85bb-e7fe14ab95e1_1782040172.json.gz
+INFO 2026-06-21 16:39:32,502 pipeline 10924 23624 [GSTIN_SNAPSHOT] record_id=1007711 gstin=33ABYFS6343M1ZC status=EXTRACTING
+INFO 2026-06-21 16:39:32,503 pipeline 10924 23624 [SNAPSHOT_ROW_CREATED] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 snapshot_id=e7353d55-41e4-4cae-b1c4-adfb4c6fd172
+INFO 2026-06-21 16:39:32,503 pipeline 10924 23624 [SNAPSHOT_DB_FLUSH] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7
+INFO 2026-06-21 16:39:32,503 pipeline 10924 23624 [ITEM_TRACE_AFTER_SNAPSHOT] record_id=1007711 invoice_no=4742/25-26 page_number=1 item_count=2 item_status=ALREADY EXIST snapshot_item_count=2
+INFO 2026-06-21 16:39:32,505 pipeline 10924 23624 [PERSISTENCE_ATTEMPT] invoice_no=4742/25-26 group_key=primary page_count=2 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,511 models 10924 23624 [DUPLICATE_RUNTIME_PROBE] file=C:\108\AI-accounting-0.03\backend\ocr_pipeline\models.py id=1007711 writing validation_status='DUPLICATE'
+INFO 2026-06-21 16:39:32,513 pipeline 10924 23624 [DB_RECORD_CREATED] record_id=1007711 invoice_no=4742/25-26 group_key=primary page_count=2
+DEBUG 2026-06-21 16:39:32,513 pipeline 10924 23624 [DB_WRITE_FINALIZED] record=1007711
+INFO 2026-06-21 16:39:32,513 pipeline 10924 23624 [MATERIALIZATION_COMMIT] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 rows=1
+INFO 2026-06-21 16:39:32,513 pipeline 10924 23624 [SNAPSHOT_ACTIVATED] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 snapshot_id=e7353d55-41e4-4cae-b1c4-adfb4c6fd172
+INFO 2026-06-21 16:39:32,513 pipeline 10924 23624 [SNAPSHOT_DB_WRITE] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 snapshot_id=e7353d55-41e4-4cae-b1c4-adfb4c6fd172
+INFO 2026-06-21 16:39:32,513 pipeline 10924 23624 [SNAPSHOT_CREATE_SUCCESS] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 invoice_count=1
+INFO 2026-06-21 16:39:32,513 pipeline 10924 23624 [SNAPSHOT_COMPLETE_SET] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 — snapshot_created=True persisted
+INFO 2026-06-21 16:39:32,516 pipeline 10924 23624 [SNAPSHOT_TX_COMMIT] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 — transaction committed, snapshot now durable
+INFO 2026-06-21 16:39:32,516 pipeline 10924 23624 [SNAPSHOT_CALLBACK_ENTER] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 job=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record=1007711
+INFO 2026-06-21 16:39:32,516 pipeline 10924 23624 [SNAPSHOT_DB_COMMIT] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7
+INFO 2026-06-21 16:39:32,516 pipeline 10924 23624 [SNAPSHOT_QUERY_START] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,520 pipeline 10924 23624 [SNAPSHOT_DB_VISIBLE] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 snapshot_count=1
+INFO 2026-06-21 16:39:32,520 pipeline 10924 23624 [SNAPSHOT_INSERT_SUCCESS] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,520 pipeline 10924 23624 [SNAPSHOT_COMMIT_SUCCESS] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,520 pipeline 10924 23624 [SNAPSHOT_QUERY_ROWS] Validation query returned 1 rows for session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,520 pipeline 10924 23624 [SNAPSHOT_READY_EMIT] Emitting SNAPSHOT_READY for session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,520 pipeline 10924 23624 [FINALIZE_STATE_TRANSITION] Status transitioned to FINALIZED for session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,520 pipeline 10924 23624 [TERMINAL_HYDRATION_RELEASE] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,561 message_factory 10924 23624 [CANONICAL_MESSAGE_EMITTED] task_type=MATERIALIZE ver=v1 corr=654fd703-4829-4e6f-abe7-cd613327f564 trace_id=trace-756982f32adf-1782040172 dedupe_key=8c74cd2a7bd03e25ff01d2dd840df5c9de0deeec6d9e15518b68e8ed276eb408 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:39:32,561 message_factory 10924 23624 [JOB_CONTEXT_PROPAGATED] task_type=MATERIALIZE job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:39:32,561 models 10924 23624 [MATERIALIZE_DISPATCH_START] event_id=817 record=1007711
+INFO 2026-06-21 16:39:32,561 models 10924 23624 [CONTEXT_TRACE_MATERIALIZE_EMIT] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 trace_id=trace-756982f32adf-1782040172
+INFO 2026-06-21 16:39:32,642 models 10924 23624 [MATERIALIZE_DISPATCH_SUCCESS] event_id=817 record=1007711
+INFO 2026-06-21 16:39:32,642 pipeline 10924 23624 [MATERIALIZE_DISPATCH_POST_SNAPSHOT] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,642 redis_orchestrator 10924 23624 [REDIS_STATE_MUTATION_ENTER] record=1007711
+INFO 2026-06-21 16:39:32,642 redis_orchestrator 10924 23624 [REDIS_STATE_MUTATION_INPUT] record=1007711 raw_input_status=HYDRATION_READY
+INFO 2026-06-21 16:39:32,642 redis_orchestrator 10924 23624 [REDIS_STATUS_ASSIGN] record=1007711 assigned_status=HYDRATION_READY
+INFO 2026-06-21 16:39:32,643 redis_orchestrator 10924 23624 [STATE_NORMALIZED] raw_state=HYDRATION_READY normalized_state=HYDRATION_READY record=1007711
+INFO 2026-06-21 16:39:32,643 redis_orchestrator 10924 23624 [LIFECYCLE_TRANSITION_ATTEMPT] record=1007711 previous_state=SNAPSHOTTING requested_state=HYDRATION_READY
+INFO 2026-06-21 16:39:32,643 redis_orchestrator 10924 23624 [LIFECYCLE_TRANSITION_ACCEPTED] record=1007711 previous_state=SNAPSHOTTING requested_state=HYDRATION_READY
+INFO 2026-06-21 16:39:32,643 redis_orchestrator 10924 23624 [REDIS_STATE_WRITE] record=1007711 status=HYDRATION_READY
+INFO 2026-06-21 16:39:32,644 redis_orchestrator 10924 23624 [REDIS_STATE_COMMIT] record=1007711 status=HYDRATION_READY
+INFO 2026-06-21 16:39:32,644 redis_orchestrator 10924 23624 [STATUS_SYNC_OK] record=1007711 status=HYDRATION_READY progress=100.0%
+INFO 2026-06-21 16:39:32,644 pipeline 10924 23624 [FINALIZE_STATE_EMIT] record=1007711 status=HYDRATION_READY
+INFO 2026-06-21 16:39:32,644 pipeline 10924 23624 [STAGING_PERSIST_COMPLETE] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 status=SUCCESS
+INFO 2026-06-21 16:39:32,644 pipeline 10924 23624 [DB_TRANSACTION_COMMIT] scope=snapshot_persist session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 duration=0.507s
+INFO 2026-06-21 16:39:32,644 pipeline 10924 23624 [ASSEMBLY_FINALIZED] record=1007711 pages=2 duration=1.13s
+INFO 2026-06-21 16:39:32,645 pipeline 10924 23624 [PIPELINE_STAGE_EXIT] stage=ASSEMBLY record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,645 pipeline 10924 23624 [MERGE_STAGE_EXIT] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 duration=1.129s
+INFO 2026-06-21 16:39:32,646 assembly_worker 10924 7376 [ASSEMBLY_EXECUTOR_DONE] role=ASSEMBLY action=MERGE record=1007711
+INFO 2026-06-21 16:39:32,646 assembly_worker 10924 7376 [ASSEMBLY_COMPLETE] record=1007711 status=SUCCESS
+INFO 2026-06-21 16:39:32,651 assembly_worker 10924 25824 [BARRIER_STATE_WRITE] record=1007711 completed=2 failed=0
+INFO 2026-06-21 16:39:32,651 assembly_worker 10924 25824 [BARRIER_STATE_COMMIT] record=1007711
+INFO 2026-06-21 16:39:32,653 coordinator 10924 25824 [FORENSIC_TRACE] event=assembly_flags_write_BEFORE record=1007711 ctx=SYNC thread=asyncio_0 (id=25824) | details={'assembly_complete': True, 'continuation_merge_complete': True}
+INFO 2026-06-21 16:39:32,656 assembly_worker 10924 25824 [ASSEMBLY_FLAGS_COMMITTED] record=1007711 assembly_complete=True continuation_merge_complete=True
+INFO 2026-06-21 16:39:32,659 coordinator 10924 25824 [FORENSIC_TRACE] event=assembly_flags_write_AFTER record=1007711 ctx=SYNC thread=asyncio_0 (id=25824)
+INFO 2026-06-21 16:39:32,659 assembly_worker 10924 7376 [ASSEMBLY_SUCCESS] record=1007711 status=READY_FOR_REVIEW res_status=SUCCESS
+INFO 2026-06-21 16:39:32,660 assembly_worker 10924 7376 [FILE_TERMINAL_SUCCESS] record=1007711 status=READY_FOR_REVIEW
+INFO 2026-06-21 16:39:32,660 redis_orchestrator 10924 25824 [REDIS_STATE_MUTATION_ENTER] record=1007711
+INFO 2026-06-21 16:39:32,660 redis_orchestrator 10924 25824 [REDIS_STATE_MUTATION_INPUT] record=1007711 raw_input_status=READY_FOR_REVIEW
+INFO 2026-06-21 16:39:32,660 redis_orchestrator 10924 25824 [REDIS_STATUS_ASSIGN] record=1007711 assigned_status=READY_FOR_REVIEW
+INFO 2026-06-21 16:39:32,660 redis_orchestrator 10924 25824 [STATE_NORMALIZED] raw_state=READY_FOR_REVIEW normalized_state=READY_FOR_REVIEW record=1007711
+INFO 2026-06-21 16:39:32,660 redis_orchestrator 10924 25824 [LIFECYCLE_TRANSITION_ATTEMPT] record=1007711 previous_state=HYDRATION_READY requested_state=READY_FOR_REVIEW
+WARNING 2026-06-21 16:39:32,660 redis_orchestrator 10924 25824 [LIFECYCLE_TRANSITION_REJECTED] record=1007711 previous_state=HYDRATION_READY requested_state=READY_FOR_REVIEW rejection_reason=BACKWARD_TRANSITION_OR_INVALID
+INFO 2026-06-21 16:39:32,660 assembly_worker 10924 7376 [JOB_BARRIER_COMPLETE] record=1007711
+INFO 2026-06-21 16:39:32,661 message_factory 10924 7376 [CANONICAL_MESSAGE_EMITTED] task_type=FINALIZE ver=v1 corr=2eddf1f2-047a-4692-a2d8-56e18b18fb83 trace_id=trace-43470aaa7960-1782040172 dedupe_key=9e687f15b6dcd79ccdba00658417d646095a5d422360fe8e5a74f9cc397e7e6a session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:39:32,661 message_factory 10924 7376 [JOB_CONTEXT_PROPAGATED] task_type=FINALIZE job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:39:32,661 assembly_worker 10924 7376 [FINALIZE_ENQUEUE_START] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 failed=False msg_id=f1e07e6e-8fae-4047-9862-9a511ff3651e
+INFO 2026-06-21 16:39:32,661 assembly_worker 10924 7376 [FINALIZE_TRIGGER] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 failed=False
+INFO 2026-06-21 16:39:32,661 coordinator 10924 7376 [FORENSIC_TRACE] event=finalize_enqueue_BEFORE record=1007711 ctx=ASYNC thread=MainThread (id=7376) | details=msg_id=f1e07e6e-8fae-4047-9862-9a511ff3651e
+INFO 2026-06-21 16:39:32,700 message_parser 21344 24544 [CONTEXT_TRACE_SCHEMA_VALIDATE] msg_id=e73d39c9-041e-49ba-b778-dd55864ac29d job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 payload_keys=['event_id', 'record_id', 'status', 'workflow_id', 'workflow_version', 'job_id']
+INFO 2026-06-21 16:39:32,700 message_parser 21344 24544 [JOB_CONTEXT_VALIDATED] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,700 message_parser 21344 24544 [JOB_CONTEXT_PROPAGATED] type=MATERIALIZE job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:39:32,700 worker_base 21344 24544 [QUEUE_MESSAGE_RECEIVED] correlation_id=654fd703-4829-4e6f-abe7-cd613327f564 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 page_number=1 worker_name=MATERIALIZE
+INFO 2026-06-21 16:39:32,700 worker_base 21344 24544 [WORKER_MESSAGE_RECEIVED] correlation_id=654fd703-4829-4e6f-abe7-cd613327f564 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=materialization worker_id=MATERIALIZE worker_pid=21344 hostname=LAPTOP-601O6S3T retry_count=1 visibility_timeout=1800
+INFO 2026-06-21 16:39:32,700 worker_base 21344 24544 [WORKER_PICKUP] role='MATERIALIZE' task_id='e73d39c9-041e-49ba-b778-dd55864ac29d' session_id='fdce9a70-4459-4f99-85bb-e7fe14ab95e1' job_id='e1ca4245-2a81-42d6-a8bf-f71aff34d1c3' correlation_id='654fd703-4829-4e6f-abe7-cd613327f564'
+INFO 2026-06-21 16:39:32,726 coordinator 10924 7376 [FORENSIC_TRACE] event=finalize_enqueue_AFTER record=1007711 ctx=ASYNC thread=MainThread (id=7376) | details=msg_id=f1e07e6e-8fae-4047-9862-9a511ff3651e
+INFO 2026-06-21 16:39:32,726 assembly_worker 10924 7376 [ONE_SHOT_FINALIZE_CONFIRMED] record=1007711 msg_id=f1e07e6e-8fae-4047-9862-9a511ff3651e
+INFO 2026-06-21 16:39:32,726 assembly_worker 10924 7376 [FINALIZE_ENQUEUED] record=1007711
+INFO 2026-06-21 16:39:32,726 assembly_worker 10924 7376 [ASSEMBLY_FINALIZED] record=1007711
+INFO 2026-06-21 16:39:32,726 assembly_worker 10924 7376 [ASSEMBLY_TASK_EXIT] record=1007711
+INFO 2026-06-21 16:39:32,727 worker_base 10924 7376 [PIPELINE_STAGE_EXIT] stage=ASSEMBLY correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown
+INFO 2026-06-21 16:39:32,727 worker_base 10924 7376 [WORKER_STAGE_SUCCESS] correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=assembly worker_id=ASSEMBLY worker_pid=10924 hostname=LAPTOP-601O6S3T retry_count=1 visibility_timeout=1800 processing_duration_ms=1879 dto_status=COMPLETED
+INFO 2026-06-21 16:39:32,775 worker_base 21344 24544 [QUEUE_MESSAGE_PROCESSING] correlation_id=654fd703-4829-4e6f-abe7-cd613327f564 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 worker_name=MATERIALIZE
+INFO 2026-06-21 16:39:32,776 worker_base 21344 24544 [PIPELINE_STAGE_ENTER] stage=MATERIALIZE correlation_id=654fd703-4829-4e6f-abe7-cd613327f564 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown
+INFO 2026-06-21 16:39:32,788 message_parser 10328 12328 [CONTEXT_TRACE_SCHEMA_VALIDATE] msg_id=f1e07e6e-8fae-4047-9862-9a511ff3651e job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 payload_keys=['record_id', 'job_id', 'item_id', 'failed']
+INFO 2026-06-21 16:39:32,788 message_parser 10328 12328 [JOB_CONTEXT_VALIDATED] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,788 message_parser 10328 12328 [JOB_CONTEXT_PROPAGATED] type=FINALIZE job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711
+INFO 2026-06-21 16:39:32,788 worker_base 10328 12328 [QUEUE_MESSAGE_RECEIVED] correlation_id=2eddf1f2-047a-4692-a2d8-56e18b18fb83 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 page_number=1 worker_name=FINALIZE
+INFO 2026-06-21 16:39:32,788 worker_base 10328 12328 [WORKER_MESSAGE_RECEIVED] correlation_id=2eddf1f2-047a-4692-a2d8-56e18b18fb83 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=finalize worker_id=FINALIZE worker_pid=10328 hostname=LAPTOP-601O6S3T retry_count=1 visibility_timeout=1800
+INFO 2026-06-21 16:39:32,788 worker_base 10328 12328 [WORKER_PICKUP] role='FINALIZE' task_id='f1e07e6e-8fae-4047-9862-9a511ff3651e' session_id='fdce9a70-4459-4f99-85bb-e7fe14ab95e1' job_id='e1ca4245-2a81-42d6-a8bf-f71aff34d1c3' correlation_id='2eddf1f2-047a-4692-a2d8-56e18b18fb83'
+INFO 2026-06-21 16:39:32,790 worker_base 10924 7376 [QUEUE_MESSAGE_ACK] id=809030ee-f58c-4f82-a529-1bd3e224bbe6 queue=assembly correlation_id=0ec0c6b3-c503-4d01-be7c-2aec4a82d677 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,850 redis_orchestrator 21344 20528 [REDIS_STATE_MUTATION_ENTER] record=1007711
+INFO 2026-06-21 16:39:32,850 redis_orchestrator 21344 20528 [REDIS_STATE_MUTATION_INPUT] record=1007711 raw_input_status=MATERIALIZED
+INFO 2026-06-21 16:39:32,850 redis_orchestrator 21344 20528 [REDIS_STATUS_ASSIGN] record=1007711 assigned_status=MATERIALIZED
+INFO 2026-06-21 16:39:32,851 redis_orchestrator 21344 20528 [LIFECYCLE_STATE_NORMALIZED] raw_state=MATERIALIZED normalized_state=HYDRATION_READY record=1007711
+INFO 2026-06-21 16:39:32,851 redis_orchestrator 21344 20528 [LIFECYCLE_TRANSITION_ATTEMPT] record=1007711 previous_state=HYDRATION_READY requested_state=HYDRATION_READY
+INFO 2026-06-21 16:39:32,851 redis_orchestrator 21344 20528 [REDIS_STATE_WRITE] record=1007711 status=HYDRATION_READY
+INFO 2026-06-21 16:39:32,852 redis_orchestrator 21344 20528 [REDIS_STATE_COMMIT] record=1007711 status=HYDRATION_READY
+INFO 2026-06-21 16:39:32,852 redis_orchestrator 21344 20528 [STATUS_SYNC_OK] record=1007711 status=HYDRATION_READY progress=100.0%
+INFO 2026-06-21 16:39:32,855 worker_base 21344 24544 [PIPELINE_STAGE_EXIT] stage=MATERIALIZE correlation_id=654fd703-4829-4e6f-abe7-cd613327f564 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown
+INFO 2026-06-21 16:39:32,855 worker_base 21344 24544 [WORKER_STAGE_SUCCESS] correlation_id=654fd703-4829-4e6f-abe7-cd613327f564 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=materialization worker_id=MATERIALIZE worker_pid=21344 hostname=LAPTOP-601O6S3T retry_count=1 visibility_timeout=1800 processing_duration_ms=178 dto_status=COMPLETED
+INFO 2026-06-21 16:39:32,876 worker_base 10328 12328 [QUEUE_MESSAGE_PROCESSING] correlation_id=2eddf1f2-047a-4692-a2d8-56e18b18fb83 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 worker_name=FINALIZE
+INFO 2026-06-21 16:39:32,877 worker_base 10328 12328 [PIPELINE_STAGE_ENTER] stage=FINALIZE correlation_id=2eddf1f2-047a-4692-a2d8-56e18b18fb83 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown
+INFO 2026-06-21 16:39:32,879 finalize_worker 10328 12328 [FINALIZE_WORKER_START] type=FINALIZE id=f1e07e6e-8fae-4047-9862-9a511ff3651e record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,879 finalize_worker 10328 12328 [FINALIZE_STAGE_ENTER] type=FINALIZE id=f1e07e6e-8fae-4047-9862-9a511ff3651e record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,879 finalize_worker 10328 12328 [FINALIZE_WORKER_ENTER] id=f1e07e6e-8fae-4047-9862-9a511ff3651e record=1007711
+INFO 2026-06-21 16:39:32,879 finalize_worker 10328 12328 [CONTEXT_TRACE_FINALIZE_RECEIVE] job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 trace_id=None
+INFO 2026-06-21 16:39:32,880 finalize_worker 10328 12328 [FINALIZE_FAILURE_EVALUATION] record=1007711 raw_failed_flag=False item_id=None is_failed=False
+INFO 2026-06-21 16:39:32,880 finalize_worker 10328 12328 [FINALIZE_FAILURE_REASON] record=1007711 reason=NONE_PIPELINE_SUCCESS
+INFO 2026-06-21 16:39:32,880 finalize_worker 10328 12328 [FINALIZE_TERMINAL_DECISION] record=1007711 is_failed=False
+INFO 2026-06-21 16:39:32,880 finalize_worker 10328 12328 [FINALIZE_FALSE_FAILURE_PREVENTED] record=1007711 item_id=None — item=None is NOT a failure, proceeding as SUCCESS
+INFO 2026-06-21 16:39:32,880 finalize_worker 10328 12328 [FINALIZE_DB_COMMIT] record=1007711 job=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 item=None failed=False
+INFO 2026-06-21 16:39:32,913 finalize_worker 10328 14108 [FINALIZE_WORKER_ENTER] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 job=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 failed=False
+INFO 2026-06-21 16:39:32,913 finalize_worker 10328 14108 [CANONICAL_CONTEXT_TRACE] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 job=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7
+INFO 2026-06-21 16:39:32,961 finalize_worker 10328 14108 [SESSION_FLAG_READ] record=1007711 sqs_session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 db_session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,961 redis_orchestrator 10328 14108 [SESSION_AGGREGATE_START] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,962 redis_orchestrator 10328 14108 [RECORD_TO_SESSION_MAPPING] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 records=['1007711']
+INFO 2026-06-21 16:39:32,966 redis_orchestrator 10328 14108 [BARRIER_STATE_READ] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 source=DB expected=2 completed=2 failed=0
+INFO 2026-06-21 16:39:32,966 redis_orchestrator 10328 14108 [BARRIER_STATE_AGGREGATED] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 source=DB_ONLY_CANONICAL_CONVERGENCE expected=2 completed=2 failed=0
+INFO 2026-06-21 16:39:32,966 redis_orchestrator 10328 14108 [MATERIALIZE_COMPLETE_READ] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 complete=True
+INFO 2026-06-21 16:39:32,966 redis_orchestrator 10328 14108 [MATERIALIZATION_AGGREGATE] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 complete=True
+INFO 2026-06-21 16:39:32,967 redis_orchestrator 10328 14108 [ORCHESTRATOR_CONVERGENCE_CHECK] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 expected=2 completed=2 failed=0 all_bootstrapping=False hard_ingestion_failed=False redis_all_terminal=True redis_hydration_ready=True
+INFO 2026-06-21 16:39:32,968 worker_base 21344 24544 [QUEUE_MESSAGE_ACK] id=e73d39c9-041e-49ba-b778-dd55864ac29d queue=materialization correlation_id=654fd703-4829-4e6f-abe7-cd613327f564 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:32,968 redis_orchestrator 10328 14108 [SNAPSHOT_STATE_READ] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 snapshot_count=1 db_snapshot_complete=True
+INFO 2026-06-21 16:39:32,968 redis_orchestrator 10328 14108 [SNAPSHOT_AGGREGATE] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 complete=True count=1
+INFO 2026-06-21 16:39:32,969 redis_orchestrator 10328 14108 [SESSION_AGGREGATE_RESULT] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 barrier=True snapshot=True materialization=True
+INFO 2026-06-21 16:39:32,969 redis_orchestrator 10328 14108 [SESSION_STATE_AGGREGATE] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 expected=2 completed=2 failed=0 barrier=True snapshot=True materialization=True redis_statuses=['HYDRATION_READY']
+INFO 2026-06-21 16:39:33,582 redis_orchestrator 10328 14108 [QUEUE_DEPTH_OBSERVABILITY] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 q_ingest=0(v=0,i=0) q_ai=9(v=0,i=9) q_assembly=0(v=0,i=0) q_finalize=1(v=0,i=1) q_materialize=0(v=0,i=0) q_export=0(v=0,i=0) queues_empty=False [METRIC_ONLY — not used as convergence gate]
+INFO 2026-06-21 16:39:33,582 redis_orchestrator 10328 14108 [TERMINAL_RELEASE_CHECK] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 barrier=True snapshot=True materialization=True queues_empty=False active_workers=1 polling_workers=0 hard_ingestion_failed=False
+INFO 2026-06-21 16:39:33,583 redis_orchestrator 10328 14108 [TERMINAL_RELEASE_GRANTED] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 reason=COMPLETED 
+INFO 2026-06-21 16:39:33,583 redis_orchestrator 10328 14108 [AUTHORITATIVE_TERMINAL_GRANTED] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 reason=COMPLETED active_workers=1
+INFO 2026-06-21 16:39:33,583 redis_orchestrator 10328 14108 [QUEUE_ACTIVITY_OBSERVED_AT_TERMINAL] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 q_ingest=0 q_ai=9 q_assembly=0 q_finalize=1 q_materialize=0 q_export=0 [METRIC_ONLY — convergence already granted]
+INFO 2026-06-21 16:39:33,588 finalize_worker 10328 14108 [HYDRATION_VISIBILITY_CONFIRMED] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 snapshot_exists=True
+INFO 2026-06-21 16:39:33,588 finalize_worker 10328 14108 [SNAPSHOT_COMPLETE] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:33,588 finalize_worker 10328 14108 [MATERIALIZATION_DB_COMMITTED] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:33,588 finalize_worker 10328 14108 [PURCHASE_SAVE_SERVICE_START] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:33,786 views 10328 14108 [VENDOR_VALIDATION_RESULT] gstin=33ABYFS6343M1ZC matched_vendor_id=26 assigned_status=EXISTING_VENDOR record_id=1007711
+INFO 2026-06-21 16:39:33,786 views 10328 14108 [HYDRATION_READONLY] Entering read-only hydration for record_id=1007711 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 vendor_id=26 validation_status=DUPLICATE db_vendor_status=PENDING
+INFO 2026-06-21 16:39:33,786 views 10328 14108 [HYDRATION_REVALIDATION_BLOCKED] Bypassed validation run for record_id=1007711
+INFO 2026-06-21 16:39:33,786 views 10328 14108 [IMMUTABLE_FINALIZED_DTO] Read-only snapshot mapped for finalized record_id=1007711
+CRITICAL 2026-06-21 16:39:33,787 views 10328 14108 [FORENSIC_ITEMS_LIFECYCLE] [AFTER_HYDRATION] record_id=1007711 invoice_no=4742/25-26 item_count=2 item_status=ALREADY EXIST payload_keys=['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+INFO 2026-06-21 16:39:33,790 pipeline 10328 14108 [ITEM_TRACE_AFTER_HYDRATION] record_id=1007711 invoice_no=4742/25-26 page_number=1 item_count=2 item_status=ALREADY EXIST snapshot_item_count=2
+CRITICAL 2026-06-21 16:39:33,790 views 10328 14108 [HYDRATION_ITEM_VERIFY] record_id=1007711 snapshot_item_count=2 hydrated_item_count=2 item_status=ALREADY EXIST
+INFO 2026-06-21 16:39:33,790 views 10328 14108 [DTO_VALIDATION_STATE] record_id=1007711 vendor_id=26 vendor_status=EXISTS validation_status=DUPLICATE item_status=ALREADY EXIST
+INFO 2026-06-21 16:39:33,790 views 10328 14108 [API_RESPONSE_STATE] record_id=1007711 vendor_status=EXISTS voucher_status=DUPLICATE item_status=ALREADY EXIST vendor_id=26 gstin=33ABYFS6343M1ZC
+INFO 2026-06-21 16:39:33,790 views 10328 14108 [READONLY_HYDRATION_CONFIRMED] Completed readonly hydration for record_id=1007711 validation_status=DUPLICATE
+INFO 2026-06-21 16:39:33,790 views 10328 14108 [GSTIN_HYDRATION] upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 record_id=1007711 gstin=33ABYFS6343M1ZC status=FINALIZED
+INFO 2026-06-21 16:39:33,790 views 10328 14108 [GSTIN_API_RESPONSE] upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 record_id=1007711 gstin=33ABYFS6343M1ZC status=FINALIZED
+INFO 2026-06-21 16:39:33,797 views 10328 14108 [VENDOR_VALIDATION_RESULT] gstin=33ABYFS6343M1ZC matched_vendor_id=26 assigned_status=EXISTING_VENDOR record_id=1007711
+INFO 2026-06-21 16:39:33,797 views 10328 14108 [HYDRATION_READONLY] Entering read-only hydration for record_id=1007711 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 vendor_id=26 validation_status=DUPLICATE db_vendor_status=PENDING
+INFO 2026-06-21 16:39:33,797 views 10328 14108 [HYDRATION_REVALIDATION_BLOCKED] Bypassed validation run for record_id=1007711
+INFO 2026-06-21 16:39:33,797 views 10328 14108 [IMMUTABLE_FINALIZED_DTO] Read-only snapshot mapped for finalized record_id=1007711
+CRITICAL 2026-06-21 16:39:33,798 views 10328 14108 [FORENSIC_ITEMS_LIFECYCLE] [AFTER_HYDRATION] record_id=1007711 invoice_no=4742/25-26 item_count=2 item_status=ALREADY EXIST payload_keys=['irn', 'gstin', 'items', 'ack_no', 'branch', 'bill_to', 'hsn_sac', '_lineage', '_page_no', 'ack_date', 'warnings', '_raw_text', 'bill_from', 'raw_gstin', 'round_off', '_forensics', '_page_role', 'invoice_no', 'total_cess', 'total_cgst', 'total_igst', 'total_sgst', 'buyer_gstin', 'item_status', 'vendor_name', 'invoice_date', 'vendor_gstin', '_pdf_ocr_text', '_source_pages', 'bill_to_gstin', 'missing_items', 'ship_to_gstin', 'low_confidence', 'raw_invoice_no', 'canonical_gstin', 'consignee_gstin', 'place_of_supply', 'raw_buyer_gstin', 'raw_vendor_name', '_runtime_task_id', 'raw_invoice_date', 'raw_vendor_gstin', '_physical_page_no', 'raw_bill_to_gstin', 'raw_ship_to_gstin', 'is_canonical_frozen', 'raw_consignee_gstin', 'total_invoice_value', 'total_taxable_value', 'validation_revision', 'validation_warnings', 'canonical_invoice_no', 'canonical_buyer_gstin', 'canonical_vendor_name', 'canonical_invoice_date', 'canonical_vendor_gstin', 'canonical_bill_to_gstin', 'canonical_ship_to_gstin', 'canonical_consignee_gstin']
+INFO 2026-06-21 16:39:33,801 pipeline 10328 14108 [ITEM_TRACE_AFTER_HYDRATION] record_id=1007711 invoice_no=4742/25-26 page_number=1 item_count=2 item_status=ALREADY EXIST snapshot_item_count=2
+CRITICAL 2026-06-21 16:39:33,802 views 10328 14108 [HYDRATION_ITEM_VERIFY] record_id=1007711 snapshot_item_count=2 hydrated_item_count=2 item_status=ALREADY EXIST
+INFO 2026-06-21 16:39:33,802 views 10328 14108 [DTO_VALIDATION_STATE] record_id=1007711 vendor_id=26 vendor_status=EXISTS validation_status=DUPLICATE item_status=ALREADY EXIST
+INFO 2026-06-21 16:39:33,802 views 10328 14108 [API_RESPONSE_STATE] record_id=1007711 vendor_status=EXISTS voucher_status=DUPLICATE item_status=ALREADY EXIST vendor_id=26 gstin=33ABYFS6343M1ZC
+INFO 2026-06-21 16:39:33,802 views 10328 14108 [READONLY_HYDRATION_CONFIRMED] Completed readonly hydration for record_id=1007711 validation_status=DUPLICATE
+INFO 2026-06-21 16:39:33,802 views 10328 14108 [GSTIN_HYDRATION] upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 record_id=1007711 gstin=33ABYFS6343M1ZC status=FINALIZED
+INFO 2026-06-21 16:39:33,802 views 10328 14108 [GSTIN_API_RESPONSE] upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 record_id=1007711 gstin=33ABYFS6343M1ZC status=FINALIZED
+WARNING 2026-06-21 16:39:33,802 finalize_worker 10328 14108 [SAVE_ELIGIBILITY_FAILED] record_id=1007711 reason=NOT_ELIGIBLE_VIA_HELPER
+INFO 2026-06-21 16:39:33,802 finalize_worker 10328 14108 [PURCHASE_SAVE_SERVICE_SKIPPED] record=1007711 reason=NOT_ELIGIBLE_VIA_HELPER
+INFO 2026-06-21 16:39:33,803 finalize_worker 10328 14108 [STATE_MACHINE_TRANSITION] record=1007711 new_state=FINALIZED processed=False
+INFO 2026-06-21 16:39:33,811 redis_orchestrator 10328 14108 [REDIS_STATE_MUTATION_ENTER] record=1007711
+INFO 2026-06-21 16:39:33,811 redis_orchestrator 10328 14108 [REDIS_STATE_MUTATION_INPUT] record=1007711 raw_input_status=HYDRATION_READY
+INFO 2026-06-21 16:39:33,811 redis_orchestrator 10328 14108 [REDIS_STATUS_ASSIGN] record=1007711 assigned_status=HYDRATION_READY
+INFO 2026-06-21 16:39:33,812 redis_orchestrator 10328 14108 [STATE_NORMALIZED] raw_state=HYDRATION_READY normalized_state=HYDRATION_READY record=1007711
+INFO 2026-06-21 16:39:33,813 redis_orchestrator 10328 14108 [LIFECYCLE_TRANSITION_ATTEMPT] record=1007711 previous_state=HYDRATION_READY requested_state=HYDRATION_READY
+INFO 2026-06-21 16:39:33,813 redis_orchestrator 10328 14108 [REDIS_STATE_WRITE] record=1007711 status=HYDRATION_READY
+INFO 2026-06-21 16:39:33,813 redis_orchestrator 10328 14108 [REDIS_STATE_COMMIT] record=1007711 status=HYDRATION_READY
+INFO 2026-06-21 16:39:33,813 redis_orchestrator 10328 14108 [STATUS_SYNC_OK] record=1007711 status=HYDRATION_READY progress=100.0%
+INFO 2026-06-21 16:39:33,813 finalize_worker 10328 14108 [TERMINAL_STATUS_PERSISTED] record=1007711 redis_status=HYDRATION_READY
+INFO 2026-06-21 16:39:33,813 finalize_worker 10328 14108 [HYDRATION_READY_EMITTED] record=1007711
+INFO 2026-06-21 16:39:33,813 redis_orchestrator 10328 14108 [REDIS_STATE_MUTATION_ENTER] record=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:33,813 redis_orchestrator 10328 14108 [REDIS_STATE_MUTATION_INPUT] record=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 raw_input_status=HYDRATION_READY
+INFO 2026-06-21 16:39:33,814 redis_orchestrator 10328 14108 [REDIS_STATUS_ASSIGN] record=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 assigned_status=HYDRATION_READY
+INFO 2026-06-21 16:39:33,814 redis_orchestrator 10328 14108 [STATE_NORMALIZED] raw_state=HYDRATION_READY normalized_state=HYDRATION_READY record=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:33,814 redis_orchestrator 10328 14108 [LIFECYCLE_TRANSITION_ATTEMPT] record=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 previous_state=None requested_state=HYDRATION_READY
+INFO 2026-06-21 16:39:33,814 redis_orchestrator 10328 14108 [REDIS_STATE_WRITE] record=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 status=HYDRATION_READY
+INFO 2026-06-21 16:39:33,814 redis_orchestrator 10328 14108 [REDIS_STATE_COMMIT] record=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 status=HYDRATION_READY
+INFO 2026-06-21 16:39:33,815 redis_orchestrator 10328 14108 [STATUS_SYNC_OK] record=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 status=HYDRATION_READY progress=100.0%
+INFO 2026-06-21 16:39:33,815 finalize_worker 10328 14108 [SESSION_TERMINAL_STATUS] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 status=HYDRATION_READY
+INFO 2026-06-21 16:39:33,815 finalize_worker 10328 14108 [HYDRATION_READY_EMITTED] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:33,815 finalize_worker 10328 14108 [TERMINAL_RELEASE_SUCCESS] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1
+INFO 2026-06-21 16:39:33,815 finalize_worker 10328 14108 [SESSION_FLAG_WRITE] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 is_failed=False
+INFO 2026-06-21 16:39:33,816 finalize_worker 10328 14108 [TERMINAL_CONSISTENCY_SET] record=1007711 session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 — UI hydration gate UNLOCKED
+INFO 2026-06-21 16:39:33,821 finalize_worker 10328 14108 [FINALIZE_STATE_PERSISTED] record=1007711 fields=['status', 'export_complete', 'snapshot_complete', 'validation_complete', 'terminal_consistency'] session=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 terminal_consistency=True
+INFO 2026-06-21 16:39:33,821 finalize_worker 10328 14108 [FINALIZE_SNAPSHOT_CREATED] record=1007711 materialization_complete=True snapshot_complete=True
+INFO 2026-06-21 16:39:33,821 finalize_worker 10328 12328 [JOB_TERMINAL_STATE_SET] record=1007711 job=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3
+INFO 2026-06-21 16:39:33,821 finalize_worker 10328 12328 [FINALIZE_COMPLETE] record=1007711 job=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3
+INFO 2026-06-21 16:39:33,821 finalize_worker 10328 12328 [FINALIZE_WORKER_EXIT] id=f1e07e6e-8fae-4047-9862-9a511ff3651e record=1007711
+INFO 2026-06-21 16:39:33,821 finalize_worker 10328 12328 [FINALIZE_STAGE_EXIT] record=1007711 duration=0.943s
+INFO 2026-06-21 16:39:33,822 worker_base 10328 12328 [PIPELINE_STAGE_EXIT] stage=FINALIZE correlation_id=2eddf1f2-047a-4692-a2d8-56e18b18fb83 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown
+INFO 2026-06-21 16:39:33,822 worker_base 10328 12328 [WORKER_STAGE_SUCCESS] correlation_id=2eddf1f2-047a-4692-a2d8-56e18b18fb83 upload_session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1 tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=e1ca4245-2a81-42d6-a8bf-f71aff34d1c3 record_id=1007711 invoice_no=unknown queue_name=finalize worker_id=FINALIZE worker_pid=10328 hostname=LAPTOP-601O6S3T retry_count=1 visibility_timeout=1800 processing_duration_ms=1055 dto_status=COMPLETED
+INFO 2026-06-21 16:39:33,897 worker_base 10328 12328 [QUEUE_MESSAGE_ACK] id=f1e07e6e-8fae-4047-9862-9a511ff3651e queue=finalize correlation_id=2eddf1f2-047a-4692-a2d8-56e18b18fb83 session_id=fdce9a70-4459-4f99-85bb-e7fe14ab95e1

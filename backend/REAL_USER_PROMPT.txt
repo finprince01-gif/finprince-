@@ -1,0 +1,18 @@
+Extract PURCHASE invoice data into this exact JSON schema:
+
+{"header":{"vendor_name":"","vendor_address":"","billing_address":"","vendor_gstin":"","vendor_state":"","place_of_supply":"","invoice_no":"","invoice_date":"","total_amount":0,"taxable_value":0,"cgst":0,"sgst":0,"igst":0,"gst_taxability_type":"Taxable","gst_nature_of_transaction":"","sales_order_no":"","irn":"","ack_no":"","ack_date":""},"items":[{"description":"","hsn_code":"","quantity":0,"uom":"","rate":0,"discount_percent":0,"taxable_value":0,"igst_rate":0,"igst_amount":0,"cgst_rate":0,"cgst_amount":0,"sgst_rate":0,"sgst_amount":0,"cess_rate":0,"cess_amount":0,"amount":0}]}
+
+RULES:
+1. header: one entry per invoice; items: one row per line item.
+2. vendor_address = "Consignee/Ship To" block; billing_address = "Buyer/Bill To" block only. Never mix them. Null if absent.
+3. invoice_no: prefer label "Invoice No"/"Bill No", near top/date, must have ≥1 digit, 3-25 chars.
+4. place_of_supply: state name or code (e.g. "33-Tamil Nadu").
+5. total_amount = taxable_value + cgst + sgst + igst. item amount = taxable_value + taxes.
+6. HSN/SAC and UOM per item if visible.
+7. Continuation page: extract invoice_no and vendor_name from top labels; markers: "continued","amount chargeable","authorised signatory","rounded off".
+8. Missing field → null. No hallucination. All numeric fields must be numbers.
+Return ONLY valid JSON.
+
+
+### [PAGE 1 OCR DATA]
+Tax Invoice | (ORIGINAL FOR RECIPIENT) | e-Invoice IRN | : 57bd9abf89e1d6f519d0b5e49b4175eefbc9206d96c50e1. 2cd721b5541c76642 Ack No. : 152523027902150 Ack Date: 13-Sep-2025 SRI VISHNU HEAT TREATERS | Invoice No. | Dated 4742/25-26 | 13-Sep-2025 BRANCH OFFICE SF NO 75/2 B SITe | 24/1 COSMOFAN FO Delivery Note | Mode/Terms of Payment rUnnatur viLLage annur pin 641107 | 2601/25-26 BRANCH OFI | NO.2/166 SF NO 472/1D | Reference No. & Date. | Other References BALAJ! INDUSTRIAL PARK MGCP VILLAGE SENTHAMPALAYAMGSTIN/UIN: 33ABYI | 4742 dt. 13-Sep-2025 Buyer's Order No. Consignee (Ship to) | JC/043/25-26 | 8-Sep-2025 N.S.SOLUTION | Dispatch Doc No. | Delivery Note Date SF NO: 195, VILANKURICHI RD, SUNDHARAR STREET, | Dispatched through | Destination COIMBATORE I State NameGSTIN/UIN | Tamil Nadu, Code : 33 33CKJPS6256F1ZW | Terms of Delivery Buyer (Bill to) Accuturn Machiners Private Limited 13 A,THUDIYALUR-KANUVAI ROAD APPANAICKENPALAYAM K.VADAMADURAI POST Coimbatore | 33ABACA5718R1ZD State Name Place of Supply .Tamil Nadu SI | Description of | HSN/SAC Quantity Rate per | Amount No. | Services 1 SQF - CASEHARDENING & TEMPERING(KGS) 998898 910.740 kgs 60.00kgs | 54,644.40 B65-6008 PIN 1059-NOS 2 SHOT BLASTINGS(KGS) 12.00kgs | 10,928.88 65,573.28 OUTPUT CGST@6% | 6% | 3,934.39 OUTPUT SgST@6% continued to page number 2 This is a Computer Generated Invoice

@@ -1,0 +1,23 @@
+<USER_REQUEST>
+export-queue-local visible=0 invisible=0
+WARNING ⚠ Failed attempt #2 | Email: admin@budstech.com:admin | IP: 127.0.0.1
+WARNING ❌ LOGIN FAILED | Email: admin@budstech.com:admin | IP: 127.0.0.1 | Reason: Wrong password | Time: 2026-06-20 23:41:24
+WARNING "POST /api/auth/login/ HTTP/1.1" 400 55
+ change the password for this user 
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-06-20T23:41:42+05:30.
+
+The user's current state is as follows:
+Active Document: c:\108\AI-accounting-0.03\backend\sprint3_validation\run_sprint3_validation.py (LANGUAGE_PYTHON)
+Cursor is on line: 1
+Other open documents:
+- c:\108\AI-accounting-0.03\backend\vouchers\pipeline\health_api.py (LANGUAGE_PYTHON)
+- c:\108\AI-accounting-0.03\backend\sprint3_validation\mine_worker_stability.py (LANGUAGE_PYTHON)
+- c:\108\AI-accounting-0.03\backend\core\ai_service.py (LANGUAGE_PYTHON)
+- c:\108\AI-accounting-0.03\backend\ocr_pipeline\normalize.py (LANGUAGE_PYTHON)
+- c:\108\AI-accounting-0.03\backend\ocr_pipeline\ocr_cache.py (LANGUAGE_PYTHON)
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from None to Gemini 3.5 Flash (Medium). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>

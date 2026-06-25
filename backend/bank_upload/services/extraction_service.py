@@ -1,10 +1,10 @@
 """
-extraction_service.py — Bank Statement Gemini Extraction
+extraction_service.py — Bank Statement Qwen/AI Extraction
 =========================================================
 
 STRICT RULES:
   ✅  Reads file bytes / text
-  ✅  Calls Gemini API
+  ✅  Calls Qwen/AI API
   ✅  Returns List[dict]
   ❌  NO Django model imports
   ❌  NO DB access of any kind
@@ -103,7 +103,7 @@ def extract_transactions(file_obj) -> tuple[list, dict]:
             if not text_payload and not mime_type.startswith('image/'):
                 raise ValueError(f"CRITICAL: Failed to extract text from {file_name}")
 
-            raw = _call_gemini(text_payload, mime_type, file_bytes, file_name)
+            raw = _call_qwen(text_payload, mime_type, file_bytes, file_name)
             rows = _parse_response(raw)
             metrics.total_chunks = 1
             metrics.successful_chunks = 1 if rows else 0
@@ -174,12 +174,12 @@ def _to_text(file_bytes: bytes, file_name: str, mime_type: str) -> str | None:
             logger.warning(f"openpyxl failed: {exc}. Falling back to binary upload.")
             return None
 
-    # PDF / image — pass raw bytes to Gemini inline
+    # PDF / image — pass raw bytes to Qwen/AI inline
     return None
 
 
 # ---------------------------------------------------------------------------
-# Helpers — Gemini call
+# Helpers — Qwen/AI call
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 
@@ -263,13 +263,13 @@ Return an array of objects:
 """
 
 
-def _call_gemini(text_payload: str | None, mime_type: str, file_bytes: bytes, file_name: str, is_first: bool = False, is_last: bool = False) -> str:
+def _call_qwen(text_payload: str | None, mime_type: str, file_bytes: bytes, file_name: str, is_first: bool = False, is_last: bool = False) -> str:
     """
-    Call Gemini with strict prompt injection, logging, and balance extraction flags.
+    Call Qwen/AI with strict prompt injection, logging, and balance extraction flags.
     """
     api_key = api_key_manager.get_healthy_key()
     if not api_key:
-        raise RuntimeError("No healthy Gemini API keys available.")
+        raise RuntimeError("No healthy Qwen API keys available.")
 
     # Enhance prompt for first/last chunks to capture balances
     balance_hint = ""
@@ -281,15 +281,18 @@ def _call_gemini(text_payload: str | None, mime_type: str, file_bytes: bytes, fi
     is_binary = (mime_type == 'application/pdf' or mime_type.startswith('image/'))
     
     if is_binary:
-        # Binary mode: send as inline_data
-        from google.genai import types  # type: ignore
-        # If text_payload exists here, it's a "retry hint" or additional instruction
+        # Binary mode: send as dict matching what ai_proxy.py expects
         base_prompt = _PROMPT_BINARY + balance_hint
         prompt_text = f"{text_payload}\n\n{base_prompt}" if text_payload else base_prompt
         
         prompt = [
-            types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
             prompt_text,
+            {
+                'inline_data': {
+                    'mime_type': mime_type,
+                    'data': file_bytes
+                }
+            }
         ]
     else:
         # Text mode (CSV/Excel): embed content in prompt template
@@ -311,7 +314,7 @@ def _call_gemini(text_payload: str | None, mime_type: str, file_bytes: bytes, fi
     )
     
     if not raw:
-        raise ValueError(f"CRITICAL: Empty response received from Gemini for {file_name}")
+        raise ValueError(f"CRITICAL: Empty response received from AI for {file_name}")
         
     return raw
 
@@ -353,7 +356,7 @@ def _extract_pdf_paged(file_bytes: bytes, file_name: str, metrics: ExtractionMet
         for idx, chunk in enumerate(chunks):
             is_first = (idx == 0)
             is_last  = (idx == len(chunks) - 1)
-            future = executor.submit(_call_gemini, None, 'application/pdf', chunk['bytes'], chunk['name'], is_first, is_last)
+            future = executor.submit(_call_qwen, None, 'application/pdf', chunk['bytes'], chunk['name'], is_first, is_last)
             future_to_idx[future] = idx
         
         for future in as_completed(future_to_idx):
@@ -366,7 +369,7 @@ def _extract_pdf_paged(file_bytes: bytes, file_name: str, metrics: ExtractionMet
                 # Retry once if 0 rows found in a non-empty page range
                 if not chunk_rows:
                     logger.warning(f"🔍 Chunk {chunk_range[0]}-{chunk_range[1]}: 0 rows found. Retrying with explicit scan...")
-                    raw_response = _call_gemini(
+                    raw_response = _call_qwen(
                         "RETRY INSTRUCTION: Previous scan found 0 transactions. Please perform an explicit, row-by-row scan of the tables on this page. I need EVERY transaction.", 
                         'application/pdf', chunks[idx]['bytes'], chunks[idx]['name']
                     )
@@ -442,7 +445,7 @@ def _validate_chronology(rows: list) -> list:
     """Ensure transactions are logically ordered. Flag suspicious jumps."""
     if not rows: return []
     # Basic sort by date to ensure page-order doesn't break time-order
-    # (Though Gemini chunks are merged in page order, this is a safety layer)
+    # (Though AI chunks are merged in page order, this is a safety layer)
     return sorted(rows, key=lambda x: x['date'] if x['date'] else '9999-99-99')
 
 
@@ -460,12 +463,12 @@ def _perform_quality_check(rows: list):
 
 
 # ---------------------------------------------------------------------------
-# Helpers — parse Gemini response
+# Helpers — parse Qwen/AI response
 # ---------------------------------------------------------------------------
 
 def _parse_response(raw: str) -> list:
     """
-    Parse Gemini's text response into a list of transaction dicts.
+    Parse Qwen/AI's text response into a list of transaction dicts.
     Strips markdown code fences, handles partial/truncated JSON gracefully.
     """
     if not raw:

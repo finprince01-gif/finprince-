@@ -3600,6 +3600,46 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   }, [voucherType, vendorId, selectedBranch, vendorGstDetails, setAddressFields, setGstin]);
 
+  // Hydrate vendor TDS/TCS statutory settings when vendorId changes or richVendors loads
+  useEffect(() => {
+    if (voucherType !== 'Purchase' || !vendorId || richVendors.length === 0) return;
+
+    const targetId = typeof vendorId === 'string' ? parseInt(vendorId, 10) : vendorId;
+    const vendor = richVendors.find(v => v.id === targetId);
+    if (!vendor) return;
+
+    const tcsStr = vendor.tcs_section_applicable || vendor.tcs_section || '';
+    const tdsStr = vendor.tds_section_applicable || vendor.tds_section || '';
+
+    const splitPattern = /,(?![^(]*\))/;
+    const tcsList = tcsStr.includes('|') ? tcsStr.split('|') : tcsStr.split(splitPattern);
+    const tdsList = tdsStr.includes('|') ? tdsStr.split('|') : tdsStr.split(splitPattern);
+
+    const filteredTcs = tcsList.filter(Boolean).map((s: string) => s.trim());
+    const filteredTds = tdsList.filter(Boolean).map((s: string) => s.trim());
+
+    setPurchaseAvailableTcsSections(filteredTcs);
+    setPurchaseAvailableTdsSections(filteredTds);
+
+    const derivedTaxType = vendor.tax_type || (tcsList.length > 0 ? 'TCS' : tdsList.length > 0 ? 'TDS' : 'NONE');
+    setVendorTaxType(derivedTaxType);
+
+    const isAuto = (vendor.enable_automatic_tds_posting === true || vendor.enable_automatic_tds_posting === 'true' || vendor.enable_automatic_tds_posting === 1);
+    setPurchaseAutoTdsEnabled(isAuto);
+
+    if (isAuto) {
+      if (derivedTaxType === 'TCS' && tcsList.length > 0) {
+        setPurchaseSelectedStatutorySection(prev => prev || tcsList[0]);
+      } else if (derivedTaxType === 'TDS' && tdsList.length > 0) {
+        setPurchaseSelectedStatutorySection(prev => prev || tdsList[0]);
+      } else {
+        setPurchaseSelectedStatutorySection('');
+      }
+    } else {
+      setPurchaseSelectedStatutorySection('');
+    }
+  }, [voucherType, vendorId, richVendors]);
+
   const validateVendorFromInvoice = async (vendorName: string, gstin: string, state: string, address: string, branch: string = '') => {
     try {
       setExtractedVendorData({ vendor_name: vendorName, gstin, state, address, branch });
@@ -5527,8 +5567,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   // Resolve vendorId from party name once richVendors finishes loading
   useEffect(() => {
-    if (isReadOnlyMode && party && richVendors.length > 0) {
-      const match = richVendors.find((v: any) => v.vendor_name === party);
+    if (party && richVendors.length > 0) {
+      const match = richVendors.find((v: any) => (v.vendor_name || '').toLowerCase() === party.toLowerCase());
       if (match) {
         if (!vendorId) setVendorId(match.id.toString());
 
@@ -5547,7 +5587,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isReadOnlyMode, party, richVendors, vendorId, vendorGstDetails, voucherType]);
+  }, [party, richVendors, vendorId, vendorGstDetails, voucherType]);
 
   // Resolve cnCustomerId from cnCustomer once richCustomers finishes loading
   useEffect(() => {

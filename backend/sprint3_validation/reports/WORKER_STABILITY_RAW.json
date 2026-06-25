@@ -1,0 +1,270 @@
+{
+  "mined_at": "2026-06-21T10:29:28.359464+00:00",
+  "aggregate_events": {
+    "worker_lock_refresh": 53609,
+    "upload_accepted": 47,
+    "record_created": 47,
+    "queue_push_success": 602,
+    "queue_forward_success": 454,
+    "downstream_enqueue_success": 92,
+    "zombie_message": 51,
+    "dlq_redirect": 51,
+    "slot_acquired": 87,
+    "slot_released": 67
+  },
+  "log_results": {
+    "ingestion": {
+      "file": "C:\\108\\AI-accounting-0.03\\backend\\logs\\ingestion.log",
+      "status": "EMPTY",
+      "events": {},
+      "size_bytes": 0
+    },
+    "ai": {
+      "file": "C:\\108\\AI-accounting-0.03\\backend\\logs\\ai.log",
+      "status": "EMPTY",
+      "events": {},
+      "size_bytes": 0
+    },
+    "assembly": {
+      "file": "C:\\108\\AI-accounting-0.03\\backend\\logs\\assembly.log",
+      "status": "EMPTY",
+      "events": {},
+      "size_bytes": 0
+    },
+    "finalize": {
+      "file": "C:\\108\\AI-accounting-0.03\\backend\\logs\\finalize.log",
+      "status": "EMPTY",
+      "events": {},
+      "size_bytes": 0
+    },
+    "export": {
+      "file": "C:\\108\\AI-accounting-0.03\\backend\\logs\\export.log",
+      "status": "EMPTY",
+      "events": {},
+      "size_bytes": 0
+    },
+    "materialization": {
+      "file": "C:\\108\\AI-accounting-0.03\\backend\\logs\\materialization.log",
+      "status": "EMPTY",
+      "events": {},
+      "size_bytes": 0
+    },
+    "worker": {
+      "file": "C:\\108\\AI-accounting-0.03\\backend\\logs\\worker.log",
+      "status": "EMPTY",
+      "events": {},
+      "size_bytes": 0
+    },
+    "cluster": {
+      "log": "cluster",
+      "file": "C:\\108\\AI-accounting-0.03\\backend\\logs\\cluster.log",
+      "status": "OK",
+      "size_bytes": 184593,
+      "events": {},
+      "crashes": [],
+      "dlq_events": [],
+      "push_by_queue": {}
+    },
+    "debug": {
+      "log": "debug",
+      "file": "C:\\108\\AI-accounting-0.03\\backend\\logs\\debug.log",
+      "status": "OK",
+      "size_bytes": 189116166,
+      "events": {
+        "worker_lock_refresh": 53609,
+        "upload_accepted": 47,
+        "record_created": 47,
+        "queue_push_success": 602,
+        "queue_forward_success": 454,
+        "downstream_enqueue_success": 92,
+        "zombie_message": 51,
+        "dlq_redirect": 51,
+        "slot_acquired": 87,
+        "slot_released": 67
+      },
+      "crashes": [],
+      "dlq_events": [
+        {
+          "timestamp": "2026-06-16 16:56:28",
+          "raw": "WARNING 2026-06-16 16:56:28,416 worker_base 5004 29184 [MESSAGE_DLQ_REDIRECT] id=2f806f99-9125-4f6c-ad33-9e8e84dab8a3 queue=ai"
+        },
+        {
+          "timestamp": "2026-06-16 16:56:28",
+          "raw": "WARNING 2026-06-16 16:56:28,651 worker_base 5004 29184 [MESSAGE_DLQ_REDIRECT] id=ee146275-f278-41b8-8752-12bcf47778e5 queue=ai"
+        },
+        {
+          "timestamp": "2026-06-16 16:56:28",
+          "raw": "WARNING 2026-06-16 16:56:28,660 worker_base 5004 29184 [MESSAGE_DLQ_REDIRECT] id=ae58e433-9005-4b30-9a25-7b451b9903a1 queue=ai"
+        },
+        {
+          "timestamp": "2026-06-16 16:56:29",
+          "raw": "WARNING 2026-06-16 16:56:29,615 worker_base 5004 29184 [MESSAGE_DLQ_REDIRECT] id=30573265-6673-4c6d-9a1f-99751a945a40 queue=ai"
+        },
+        {
+          "timestamp": "2026-06-16 16:56:29",
+          "raw": "WARNING 2026-06-16 16:56:29,730 worker_base 5004 29184 [MESSAGE_DLQ_REDIRECT] id=3a2cb7d9-4d00-407c-9adf-328d6f42b9e5 queue=ai"
+        },
+        {
+          "timestamp": "2026-06-17 18:05:37",
+          "raw": "WARNING 2026-06-17 18:05:37,895 worker_base 32504 34496 [MESSAGE_DLQ_REDIRECT] id=c980b037-c672-4f93-b01d-057a019370a2 queue=materialization"
+        },
+        {
+          "timestamp": "2026-06-18 10:31:51",
+          "raw": "WARNING 2026-06-18 10:31:51,034 worker_base 17292 8924 [MESSAGE_DLQ_REDIRECT] id=ca623363-5f98-44f8-b119-93ef2e8be32d queue=materialization"
+        },
+        {
+          "timestamp": "2026-06-18 11:14:45",
+          "raw": "WARNING 2026-06-18 11:14:45,567 worker_base 16992 18332 [MESSAGE_DLQ_REDIRECT] id=c41a833d-f764-4100-b96a-ef73f4b61b07 queue=ai"
+        },
+        {
+          "timestamp": "2026-06-18 11:14:45",
+          "raw": "WARNING 2026-06-18 11:14:45,938 worker_base 16992 18332 [MESSAGE_DLQ_REDIRECT] id=642ed7bb-d758-45c6-910e-0c0f3171482d queue=ai"
+        },
+        {
+          "timestamp": "2026-06-18 11:52:41",
+          "raw": "WARNING 2026-06-18 11:52:41,710 worker_base 2900 13132 [MESSAGE_DLQ_REDIRECT] id=2e22da87-3d2d-41ef-b80e-5f41d1e98a06 queue=ai"
+        },
+        {
+          "timestamp": "2026-06-18 12:42:52",
+          "raw": "WARNING 2026-06-18 12:42:52,585 worker_base 8876 14384 [MESSAGE_DLQ_REDIRECT] id=6ca43d74-bc1f-404a-a7e9-52f1f5c8212e queue=ingestion"
+        },
+        {
+          "timestamp": "2026-06-18 13:05:16",
+          "raw": "WARNING 2026-06-18 13:05:16,030 worker_base 27612 27408 [MESSAGE_DLQ_REDIRECT] id=30154a51-aef0-47ad-992b-3f24a95b947c queue=ai"
+        },
+        {
+          "timestamp": "2026-06-18 13:05:17",
+          "raw": "WARNING 2026-06-18 13:05:17,296 worker_base 27612 27408 [MESSAGE_DLQ_REDIRECT] id=f3258c8a-b8b6-4911-bc98-1a6c09bb66c2 queue=ai"
+        },
+        {
+          "timestamp": "2026-06-18 14:24:16",
+          "raw": "WARNING 2026-06-18 14:24:16,740 worker_base 10900 11596 [MESSAGE_DLQ_REDIRECT] id=013b7017-51f7-40fa-942d-27031359f8d3 queue=ingestion"
+        },
+        {
+          "timestamp": "2026-06-18 14:24:49",
+          "raw": "WARNING 2026-06-18 14:24:49,322 worker_base 16412 2892 [MESSAGE_DLQ_REDIRECT] id=029c9bec-bbb5-4671-a5e5-d8547c18c9b5 queue=ai"
+        },
+        {
+          "timestamp": "2026-06-18 14:28:00",
+          "raw": "WARNING 2026-06-18 14:28:00,905 worker_base 16412 2892 [MESSAGE_DLQ_REDIRECT] id=c9f457c8-549b-459b-8493-5c2ed86869e2 queue=ai"
+        },
+        {
+          "timestamp": "2026-06-18 14:43:06",
+          "raw": "WARNING 2026-06-18 14:43:06,092 worker_base 28484 29492 [MESSAGE_DLQ_REDIRECT] id=0f0fd09f-6ea4-4160-bbd0-962577cf221c queue=ingestion"
+        },
+        {
+          "timestamp": "2026-06-18 14:47:58",
+          "raw": "WARNING 2026-06-18 14:47:58,595 worker_base 28484 29492 [MESSAGE_DLQ_REDIRECT] id=061f4f8f-9977-4ef5-951b-08acd713f814 queue=ingestion"
+        },
+        {
+          "timestamp": "2026-06-19 10:53:41",
+          "raw": "WARNING 2026-06-19 10:53:41,741 worker_base 11376 1708 [MESSAGE_DLQ_REDIRECT] id=dc1076fd-75a5-4909-842e-cda3578736ea queue=ingestion"
+        },
+        {
+          "timestamp": "2026-06-19 10:57:08",
+          "raw": "WARNING 2026-06-19 10:57:08,760 worker_base 16096 26508 [MESSAGE_DLQ_REDIRECT] id=2c1444e1-8ce4-4cee-beaa-f29539863c31 queue=ingestion"
+        }
+      ],
+      "push_by_queue": {
+        "null": 602
+      }
+    }
+  },
+  "all_crashes": [],
+  "all_dlq_events": [
+    {
+      "timestamp": "2026-06-16 16:56:28",
+      "raw": "WARNING 2026-06-16 16:56:28,416 worker_base 5004 29184 [MESSAGE_DLQ_REDIRECT] id=2f806f99-9125-4f6c-ad33-9e8e84dab8a3 queue=ai"
+    },
+    {
+      "timestamp": "2026-06-16 16:56:28",
+      "raw": "WARNING 2026-06-16 16:56:28,651 worker_base 5004 29184 [MESSAGE_DLQ_REDIRECT] id=ee146275-f278-41b8-8752-12bcf47778e5 queue=ai"
+    },
+    {
+      "timestamp": "2026-06-16 16:56:28",
+      "raw": "WARNING 2026-06-16 16:56:28,660 worker_base 5004 29184 [MESSAGE_DLQ_REDIRECT] id=ae58e433-9005-4b30-9a25-7b451b9903a1 queue=ai"
+    },
+    {
+      "timestamp": "2026-06-16 16:56:29",
+      "raw": "WARNING 2026-06-16 16:56:29,615 worker_base 5004 29184 [MESSAGE_DLQ_REDIRECT] id=30573265-6673-4c6d-9a1f-99751a945a40 queue=ai"
+    },
+    {
+      "timestamp": "2026-06-16 16:56:29",
+      "raw": "WARNING 2026-06-16 16:56:29,730 worker_base 5004 29184 [MESSAGE_DLQ_REDIRECT] id=3a2cb7d9-4d00-407c-9adf-328d6f42b9e5 queue=ai"
+    },
+    {
+      "timestamp": "2026-06-17 18:05:37",
+      "raw": "WARNING 2026-06-17 18:05:37,895 worker_base 32504 34496 [MESSAGE_DLQ_REDIRECT] id=c980b037-c672-4f93-b01d-057a019370a2 queue=materialization"
+    },
+    {
+      "timestamp": "2026-06-18 10:31:51",
+      "raw": "WARNING 2026-06-18 10:31:51,034 worker_base 17292 8924 [MESSAGE_DLQ_REDIRECT] id=ca623363-5f98-44f8-b119-93ef2e8be32d queue=materialization"
+    },
+    {
+      "timestamp": "2026-06-18 11:14:45",
+      "raw": "WARNING 2026-06-18 11:14:45,567 worker_base 16992 18332 [MESSAGE_DLQ_REDIRECT] id=c41a833d-f764-4100-b96a-ef73f4b61b07 queue=ai"
+    },
+    {
+      "timestamp": "2026-06-18 11:14:45",
+      "raw": "WARNING 2026-06-18 11:14:45,938 worker_base 16992 18332 [MESSAGE_DLQ_REDIRECT] id=642ed7bb-d758-45c6-910e-0c0f3171482d queue=ai"
+    },
+    {
+      "timestamp": "2026-06-18 11:52:41",
+      "raw": "WARNING 2026-06-18 11:52:41,710 worker_base 2900 13132 [MESSAGE_DLQ_REDIRECT] id=2e22da87-3d2d-41ef-b80e-5f41d1e98a06 queue=ai"
+    },
+    {
+      "timestamp": "2026-06-18 12:42:52",
+      "raw": "WARNING 2026-06-18 12:42:52,585 worker_base 8876 14384 [MESSAGE_DLQ_REDIRECT] id=6ca43d74-bc1f-404a-a7e9-52f1f5c8212e queue=ingestion"
+    },
+    {
+      "timestamp": "2026-06-18 13:05:16",
+      "raw": "WARNING 2026-06-18 13:05:16,030 worker_base 27612 27408 [MESSAGE_DLQ_REDIRECT] id=30154a51-aef0-47ad-992b-3f24a95b947c queue=ai"
+    },
+    {
+      "timestamp": "2026-06-18 13:05:17",
+      "raw": "WARNING 2026-06-18 13:05:17,296 worker_base 27612 27408 [MESSAGE_DLQ_REDIRECT] id=f3258c8a-b8b6-4911-bc98-1a6c09bb66c2 queue=ai"
+    },
+    {
+      "timestamp": "2026-06-18 14:24:16",
+      "raw": "WARNING 2026-06-18 14:24:16,740 worker_base 10900 11596 [MESSAGE_DLQ_REDIRECT] id=013b7017-51f7-40fa-942d-27031359f8d3 queue=ingestion"
+    },
+    {
+      "timestamp": "2026-06-18 14:24:49",
+      "raw": "WARNING 2026-06-18 14:24:49,322 worker_base 16412 2892 [MESSAGE_DLQ_REDIRECT] id=029c9bec-bbb5-4671-a5e5-d8547c18c9b5 queue=ai"
+    },
+    {
+      "timestamp": "2026-06-18 14:28:00",
+      "raw": "WARNING 2026-06-18 14:28:00,905 worker_base 16412 2892 [MESSAGE_DLQ_REDIRECT] id=c9f457c8-549b-459b-8493-5c2ed86869e2 queue=ai"
+    },
+    {
+      "timestamp": "2026-06-18 14:43:06",
+      "raw": "WARNING 2026-06-18 14:43:06,092 worker_base 28484 29492 [MESSAGE_DLQ_REDIRECT] id=0f0fd09f-6ea4-4160-bbd0-962577cf221c queue=ingestion"
+    },
+    {
+      "timestamp": "2026-06-18 14:47:58",
+      "raw": "WARNING 2026-06-18 14:47:58,595 worker_base 28484 29492 [MESSAGE_DLQ_REDIRECT] id=061f4f8f-9977-4ef5-951b-08acd713f814 queue=ingestion"
+    },
+    {
+      "timestamp": "2026-06-19 10:53:41",
+      "raw": "WARNING 2026-06-19 10:53:41,741 worker_base 11376 1708 [MESSAGE_DLQ_REDIRECT] id=dc1076fd-75a5-4909-842e-cda3578736ea queue=ingestion"
+    },
+    {
+      "timestamp": "2026-06-19 10:57:08",
+      "raw": "WARNING 2026-06-19 10:57:08,760 worker_base 16096 26508 [MESSAGE_DLQ_REDIRECT] id=2c1444e1-8ce4-4cee-beaa-f29539863c31 queue=ingestion"
+    }
+  ],
+  "summary": {
+    "total_worker_starts": 0,
+    "total_worker_crashes": 0,
+    "total_queue_pushes": 602,
+    "total_dlq_events": 51,
+    "total_zombie_messages": 51,
+    "total_lock_refreshes": 53609,
+    "total_upload_accepted": 47,
+    "total_records_created": 47,
+    "total_downstream_success": 92,
+    "total_downstream_failed": 0,
+    "total_slots_acquired": 87,
+    "total_slots_released": 67
+  }
+}

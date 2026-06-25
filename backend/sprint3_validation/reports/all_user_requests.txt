@@ -1,0 +1,190 @@
+--- STEP 0 ---
+<USER_REQUEST>
+export-queue-local visible=0 invisible=0
+WARNING ⚠ Failed attempt #2 | Email: admin@budstech.com:admin | IP: 127.0.0.1
+WARNING ❌ LOGIN FAILED | Email: admin@budstech.com:admin | IP: 127.0.0.1 | Reason: Wrong password | Time: 2026-06-20 23:41:24
+WARNING "POST /api/auth/login/ HTTP/1.1" 400 55
+ change the password for this user 
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-06-20T23:41:42+05:30.
+
+The user's current state is as follows:
+Active Document: c:\108\AI-accounting-0.03\backend\sprint3_validation\run_sprint3_validation.py (LANGUAGE_PYTHON)
+Cursor is on line: 1
+Other open documents:
+- c:\108\AI-accounting-0.03\backend\vouchers\pipeline\health_api.py (LANGUAGE_PYTHON)
+- c:\108\AI-accounting-0.03\backend\sprint3_validation\mine_worker_stability.py (LANGUAGE_PYTHON)
+- c:\108\AI-accounting-0.03\backend\core\ai_service.py (LANGUAGE_PYTHON)
+- c:\108\AI-accounting-0.03\backend\ocr_pipeline\normalize.py (LANGUAGE_PYTHON)
+- c:\108\AI-accounting-0.03\backend\ocr_pipeline\ocr_cache.py (LANGUAGE_PYTHON)
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from None to Gemini 3.5 Flash (Medium). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>
+
+--- STEP 0 ---
+<USER_REQUEST>
+# FORENSIC CLUSTER ROOT CAUSE INVESTIGATION (NO CODE CHANGES)
+
+Objective:
+Do NOT modify any source code, configuration, prompts, OCR logic, Redis logic, SQS logic, AI logic, watchdog logic, timeout values, concurrency values, or infrastructure.
+
+Your only task is to perform a complete forensic investigation of the production pipeline, identify the TRUE root cause(s), prove them with evidence, and produce a remediation report.
+
+==================================================================
+TEST DATASET
+==================================================================
+
+Use ONLY this dataset for testing:
+
+C:\Users\ulaganathan\Downloads\New folder (2)
+
+Dataset:
+- 22 PDF invoices
+- 228 total pages
+- Real production invoices
+- Includes duplicate pair:
+  IMG_20260406_0006.pdf
+  IMG_20260406_0006_TEST.pdf
+
+==================================================================
+REQUIRED EXECUTION
+==================================================================
+
+1. Start cluster normally.
+2. Run complete E2E processing using the above invoice folder.
+3. Allow processing to continue until:
+   - completion
+   - deadlock
+   - timeout
+   - queue stall
+   - worker failure
+   - saturation
+   - duplicate execution
+   - DLQ routing
+
+4. Do NOT stop when errors occur.
+5. Capture full telemetry.
+
+==================================================================
+REQUIRED FORENSIC ANALYSIS
+==================================================================
+
+Analyze every layer:
+
+A. Upload Layer
+- upload timing
+- record creation
+- session creation
+
+B. Ingestion Layer
+- ingestion queue
+- ingestion worker
+- ingestion timing
+
+C. OCR Layer
+- PaddleOCR timing
+- OCR retries
+- OCR quality telemetry
+- OCR recovery passes
+
+D. AI Layer
+- AI queue depth
+- AI worker lifecycle
+- ProviderSaturatedError
+- permit acquisition
+- permit release
+- concurrency governor
+- inference scheduling
+- queue wait time
+- actual inference time
+
+E. Qwen Layer
+- request creation
+- image size
+- prompt size
+- context size
+- prefix cache
+- GPU usage
+- toke
+<truncated 2016 bytes>
+===============================================================
+
+Generate:
+
+1. ROOT_CAUSE_REPORT.md
+2. BOTTLENECK_ANALYSIS.md
+3. AI_QUEUE_FORENSICS.md
+4. OLLAMA_FORENSICS.md
+5. GPU_FORENSICS.md
+6. REDIS_FORENSICS.md
+7. SQS_FORENSICS.md
+8. PREFIX_CACHE_ANALYSIS.md
+9. OCR_QUALITY_ANALYSIS.md
+10. SCALABILITY_GAP_ANALYSIS.md
+
+==================================================================
+FINAL OUTPUT
+==================================================================
+
+Provide:
+
+- Primary Root Cause
+- Secondary Root Causes
+- Impact Severity
+- Evidence
+- Exact File(s) Responsible
+- Exact Function(s) Responsible
+- Exact Execution Path
+- Ranked Fix Order (Priority 1, 2, 3, 4...)
+
+Do NOT implement fixes.
+
+Do NOT change code.
+
+Do NOT change configs.
+
+Do NOT propose speculative solutions.
+
+First prove the root cause with hard evidence from the cluster run using:
+
+C:\Users\ulaganathan\Downloads\New folder (2)'
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-06-20T23:55:12+05:30.
+
+The user's current state is as follows:
+Active Document: c:\108\AI-accounting-0.03\backend\seed_users.py (LANGUAGE_PYTHON)
+Cursor is on line: 1
+Other open documents:
+- c:\108\AI-accounting-0.03\backend\sprint3_validation\generate_reports.py (LANGUAGE_PYTHON)
+- c:\108\AI-accounting-0.03\backend\sprint3_validation\mine_redis_forensics.py (LANGUAGE_PYTHON)
+- c:\108\AI-accounting-0.03\frontend\src\components\SmartInvoiceUploadModal.tsx (LANGUAGE_TSX)
+- c:\108\AI-accounting-0.03\backend\core\ai_proxy.py (LANGUAGE_PYTHON)
+- c:\108\AI-accounting-0.03\backend\vendors\vendor_validation_logic.py (LANGUAGE_PYTHON)
+Running terminal commands:
+- python manage.py runserver (in c:\108\AI-accounting-0.03\backend, running for 3m46s)
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from None to Gemini 3.5 Flash (Medium). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>
+
+--- STEP 105 ---
+<USER_REQUEST>
+continue
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-06-21T15:35:39+05:30.
+
+The user's current state is as follows:
+Active Document: c:\108\AI-accounting-0.03\backend\seed_users.py (LANGUAGE_PYTHON)
+Cursor is on line: 1
+Other open documents:
+- c:\108\AI-accounting-0.03\backend\.env.example (LANGUAGE_UNSPECIFIED)
+- c:\108\AI-accounting-0.03\backend\core\redis_orchestrator.py (LANGUAGE_PYTHON)
+- c:\108\AI-accounting-0.03\backend\sprint3_validation\mine_prefix_cache.py (LANGUAGE_PYTHON)
+- c:\108\AI-accounting-0.03\backend\ocr_pipeline\models.py (LANGUAGE_PYTHON)
+- c:\108\AI-accounting-0.03\backend\ocr_pipeline\gstin_classifier.py (LANGUAGE_PYTHON)
+</ADDITIONAL_METADATA>
+

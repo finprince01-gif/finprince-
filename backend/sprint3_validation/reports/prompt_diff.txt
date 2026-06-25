@@ -1,0 +1,140 @@
+--- MATCHING LINE 1271218 ---
+INFO 2026-06-20 15:51:06,532 extraction 1552 29652 [AI_TASK_ENQUEUED] record=1007697 page=5 task=ai_1007697_5_1781950866 session=a4fca950-eedb-4aad-93b5-ead601e0a2be
+
+[1271203]: INFO 2026-06-20 15:51:05,681 ai_worker 26840 26528 [SESSION_FORENSIC] stage='ai_worker_receive' record=1007697 session=a4fca950-eedb-4aad-93b5-ead601e0a2be tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 page=1
+[1271204]: INFO 2026-06-20 15:51:05,681 ai_worker 26840 26528 [AI_PAGE_START] record=1007697 page=1 session=a4fca950-eedb-4aad-93b5-ead601e0a2be correlation_id=5c75b649-3938-489f-9797-a03ee018f4dd worker_role=AI
+[1271205]: INFO 2026-06-20 15:51:05,692 ai_worker 26840 26528 [OCR_RETRY_CHAIN_START] record=1007697 page=1 max_passes=5
+[1271206]: INFO 2026-06-20 15:51:05,698 ai_worker 26840 26528 [OCR_RECOVERY_PASS] pass=1/5 (original image) record=1007697 page=1
+[1271207]: INFO 2026-06-20 15:51:05,699 ai_proxy 26840 16292 [TENANT_CONTEXT_RESOLVED] tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7
+[1271208]: INFO 2026-06-20 15:51:05,700 simple_invoice_classifier 26840 16292 [BYPASS_REJECT] Not a single-page document.
+[1271209]: DEBUG 2026-06-20 15:51:06,035 worker_base 1552 28588 [WORKER_LOCK_REFRESH] role=INGESTION pid=1552
+[1271210]: DEBUG 2026-06-20 15:51:06,059 sqs 26840 16292 [QUEUE_DEPTH_SNAPSHOT] queue=ai physical_url=https://sqs.ap-south-1.amazonaws.com/620468690151/invoice-ai-queue-local visible=0 invisible=0
+[1271211]: INFO 2026-06-20 15:51:06,081 redis_orchestrator 26840 16292 [REDIS_INIT] Connected to localhost:6379
+[1271212]: DEBUG 2026-06-20 15:51:06,113 worker_base 9492 29372 [WORKER_RESOURCE] role=MATERIALIZE cpu=0.0 rss_mb=166.60546875 active=0
+[1271213]: INFO 2026-06-20 15:51:06,117 worker_base 9492 29372 [DB_CONNECTION_FORENSICS] role=MATERIALIZE PID=9492 total_connections=20 sleeping_connections=18 active_connections=2
+[1271214]: INFO 2026-06-20 15:51:06,525 extraction 1552 29652 [OCR_END] page=5
+[1271215]: INFO 2026-06-20 15:51:06,526 extraction 1552 29652 [OCR_DURATION] page=5 duration_ms=24951
+[1271216]: INFO 2026-06-20 15:51:06,532 extraction 1552 29652 [AI_PAYLOAD_VALID] record=1007697 page=5 item=None cid=None
+[1271217]: INFO 2026-06-20 15:51:06,532 extraction 1552 29652 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 3391 chars | User: system
+[1271218]: INFO 2026-06-20 15:51:06,532 extraction 1552 29652 [AI_TASK_ENQUEUED] record=1007697 page=5 task=ai_1007697_5_1781950866 session=a4fca950-eedb-4aad-93b5-ead601e0a2be
+[1271219]: INFO 2026-06-20 15:51:06,532 extraction 1552 29652 [AI_EXTRACTION_CALL] record=1007697 page=5 session=a4fca950-eedb-4aad-93b5-ead601e0a2be
+[1271220]: INFO 2026-06-20 15:51:06,532 extraction 1552 29652 [PIPELINE_AI_ENQUEUE] record_id=1007697 queue=ai_requests
+[1271221]: INFO 2026-06-20 15:51:06,532 extraction 1552 29652 [SQS_PUSH] record=1007697 page=5 queue=ai_requests
+[1271222]: INFO 2026-06-20 15:51:06,533 message_factory 1552 29652 [CANONICAL_MESSAGE_EMITTED] task_type=AI_EXTRACTION ver=v1 corr=74847e4e-753a-4f5f-bc8e-907d005b87d3 trace_id=trace-8f3a3de92090-1781950866 dedupe_key=b885cd7dae1cfb133e463e924ebf958a57fc36bdefb62b9b578088c55122f9a7 session=a4fca950-eedb-4aad-93b5-ead601e0a2be tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=47bee499-2c39-46c9-b0b8-f186f3bc7648 record_id=1007697
+[1271223]: INFO 2026-06-20 15:51:06,533 message_factory 1552 29652 [JOB_CONTEXT_PROPAGATED] task_type=AI_EXTRACTION job_id=47bee499-2c39-46c9-b0b8-f186f3bc7648 record_id=1007697
+[1271224]: INFO 2026-06-20 15:51:06,533 sqs 1552 29652 [SQS_SERIALIZATION_PAYLOAD] queue=ai message_id=cfa9ece1-15d6-4d56-b463-2c273478d93b keys=['id', 'correlation_id', 'trace_id', 'dedupe_key', 'session_id', 'tenant_id', 'task_type', 'worker_role', 'page_number', 'expected_pages', 'payload_version', 'retry_metadata', 'timestamp', 'payload']
+[1271225]: INFO 2026-06-20 15:51:06,534 sqs 1552 29652 [SQS_SERIALIZATION_SUCCESS] queue=ai message_id=cfa9ece1-15d6-4d56-b463-2c273478d93b
+[1271226]: DEBUG 2026-06-20 15:51:06,760 sqs 26840 16292 [QUEUE_DEPTH_SNAPSHOT] queue=ai physical_url=https://sqs.ap-south-1.amazonaws.com/620468690151/invoice-ai-queue-local visible=0 invisible=0
+[1271227]: INFO 2026-06-20 15:51:06,770 ai_proxy 26840 16292 [AI_MODEL_SELECTED] provider=Qwen model=qwen2.5vl:7b tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 record_id=1007697 page_number=1
+[1271228]: INFO 2026-06-20 15:51:06,775 qwen_provider 26840 16292 [PREFIX_CACHE_TELEMETRY] PREFIX_HASH=0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390 PROMPT_HASH=95a057b2b296a143466cf1e3651c53a7dfe10c70fcabf4f61dd2af44379cc46d REQUEST_ID=ai_1007697_1_1781950860 PAGE_NUMBER=1 INVOICE_ID=1007697
+[1271229]: INFO 2026-06-20 15:51:07,801 qwen_provider 26840 16292 [QWEN_REQUEST_START] Attempt 1 model=qwen2.5vl:7b mode=single images=1
+[1271230]: DEBUG 2026-06-20 15:51:07,866 worker_base 25672 22864 [WORKER_LOCK_REFRESH] role=ASSEMBLY pid=25672
+[1271231]: INFO 2026-06-20 15:51:08,269 sqs 1552 5204 [QUEUE_PUSH_SUCCESS] id=169cf795-6df3-4ef4-867d-a3121f87bf99 sqs_id=0d1af3d7-681b-495f-9be6-4342e90a4bd6 queue=ai url=https://sqs.ap-south-1.amazonaws.com/620468690151/invoice-ai-queue-local tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 cluster_env=local host=LAPTOP-601O6S3T
+[1271232]: INFO 2026-06-20 15:51:08,270 sqs 1552 5204 [SQS_MESSAGE_ENQUEUED] id=169cf795-6df3-4ef4-867d-a3121f87bf99 sqs_id=0d1af3d7-681b-495f-9be6-4342e90a4bd6 queue=ai physical_url=https://sqs.ap-south-1.amazonaws.com/620468690151/invoice-ai-queue-local tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 delay=0s type=AI_EXTRACTION cluster_env=local host=LAPTOP-601O6S3T
+
+
+--- MATCHING LINE 1271305 ---
+INFO 2026-06-20 15:51:09,895 qwen_provider 26840 13884 [PREFIX_CACHE_TELEMETRY] PREFIX_HASH=0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390 PROMPT_HASH=dfe4d046f3596f8c198d5da15607b77dbd454cb53e98c2fc20dbffd97d5694c5 REQUEST_ID=ai_1007697_5_1781950866 PAGE_NUMBER=5 INVOICE_ID=1007697
+
+[1271290]: INFO 2026-06-20 15:51:09,642 worker_base 26840 26528 [VISIBILITY_EXTENDER_START] role=ai handle=AQEBGZW9S7...
+[1271291]: DEBUG 2026-06-20 15:51:09,642 worker_base 26840 26528 [SQS_VISIBILITY_START] handle=AQEBGZW9S7... queue=ai
+[1271292]: DEBUG 2026-06-20 15:51:09,645 sqs 26840 20228 [RECEIVE_MESSAGE_CALL] queue=ai url=https://sqs.ap-south-1.amazonaws.com/620468690151/invoice-ai-queue-local wait=20
+[1271293]: INFO 2026-06-20 15:51:09,706 worker_base 26840 26528 [QUEUE_MESSAGE_PROCESSING] correlation_id=74847e4e-753a-4f5f-bc8e-907d005b87d3 session_id=a4fca950-eedb-4aad-93b5-ead601e0a2be worker_name=AI
+[1271294]: INFO 2026-06-20 15:51:09,707 worker_base 26840 26528 [PIPELINE_STAGE_ENTER] stage=AI correlation_id=74847e4e-753a-4f5f-bc8e-907d005b87d3 upload_session_id=a4fca950-eedb-4aad-93b5-ead601e0a2be tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=47bee499-2c39-46c9-b0b8-f186f3bc7648 record_id=1007697 invoice_no=unknown
+[1271295]: INFO 2026-06-20 15:51:09,708 ai_worker 26840 26528 [CONTEXT_TRACE_AI_RECEIVE] job_id=47bee499-2c39-46c9-b0b8-f186f3bc7648 record_id=1007697 session_id=a4fca950-eedb-4aad-93b5-ead601e0a2be tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 trace_id=None page=5
+[1271296]: INFO 2026-06-20 15:51:09,708 ai_worker 26840 26528 [SESSION_FORENSIC] stage='ai_worker_receive' record=1007697 session=a4fca950-eedb-4aad-93b5-ead601e0a2be tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 page=5
+[1271297]: INFO 2026-06-20 15:51:09,709 ai_worker 26840 26528 [AI_PAGE_START] record=1007697 page=5 session=a4fca950-eedb-4aad-93b5-ead601e0a2be correlation_id=74847e4e-753a-4f5f-bc8e-907d005b87d3 worker_role=AI
+[1271298]: INFO 2026-06-20 15:51:09,715 ai_worker 26840 26528 [OCR_RETRY_CHAIN_START] record=1007697 page=5 max_passes=5
+[1271299]: INFO 2026-06-20 15:51:09,721 ai_worker 26840 26528 [OCR_RECOVERY_PASS] pass=1/5 (original image) record=1007697 page=5
+[1271300]: INFO 2026-06-20 15:51:09,722 ai_proxy 26840 13884 [TENANT_CONTEXT_RESOLVED] tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7
+[1271301]: INFO 2026-06-20 15:51:09,722 simple_invoice_classifier 26840 13884 [BYPASS_REJECT] Not a single-page document.
+[1271302]: DEBUG 2026-06-20 15:51:09,835 sqs 26840 13884 [QUEUE_DEPTH_SNAPSHOT] queue=ai physical_url=https://sqs.ap-south-1.amazonaws.com/620468690151/invoice-ai-queue-local visible=2 invisible=2
+[1271303]: DEBUG 2026-06-20 15:51:09,888 sqs 26840 13884 [QUEUE_DEPTH_SNAPSHOT] queue=ai physical_url=https://sqs.ap-south-1.amazonaws.com/620468690151/invoice-ai-queue-local visible=0 invisible=0
+[1271304]: INFO 2026-06-20 15:51:09,892 ai_proxy 26840 13884 [AI_MODEL_SELECTED] provider=Qwen model=qwen2.5vl:7b tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 record_id=1007697 page_number=5
+[1271305]: INFO 2026-06-20 15:51:09,895 qwen_provider 26840 13884 [PREFIX_CACHE_TELEMETRY] PREFIX_HASH=0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390 PROMPT_HASH=dfe4d046f3596f8c198d5da15607b77dbd454cb53e98c2fc20dbffd97d5694c5 REQUEST_ID=ai_1007697_5_1781950866 PAGE_NUMBER=5 INVOICE_ID=1007697
+[1271306]: DEBUG 2026-06-20 15:51:09,964 worker_base 20896 3152 [WORKER_LOCK_REFRESH] role=EXPORT pid=20896
+[1271307]: INFO 2026-06-20 15:51:10,130 qwen_provider 26840 13884 [QWEN_REQUEST_START] Attempt 1 model=qwen2.5vl:7b mode=single images=1
+[1271308]: INFO 2026-06-20 15:51:10,185 sqs 26840 20228 [RECEIVE_MESSAGE_SUCCESS] queue=ai url=https://sqs.ap-south-1.amazonaws.com/620468690151/invoice-ai-queue-local count=1 cluster_env=local host=LAPTOP-601O6S3T
+[1271309]: INFO 2026-06-20 15:51:10,188 worker_base 26840 26528 [WORKER_MESSAGE_RECEIVED] role=AI id=99e9c97b-8fa4-4a26-8529-99ac17328202 msg_id=2c4a5b93-7982-4ca8-8da6-07fefe690ed1
+[1271310]: INFO 2026-06-20 15:51:10,188 worker_base 26840 26528 [EXECUTOR_SUBMIT] id=99e9c97b-8fa4-4a26-8529-99ac17328202 msg_id=2c4a5b93-7982-4ca8-8da6-07fefe690ed1
+[1271311]: INFO 2026-06-20 15:51:10,188 worker_base 26840 26528 [WORKER_LOOP_CONTINUES] role=AI
+[1271312]: INFO 2026-06-20 15:51:10,188 worker_base 26840 26528 [WORKER_POLLING] role=AI active=3
+[1271313]: INFO 2026-06-20 15:51:10,189 message_parser 26840 26528 [CONTEXT_TRACE_SCHEMA_VALIDATE] msg_id=99e9c97b-8fa4-4a26-8529-99ac17328202 job_id=47bee499-2c39-46c9-b0b8-f186f3bc7648 record_id=1007697 payload_keys=['type', 'prompt', 'image_data', 'mime_type', 'voucher_type', 'page_index', 'page_number', 'total_pages', 'wait_for_result', '_pdf_ocr_text', 'file_hash', 'item_id', 'record_id', 'job_id', 'upload_session_id', 'tenant_id', 'upload_type', 'correlation_id', 'is_rescan', 'rescan_history_id', 'user_id', 'metadata']
+[1271314]: INFO 2026-06-20 15:51:10,189 message_parser 26840 26528 [JOB_CONTEXT_VALIDATED] job_id=47bee499-2c39-46c9-b0b8-f186f3bc7648 record_id=1007697 session_id=a4fca950-eedb-4aad-93b5-ead601e0a2be
+[1271315]: INFO 2026-06-20 15:51:10,189 message_parser 26840 26528 [JOB_CONTEXT_PROPAGATED] type=AI_EXTRACTION job_id=47bee499-2c39-46c9-b0b8-f186f3bc7648 record_id=1007697
+[1271316]: INFO 2026-06-20 15:51:10,189 message_parser 26840 26528 [MESSAGE_NORMALIZED] type=AI_EXTRACTION id=99e9c97b-8fa4-4a26-8529-99ac17328202 ver=v1
+[1271317]: INFO 2026-06-20 15:51:10,189 worker_base 26840 26528 [QUEUE_MESSAGE_RECEIVED] correlation_id=d9e10493-c01c-4535-b563-5234022edb44 session_id=a4fca950-eedb-4aad-93b5-ead601e0a2be job_id=47bee499-2c39-46c9-b0b8-f186f3bc7648 record_id=1007697 page_number=1 worker_name=AI
+[1271318]: INFO 2026-06-20 15:51:10,189 worker_base 26840 26528 [WORKER_MESSAGE_RECEIVED] correlation_id=d9e10493-c01c-4535-b563-5234022edb44 upload_session_id=a4fca950-eedb-4aad-93b5-ead601e0a2be tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=47bee499-2c39-46c9-b0b8-f186f3bc7648 record_id=1007697 invoice_no=unknown queue_name=ai worker_id=AI worker_pid=26840 hostname=LAPTOP-601O6S3T retry_count=1 visibility_timeout=300
+[1271319]: INFO 2026-06-20 15:51:10,189 worker_base 26840 26528 [MESSAGE_RECEIVED] id=99e9c97b-8fa4-4a26-8529-99ac17328202 queue=ai correlation_id=d9e10493-c01c-4535-b563-5234022edb44
+
+
+--- MATCHING LINE 1272318 ---
+INFO 2026-06-20 15:53:48,015 extraction 26840 28680 [AI_TASK_ENQUEUED] record=1007697 page=6 task=ai_1007697_6_1781951028 session=a4fca950-eedb-4aad-93b5-ead601e0a2be
+
+[1272303]: INFO 2026-06-20 15:53:43,446 worker_base 1552 28588 [WORKER_LOOP_CONTINUES] role=INGESTION
+[1272304]: INFO 2026-06-20 15:53:43,446 worker_base 1552 28588 [WORKER_POLLING] role=INGESTION active=0
+[1272305]: INFO 2026-06-20 15:53:43,498 worker_base 26840 26528 [QUEUE_VISIBILITY_TIMEOUT] Extending visibility for message handle=AQEBgl84qv queue=ai
+[1272306]: INFO 2026-06-20 15:53:43,498 worker_base 26840 26528 [VISIBILITY_TIMEOUT_EXTENDED] Extending visibility for message handle=AQEBgl84qv queue=ai
+[1272307]: DEBUG 2026-06-20 15:53:43,507 sqs 1552 28588 [QUEUE_DEPTH_SNAPSHOT] queue=ai physical_url=https://sqs.ap-south-1.amazonaws.com/620468690151/invoice-ai-queue-local visible=0 invisible=5
+[1272308]: DEBUG 2026-06-20 15:53:43,507 sqs 1552 26736 [RECEIVE_MESSAGE_CALL] queue=ingestion url=https://sqs.ap-south-1.amazonaws.com/620468690151/invoice-ingestion-queue-local wait=20
+[1272309]: DEBUG 2026-06-20 15:53:43,920 worker_base 26840 26528 [WORKER_RESOURCE] role=AI cpu=0.0 rss_mb=204.91015625 active=5
+[1272310]: INFO 2026-06-20 15:53:43,925 worker_base 26840 26528 [DB_CONNECTION_FORENSICS] role=AI PID=26840 total_connections=26 sleeping_connections=24 active_connections=2
+[1272311]: INFO 2026-06-20 15:53:45,673 worker_base 26840 26528 [QUEUE_VISIBILITY_TIMEOUT] Extending visibility for message handle=AQEBY6nLDJ queue=ai
+[1272312]: INFO 2026-06-20 15:53:45,673 worker_base 26840 26528 [VISIBILITY_TIMEOUT_EXTENDED] Extending visibility for message handle=AQEBY6nLDJ queue=ai
+[1272313]: DEBUG 2026-06-20 15:53:46,238 worker_base 1552 28588 [WORKER_LOCK_REFRESH] role=INGESTION pid=1552
+[1272314]: INFO 2026-06-20 15:53:47,972 extraction 26840 28680 [OCR_END] page=6
+[1272315]: INFO 2026-06-20 15:53:47,973 extraction 26840 28680 [OCR_DURATION] page=6 duration_ms=38076
+[1272316]: INFO 2026-06-20 15:53:48,014 extraction 26840 28680 [AI_PAYLOAD_VALID] record=1007697 page=6 item=None cid=None
+[1272317]: INFO 2026-06-20 15:53:48,015 extraction 26840 28680 AI OCR ISOLATED Request | Page: 6 | Prompt Size: 3410 chars | User: system
+[1272318]: INFO 2026-06-20 15:53:48,015 extraction 26840 28680 [AI_TASK_ENQUEUED] record=1007697 page=6 task=ai_1007697_6_1781951028 session=a4fca950-eedb-4aad-93b5-ead601e0a2be
+[1272319]: INFO 2026-06-20 15:53:48,015 extraction 26840 28680 [AI_EXTRACTION_CALL] record=1007697 page=6 session=a4fca950-eedb-4aad-93b5-ead601e0a2be
+[1272320]: INFO 2026-06-20 15:53:48,015 extraction 26840 28680 [PIPELINE_AI_ENQUEUE] record_id=1007697 queue=ai_requests
+[1272321]: INFO 2026-06-20 15:53:48,015 extraction 26840 28680 [SQS_PUSH] record=1007697 page=6 queue=ai_requests
+[1272322]: INFO 2026-06-20 15:53:48,015 message_factory 26840 28680 [CANONICAL_MESSAGE_EMITTED] task_type=AI_EXTRACTION ver=v1 corr=0bc989b8-1928-43dd-b5f1-986e88174ab3 trace_id=trace-dbd954dc1f0f-1781951028 dedupe_key=b885cd7dae1cfb133e463e924ebf958a57fc36bdefb62b9b578088c55122f9a7 session=a4fca950-eedb-4aad-93b5-ead601e0a2be tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=47bee499-2c39-46c9-b0b8-f186f3bc7648 record_id=1007697
+[1272323]: INFO 2026-06-20 15:53:48,015 message_factory 26840 28680 [JOB_CONTEXT_PROPAGATED] task_type=AI_EXTRACTION job_id=47bee499-2c39-46c9-b0b8-f186f3bc7648 record_id=1007697
+[1272324]: INFO 2026-06-20 15:53:48,016 sqs 26840 28680 [SQS_SERIALIZATION_PAYLOAD] queue=ai message_id=d2c16bea-9b6f-4fca-927b-1f37ff122666 keys=['id', 'correlation_id', 'trace_id', 'dedupe_key', 'session_id', 'tenant_id', 'task_type', 'worker_role', 'page_number', 'expected_pages', 'payload_version', 'retry_metadata', 'timestamp', 'payload']
+[1272325]: INFO 2026-06-20 15:53:48,016 sqs 26840 28680 [UUID_COERCION_APPLIED] Coerced value UUID '47bee499-2c39-46c9-b0b8-f186f3bc7648' to string.
+[1272326]: INFO 2026-06-20 15:53:48,016 sqs 26840 28680 [UUID_COERCION_APPLIED] Coerced value UUID '47bee499-2c39-46c9-b0b8-f186f3bc7648' to string.
+[1272327]: DEBUG 2026-06-20 15:53:48,021 worker_base 25672 22864 [WORKER_LOCK_REFRESH] role=ASSEMBLY pid=25672
+[1272328]: INFO 2026-06-20 15:53:48,027 sqs 26840 28680 [SQS_SERIALIZATION_SUCCESS] queue=ai message_id=d2c16bea-9b6f-4fca-927b-1f37ff122666
+[1272329]: DEBUG 2026-06-20 15:53:48,268 worker_base 25672 22864 [WORKER_RESOURCE] role=ASSEMBLY cpu=0.0 rss_mb=127.30078125 active=0
+[1272330]: INFO 2026-06-20 15:53:48,273 worker_base 25672 22864 [DB_CONNECTION_FORENSICS] role=ASSEMBLY PID=25672 total_connections=27 sleeping_connections=25 active_connections=2
+[1272331]: DEBUG 2026-06-20 15:53:48,300 worker_base 1552 28588 [WORKER_RESOURCE] role=INGESTION cpu=0.0 rss_mb=160.59375 active=0
+[1272332]: INFO 2026-06-20 15:53:48,306 worker_base 1552 28588 [DB_CONNECTION_FORENSICS] role=INGESTION PID=1552 total_connections=27 sleeping_connections=25 active_connections=2
+
+
+--- MATCHING LINE 1272388 ---
+INFO 2026-06-20 15:53:50,372 qwen_provider 26840 20228 [PREFIX_CACHE_TELEMETRY] PREFIX_HASH=9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718 PROMPT_HASH=035a2591fccae51316f9bad07d2511ead1ffe6ba05ff7893ef839360324ea74d REQUEST_ID=ai_1007697_6_1781951028 PAGE_NUMBER=6 INVOICE_ID=1007697
+
+[1272373]: DEBUG 2026-06-20 15:53:50,092 worker_base 20896 3152 [WORKER_LOCK_REFRESH] role=EXPORT pid=20896
+[1272374]: INFO 2026-06-20 15:53:50,120 worker_base 26840 26528 [QUEUE_MESSAGE_PROCESSING] correlation_id=0bc989b8-1928-43dd-b5f1-986e88174ab3 session_id=a4fca950-eedb-4aad-93b5-ead601e0a2be worker_name=AI
+[1272375]: INFO 2026-06-20 15:53:50,120 worker_base 26840 26528 [PIPELINE_STAGE_ENTER] stage=AI correlation_id=0bc989b8-1928-43dd-b5f1-986e88174ab3 upload_session_id=a4fca950-eedb-4aad-93b5-ead601e0a2be tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 job_id=47bee499-2c39-46c9-b0b8-f186f3bc7648 record_id=1007697 invoice_no=unknown
+[1272376]: INFO 2026-06-20 15:53:50,121 ai_worker 26840 26528 [CONTEXT_TRACE_AI_RECEIVE] job_id=47bee499-2c39-46c9-b0b8-f186f3bc7648 record_id=1007697 session_id=a4fca950-eedb-4aad-93b5-ead601e0a2be tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 trace_id=None page=6
+[1272377]: INFO 2026-06-20 15:53:50,121 ai_worker 26840 26528 [SESSION_FORENSIC] stage='ai_worker_receive' record=1007697 session=a4fca950-eedb-4aad-93b5-ead601e0a2be tenant=2eda0ac6-6af2-493e-8792-bc973fe946b7 page=6
+[1272378]: INFO 2026-06-20 15:53:50,121 ai_worker 26840 26528 [AI_PAGE_START] record=1007697 page=6 session=a4fca950-eedb-4aad-93b5-ead601e0a2be correlation_id=0bc989b8-1928-43dd-b5f1-986e88174ab3 worker_role=AI
+[1272379]: INFO 2026-06-20 15:53:50,130 ai_worker 26840 26528 [OCR_RETRY_CHAIN_START] record=1007697 page=6 max_passes=5
+[1272380]: INFO 2026-06-20 15:53:50,132 ai_worker 26840 26528 [OCR_RECOVERY_PASS] pass=1/5 (original image) record=1007697 page=6
+[1272381]: INFO 2026-06-20 15:53:50,133 ai_proxy 26840 20228 [TENANT_CONTEXT_RESOLVED] tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7
+[1272382]: INFO 2026-06-20 15:53:50,133 simple_invoice_classifier 26840 20228 [BYPASS_REJECT] Not a single-page document.
+[1272383]: DEBUG 2026-06-20 15:53:50,175 sqs 26840 20228 [QUEUE_DEPTH_SNAPSHOT] queue=ai physical_url=https://sqs.ap-south-1.amazonaws.com/620468690151/invoice-ai-queue-local visible=0 invisible=5
+[1272384]: DEBUG 2026-06-20 15:53:50,310 worker_base 20896 3152 [WORKER_RESOURCE] role=EXPORT cpu=0.0 rss_mb=145.84375 active=0
+[1272385]: INFO 2026-06-20 15:53:50,328 worker_base 20896 3152 [DB_CONNECTION_FORENSICS] role=EXPORT PID=20896 total_connections=28 sleeping_connections=26 active_connections=2
+[1272386]: DEBUG 2026-06-20 15:53:50,364 sqs 26840 20228 [QUEUE_DEPTH_SNAPSHOT] queue=ai physical_url=https://sqs.ap-south-1.amazonaws.com/620468690151/invoice-ai-queue-local visible=0 invisible=5
+[1272387]: INFO 2026-06-20 15:53:50,368 ai_proxy 26840 20228 [AI_MODEL_SELECTED] provider=Qwen model=qwen2.5vl:7b tenant_id=2eda0ac6-6af2-493e-8792-bc973fe946b7 record_id=1007697 page_number=6
+[1272388]: INFO 2026-06-20 15:53:50,372 qwen_provider 26840 20228 [PREFIX_CACHE_TELEMETRY] PREFIX_HASH=9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718 PROMPT_HASH=035a2591fccae51316f9bad07d2511ead1ffe6ba05ff7893ef839360324ea74d REQUEST_ID=ai_1007697_6_1781951028 PAGE_NUMBER=6 INVOICE_ID=1007697
+[1272389]: INFO 2026-06-20 15:53:50,972 qwen_provider 26840 20228 [QWEN_REQUEST_START] Attempt 1 model=qwen2.5vl:7b mode=single images=1
+[1272390]: DEBUG 2026-06-20 15:53:51,167 worker_base 9492 29372 [WORKER_LOCK_REFRESH] role=MATERIALIZE pid=9492
+[1272391]: DEBUG 2026-06-20 15:53:51,321 worker_base 9492 29372 [WORKER_RESOURCE] role=MATERIALIZE cpu=0.0 rss_mb=144.6875 active=0
+[1272392]: INFO 2026-06-20 15:53:51,326 worker_base 9492 29372 [DB_CONNECTION_FORENSICS] role=MATERIALIZE PID=9492 total_connections=28 sleeping_connections=26 active_connections=2
+[1272393]: INFO 2026-06-20 15:53:52,878 worker_base 26840 26528 [QUEUE_VISIBILITY_TIMEOUT] Extending visibility for message handle=AQEBVrzbUL queue=ai
+[1272394]: INFO 2026-06-20 15:53:52,878 worker_base 26840 26528 [VISIBILITY_TIMEOUT_EXTENDED] Extending visibility for message handle=AQEBVrzbUL queue=ai
+[1272395]: DEBUG 2026-06-20 15:53:52,904 sqs 25672 6832 [RECEIVE_MESSAGE_EMPTY] queue=assembly url=https://sqs.ap-south-1.amazonaws.com/620468690151/invoice-assembly-queue-local cluster_env=local host=LAPTOP-601O6S3T
+[1272396]: DEBUG 2026-06-20 15:53:52,904 sqs 6932 25800 [RECEIVE_MESSAGE_EMPTY] queue=finalize url=https://sqs.ap-south-1.amazonaws.com/620468690151/invoice-finalize-queue-local cluster_env=local host=LAPTOP-601O6S3T
+[1272397]: INFO 2026-06-20 15:53:52,915 worker_base 6932 24552 [WORKER_IDLE_WAIT] role=FINALIZE queue=finalize status=EMPTY
+[1272398]: INFO 2026-06-20 15:53:52,915 worker_base 6932 24552 [POLL_EMPTY_TICK] role=FINALIZE active=0 running=True
+[1272399]: INFO 2026-06-20 15:53:52,915 worker_base 25672 22864 [WORKER_IDLE_WAIT] role=ASSEMBLY queue=assembly status=EMPTY
+[1272400]: INFO 2026-06-20 15:53:52,915 worker_base 6932 24552 [WORKER_LOOP_CONTINUES] role=FINALIZE
+[1272401]: INFO 2026-06-20 15:53:52,915 worker_base 25672 22864 [POLL_EMPTY_TICK] role=ASSEMBLY active=0 running=True
+[1272402]: INFO 2026-06-20 15:53:52,916 worker_base 6932 24552 [WORKER_POLLING] role=FINALIZE active=0
+
+

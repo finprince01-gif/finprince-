@@ -272,6 +272,45 @@ CRITICAL RULES
 
 9. NEVER return null. NEVER skip footer totals. NEVER fabricate tax values.
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT FORMAT — MANDATORY PRODUCTION RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RULE A — JSON ONLY:
+   • Return ONLY a single raw JSON object.
+   • NO markdown fences (no ```json or ```).
+   • NO code blocks.
+   • NO explanations, comments, or prose outside the JSON.
+   • The very first character of your response MUST be '{{'
+   • The very last character of your response MUST be '}}'
+
+RULE B — NO ARITHMETIC EXPRESSIONS:
+   • NEVER output arithmetic expressions inside any field value.
+   • WRONG:  "taxable_value": "54644.4 + 10928.88 = 65573.2"
+   • CORRECT: "taxable_value": "65573.28"
+   • WRONG:  "cgst": "450 + 450"
+   • CORRECT: "cgst": "900.00"
+
+RULE C — EVALUATE THEN EXTRACT:
+   • If the invoice shows a calculation on the same line (e.g., A + B = C),
+     extract ONLY the final evaluated result C.
+   • Evaluate the arithmetic yourself and return only the number.
+
+RULE D — FORBIDDEN CHARACTERS IN NUMERIC FIELDS:
+   • Numeric string values MUST NEVER contain: + - * / = ( ) spaces or letters.
+   • Only digits and a single decimal point are allowed.
+   • Example of forbidden: "1000 + 180", "₹65573", "65,573.28"
+   • Example of correct: "65573.28"
+
+RULE E — NUMERIC STRING FORMAT:
+   • Every numeric value must be a STRING with exactly 2 decimal places.
+   • Example: "65573.28" not 65573.28 (not a raw number, not an expression).
+
+RULE F — SELF-VALIDATE BEFORE RESPONDING:
+   • Before returning your response, mentally verify it is valid JSON.
+   • If you detect any syntax error, repair it and return the corrected JSON.
+   • Never return output that would fail json.loads().
+
 Return raw JSON only. No explanation text.
 """
         else:
@@ -371,6 +410,36 @@ STRICT RULES
 • Do NOT include explanation text.
 • Do NOT include markdown code blocks.
 • Return raw JSON only.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT FORMAT — MANDATORY PRODUCTION RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RULE A — JSON ONLY:
+   Return ONLY a single raw JSON object. No markdown, no code fences, no prose.
+   First character MUST be '{'. Last character MUST be '}'.
+
+RULE B — NO ARITHMETIC EXPRESSIONS:
+   NEVER output arithmetic expressions inside any field value.
+   WRONG:  "taxable_value": "54644.4 + 10928.88 = 65573.2"
+   CORRECT: "taxable_value": "65573.28"
+
+RULE C — EVALUATE THEN EXTRACT:
+   If the invoice shows A + B = C on one line, extract ONLY C.
+   Evaluate arithmetic yourself and return only the plain number.
+
+RULE D — FORBIDDEN CHARACTERS IN NUMERIC FIELDS:
+   Numeric string values MUST NEVER contain: + - * / = ( ) or letters.
+   Only digits and one decimal point allowed: "65573.28"
+
+RULE E — NUMERIC STRING FORMAT:
+   Every numeric value must be a STRING with exactly 2 decimal places.
+   Example: "65573.28" not 65573 not "65,573.28" not "65573.2 + 0 = 65573.2"
+
+RULE F — SELF-VALIDATE BEFORE RESPONDING:
+   Before returning, verify your output is valid JSON.
+   If you detect a syntax error, repair it before responding.
+   Never return output that would fail json.loads().
 """
 
 

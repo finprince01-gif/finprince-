@@ -1,0 +1,716 @@
+INFO 2026-06-16 14:06:45,541 extraction 25512 24056 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4491 chars | User: system
+
+INFO 2026-06-16 14:06:45,568 extraction 25512 4436 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4463 chars | User: system
+
+INFO 2026-06-16 14:06:45,618 extraction 25512 25240 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4539 chars | User: system
+
+INFO 2026-06-16 14:06:45,633 extraction 25512 12376 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4748 chars | User: system
+
+INFO 2026-06-16 14:06:45,685 extraction 25512 24008 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4753 chars | User: system
+
+INFO 2026-06-16 14:55:55,913 extraction 25512 23544 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4463 chars | User: system
+
+INFO 2026-06-16 14:55:55,922 extraction 25512 3116 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4539 chars | User: system
+
+INFO 2026-06-16 14:55:55,960 extraction 25512 12136 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4491 chars | User: system
+
+INFO 2026-06-16 14:55:55,991 extraction 25512 27836 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4748 chars | User: system
+
+INFO 2026-06-16 14:55:56,008 extraction 25512 10276 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4753 chars | User: system
+
+INFO 2026-06-16 15:12:17,901 extraction 25512 10636 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4539 chars | User: system
+
+INFO 2026-06-16 15:12:17,968 extraction 25512 7940 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4491 chars | User: system
+
+INFO 2026-06-16 15:12:17,975 extraction 25512 18456 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4463 chars | User: system
+
+INFO 2026-06-16 15:12:18,087 extraction 25512 25080 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4753 chars | User: system
+
+INFO 2026-06-16 15:12:18,146 extraction 25512 15612 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4748 chars | User: system
+
+INFO 2026-06-16 15:13:00,879 extraction 25512 22292 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4539 chars | User: system
+
+INFO 2026-06-16 15:13:00,904 extraction 25512 4436 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4463 chars | User: system
+
+INFO 2026-06-16 15:13:00,960 extraction 25512 23792 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4491 chars | User: system
+
+INFO 2026-06-16 15:13:00,991 extraction 25512 27152 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4748 chars | User: system
+
+INFO 2026-06-16 15:13:01,036 extraction 25512 28524 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4753 chars | User: system
+
+INFO 2026-06-16 15:14:27,512 extraction 25512 29572 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4491 chars | User: system
+
+INFO 2026-06-16 15:14:27,510 extraction 25512 24712 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4463 chars | User: system
+
+INFO 2026-06-16 15:14:27,545 extraction 25512 29364 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4539 chars | User: system
+
+INFO 2026-06-16 15:14:27,615 extraction 25512 28988 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4748 chars | User: system
+
+INFO 2026-06-16 15:14:27,684 extraction 25512 28424 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4753 chars | User: system
+
+INFO 2026-06-16 15:14:35,559 extraction 25512 27916 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4491 chars | User: system
+
+INFO 2026-06-16 15:14:35,615 extraction 25512 10032 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4539 chars | User: system
+
+INFO 2026-06-16 15:14:35,710 extraction 25512 29524 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4463 chars | User: system
+
+INFO 2026-06-16 15:14:35,804 extraction 25512 28880 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4748 chars | User: system
+
+INFO 2026-06-16 15:14:35,932 extraction 25512 7964 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4753 chars | User: system
+
+INFO 2026-06-16 15:25:15,356 extraction 25512 1068 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4463 chars | User: system
+
+INFO 2026-06-16 15:25:15,398 extraction 25512 6524 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4491 chars | User: system
+
+INFO 2026-06-16 15:25:15,412 extraction 25512 19248 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4748 chars | User: system
+
+INFO 2026-06-16 15:25:15,441 extraction 25512 25404 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4539 chars | User: system
+
+INFO 2026-06-16 15:25:15,584 extraction 25512 16400 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4753 chars | User: system
+
+INFO 2026-06-16 15:36:58,345 extraction 25512 27944 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4539 chars | User: system
+
+INFO 2026-06-16 15:36:58,412 extraction 25512 20168 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4491 chars | User: system
+
+INFO 2026-06-16 15:36:58,419 extraction 25512 23680 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4748 chars | User: system
+
+INFO 2026-06-16 15:36:58,426 extraction 25512 30408 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4463 chars | User: system
+
+INFO 2026-06-16 15:36:58,487 extraction 25512 13460 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4753 chars | User: system
+
+INFO 2026-06-16 16:55:26,580 extraction 30268 25268 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4539 chars | User: system
+
+INFO 2026-06-16 16:55:26,580 extraction 30268 26932 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4463 chars | User: system
+
+INFO 2026-06-16 16:55:26,580 extraction 30268 19244 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4491 chars | User: system
+
+INFO 2026-06-16 16:55:26,580 extraction 30268 22228 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4748 chars | User: system
+
+INFO 2026-06-16 16:55:26,637 extraction 30268 26780 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4753 chars | User: system
+
+INFO 2026-06-16 16:59:15,258 extraction 25540 29236 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4539 chars | User: system
+
+INFO 2026-06-16 16:59:15,301 extraction 25540 22588 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4491 chars | User: system
+
+INFO 2026-06-16 16:59:15,327 extraction 25540 11320 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4463 chars | User: system
+
+INFO 2026-06-16 16:59:15,349 extraction 25540 28116 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4748 chars | User: system
+
+INFO 2026-06-16 16:59:15,384 extraction 25540 16548 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4753 chars | User: system
+
+INFO 2026-06-16 17:00:51,343 extraction 25540 30388 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4539 chars | User: system
+
+INFO 2026-06-16 17:00:51,352 extraction 25540 22240 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4463 chars | User: system
+
+INFO 2026-06-16 17:00:51,366 extraction 25540 29072 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4491 chars | User: system
+
+INFO 2026-06-16 17:00:51,384 extraction 25540 26780 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4748 chars | User: system
+
+INFO 2026-06-16 17:00:51,384 extraction 25540 28868 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4753 chars | User: system
+
+INFO 2026-06-17 11:07:16,891 extraction 23956 20284 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4750 chars | User: system
+
+INFO 2026-06-17 11:07:16,892 extraction 23956 25388 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4740 chars | User: system
+
+INFO 2026-06-17 11:07:16,892 extraction 23956 10512 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4552 chars | User: system
+
+INFO 2026-06-17 11:07:16,892 extraction 23956 3052 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4255 chars | User: system
+
+INFO 2026-06-17 11:07:16,893 extraction 23956 18952 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4586 chars | User: system
+
+INFO 2026-06-17 13:17:17,011 extraction 23624 26032 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 6324 chars | User: system
+
+INFO 2026-06-17 13:17:17,012 extraction 23624 11228 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 6236 chars | User: system
+
+INFO 2026-06-17 13:17:17,019 extraction 23624 14520 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 6523 chars | User: system
+
+INFO 2026-06-17 14:10:39,385 extraction 23624 20412 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4973 chars | User: system
+
+INFO 2026-06-17 14:10:39,450 extraction 23624 25788 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 5014 chars | User: system
+
+INFO 2026-06-17 14:10:39,465 extraction 23624 21788 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4962 chars | User: system
+
+INFO 2026-06-17 14:10:39,495 extraction 23624 4460 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4956 chars | User: system
+
+INFO 2026-06-17 14:10:39,512 extraction 23624 7324 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4980 chars | User: system
+
+INFO 2026-06-17 14:10:59,397 extraction 768 2756 AI OCR ISOLATED Request | Page: 6 | Prompt Size: 4939 chars | User: system
+
+INFO 2026-06-17 14:11:01,916 extraction 768 14168 AI OCR ISOLATED Request | Page: 7 | Prompt Size: 4838 chars | User: system
+
+INFO 2026-06-17 14:11:04,469 extraction 768 18980 AI OCR ISOLATED Request | Page: 8 | Prompt Size: 5734 chars | User: system
+
+INFO 2026-06-17 14:11:06,988 extraction 768 1404 AI OCR ISOLATED Request | Page: 9 | Prompt Size: 5489 chars | User: system
+
+INFO 2026-06-17 14:11:09,453 extraction 768 29424 AI OCR ISOLATED Request | Page: 10 | Prompt Size: 5602 chars | User: system
+
+INFO 2026-06-17 14:11:20,183 extraction 768 29172 AI OCR ISOLATED Request | Page: 11 | Prompt Size: 5581 chars | User: system
+
+INFO 2026-06-17 14:11:32,878 extraction 768 13124 AI OCR ISOLATED Request | Page: 12 | Prompt Size: 5883 chars | User: system
+
+INFO 2026-06-17 14:11:38,507 extraction 768 8776 AI OCR ISOLATED Request | Page: 13 | Prompt Size: 5213 chars | User: system
+
+INFO 2026-06-17 14:11:46,086 extraction 768 24828 AI OCR ISOLATED Request | Page: 14 | Prompt Size: 5794 chars | User: system
+
+INFO 2026-06-17 14:14:30,593 extraction 25648 21024 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4956 chars | User: system
+
+INFO 2026-06-17 14:14:30,593 extraction 25648 26060 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4962 chars | User: system
+
+INFO 2026-06-17 14:14:30,606 extraction 25648 4856 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 5014 chars | User: system
+
+INFO 2026-06-17 14:14:30,612 extraction 25648 29492 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4973 chars | User: system
+
+INFO 2026-06-17 14:14:30,620 extraction 25648 16664 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4980 chars | User: system
+
+INFO 2026-06-17 14:14:51,998 extraction 26876 28596 AI OCR ISOLATED Request | Page: 6 | Prompt Size: 4939 chars | User: system
+
+INFO 2026-06-17 14:14:54,528 extraction 26876 28368 AI OCR ISOLATED Request | Page: 7 | Prompt Size: 4838 chars | User: system
+
+INFO 2026-06-17 14:14:57,175 extraction 26876 23120 AI OCR ISOLATED Request | Page: 8 | Prompt Size: 5734 chars | User: system
+
+INFO 2026-06-17 14:14:59,737 extraction 26876 27184 AI OCR ISOLATED Request | Page: 9 | Prompt Size: 5489 chars | User: system
+
+INFO 2026-06-17 14:15:02,225 extraction 26876 29408 AI OCR ISOLATED Request | Page: 10 | Prompt Size: 5602 chars | User: system
+
+INFO 2026-06-17 14:15:18,511 extraction 26876 13932 AI OCR ISOLATED Request | Page: 11 | Prompt Size: 5581 chars | User: system
+
+INFO 2026-06-17 14:15:22,280 extraction 26876 11928 AI OCR ISOLATED Request | Page: 12 | Prompt Size: 5883 chars | User: system
+
+INFO 2026-06-17 14:15:38,095 extraction 26876 17168 AI OCR ISOLATED Request | Page: 13 | Prompt Size: 5213 chars | User: system
+
+INFO 2026-06-17 14:15:40,726 extraction 26876 28232 AI OCR ISOLATED Request | Page: 14 | Prompt Size: 5794 chars | User: system
+
+INFO 2026-06-17 15:06:30,800 extraction 23748 10096 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-17 15:06:30,800 extraction 23748 29508 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-17 15:07:04,090 extraction 23748 21492 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-17 15:07:04,140 extraction 23748 23868 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-17 15:07:43,247 extraction 23748 25432 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-17 15:07:43,258 extraction 23748 17736 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-17 16:20:12,018 extraction 23748 29376 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4539 chars | User: system
+
+INFO 2026-06-17 16:20:12,035 extraction 23748 30240 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4463 chars | User: system
+
+INFO 2026-06-17 16:20:12,065 extraction 23748 29528 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4491 chars | User: system
+
+INFO 2026-06-17 16:20:12,089 extraction 23748 27752 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4753 chars | User: system
+
+INFO 2026-06-17 16:20:12,122 extraction 23748 28984 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4748 chars | User: system
+
+INFO 2026-06-17 16:23:45,897 extraction 24788 13516 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4748 chars | User: system
+
+INFO 2026-06-17 16:23:45,897 extraction 24788 27096 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4463 chars | User: system
+
+INFO 2026-06-17 16:23:45,897 extraction 24788 4108 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4539 chars | User: system
+
+INFO 2026-06-17 16:23:45,933 extraction 24788 30644 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4491 chars | User: system
+
+INFO 2026-06-17 16:23:45,984 extraction 24788 19624 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4753 chars | User: system
+
+INFO 2026-06-17 16:39:53,990 extraction 12592 3252 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4463 chars | User: system
+
+INFO 2026-06-17 16:39:54,003 extraction 12592 24580 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4539 chars | User: system
+
+INFO 2026-06-17 16:39:54,005 extraction 12592 28464 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4491 chars | User: system
+
+INFO 2026-06-17 16:39:54,052 extraction 12592 28760 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4748 chars | User: system
+
+INFO 2026-06-17 16:39:54,135 extraction 12592 26332 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4753 chars | User: system
+
+INFO 2026-06-17 16:43:04,196 extraction 29240 23600 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 4539 chars | User: system
+
+INFO 2026-06-17 16:43:04,206 extraction 29240 29560 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 4463 chars | User: system
+
+INFO 2026-06-17 16:43:04,208 extraction 29240 30656 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 4748 chars | User: system
+
+INFO 2026-06-17 16:43:04,227 extraction 29240 21624 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 4491 chars | User: system
+
+INFO 2026-06-17 16:43:04,311 extraction 29240 28292 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 4753 chars | User: system
+
+INFO 2026-06-17 17:06:59,003 extraction 13464 37476 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-17 17:06:59,015 extraction 13464 31316 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-17 17:07:43,011 extraction 13464 26828 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-17 17:07:43,024 extraction 13464 33020 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-17 17:10:06,908 extraction 7156 34832 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-17 17:10:06,928 extraction 7156 14516 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-17 17:25:00,388 extraction 21788 39860 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-17 17:25:00,387 extraction 21788 28680 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-17 17:32:44,343 extraction 29068 24184 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-17 17:32:44,343 extraction 29068 39100 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-17 17:48:05,790 extraction 35388 22472 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-17 17:48:05,815 extraction 35388 34428 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-17 17:48:33,394 extraction 26956 30724 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-17 17:48:33,395 extraction 26956 31376 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-17 18:04:25,603 extraction 11236 2476 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-17 18:04:25,611 extraction 11236 17452 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-17 18:13:25,470 extraction 11236 8100 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-17 18:13:25,470 extraction 11236 36600 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 10:30:26,755 extraction 5212 10800 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 10:30:26,755 extraction 5212 7716 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 10:48:08,850 extraction 15084 25860 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 10:48:08,855 extraction 15084 12328 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 10:53:20,645 extraction 15084 7040 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 10:53:20,659 extraction 15084 22776 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 11:02:00,847 extraction 19080 3680 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 11:02:00,859 extraction 19080 26540 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 11:02:30,351 extraction 19080 26172 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 11:02:30,362 extraction 19080 15700 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 11:11:05,464 extraction 3524 7864 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 11:11:05,464 extraction 3524 14108 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 11:18:15,998 extraction 17652 13156 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 11:18:15,998 extraction 17652 12484 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 11:29:34,999 extraction 24448 6236 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 11:29:35,015 extraction 24448 27308 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 11:51:58,332 extraction 248 7584 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 11:51:58,332 extraction 248 2228 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 12:10:44,486 extraction 15124 19096 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 12:10:44,486 extraction 15124 15540 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 12:54:37,868 extraction 14396 7784 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 12:54:37,876 extraction 14396 13000 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 12:59:03,138 extraction 14396 2732 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 12:59:03,244 extraction 14396 14716 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 12:59:55,162 extraction 14396 1924 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 12:59:55,162 extraction 14396 10224 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 13:01:41,833 extraction 2896 2356 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5350 chars | User: system
+
+INFO 2026-06-18 13:01:41,840 extraction 2896 11048 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5543 chars | User: system
+
+INFO 2026-06-18 13:56:51,607 extraction 26372 476 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5350 chars | User: system
+
+INFO 2026-06-18 13:56:51,623 extraction 26372 23568 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5543 chars | User: system
+
+INFO 2026-06-18 14:07:32,172 extraction 26372 13868 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 14:07:32,187 extraction 26372 18808 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 14:13:40,445 extraction 6268 5248 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 14:13:40,449 extraction 6268 5236 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 14:16:48,691 extraction 6268 3872 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 14:16:48,707 extraction 6268 6664 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 14:22:18,688 extraction 10900 21088 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 14:22:18,689 extraction 10900 5732 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 14:40:37,252 extraction 28484 18360 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 14:40:37,252 extraction 28484 6632 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 14:47:05,957 extraction 28484 19948 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 14:47:05,960 extraction 28484 21968 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 14:48:32,749 extraction 28484 23420 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 14:48:32,754 extraction 28484 23920 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 14:49:31,974 extraction 28484 24820 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 14:49:31,991 extraction 28484 21592 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 15:07:09,039 extraction 28484 3008 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 15:07:09,058 extraction 28484 22976 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 15:11:41,000 extraction 21116 8232 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 15:11:41,008 extraction 21116 18804 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 15:13:28,183 extraction 21116 28036 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 5546 chars | User: system
+
+INFO 2026-06-18 15:13:28,203 extraction 21116 28800 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 5353 chars | User: system
+
+INFO 2026-06-18 15:48:09,582 extraction 3056 23356 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3459 chars | User: system
+
+INFO 2026-06-18 15:48:09,582 extraction 3056 18148 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 3266 chars | User: system
+
+INFO 2026-06-19 10:52:07,652 extraction 11376 25580 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2800 chars | User: system
+
+INFO 2026-06-19 10:52:08,087 extraction 11376 2456 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3150 chars | User: system
+
+INFO 2026-06-19 10:52:56,134 extraction 11376 17636 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2800 chars | User: system
+
+INFO 2026-06-19 10:53:01,508 extraction 11376 22044 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3150 chars | User: system
+
+INFO 2026-06-19 10:55:52,440 extraction 16096 8800 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2800 chars | User: system
+
+INFO 2026-06-19 10:55:52,948 extraction 16096 17600 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3150 chars | User: system
+
+INFO 2026-06-19 10:56:27,354 extraction 16096 25212 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2800 chars | User: system
+
+INFO 2026-06-19 10:56:28,341 extraction 16096 24604 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3150 chars | User: system
+
+INFO 2026-06-19 11:01:00,030 extraction 22932 17024 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2800 chars | User: system
+
+INFO 2026-06-19 11:01:00,580 extraction 22932 19640 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3150 chars | User: system
+
+INFO 2026-06-19 11:01:34,551 extraction 22932 3716 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2800 chars | User: system
+
+INFO 2026-06-19 11:01:35,003 extraction 22932 26536 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3150 chars | User: system
+
+INFO 2026-06-19 11:08:32,707 extraction 18748 21496 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2800 chars | User: system
+
+INFO 2026-06-19 11:08:33,217 extraction 18748 4552 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3150 chars | User: system
+
+INFO 2026-06-19 11:09:14,470 extraction 18748 21864 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2800 chars | User: system
+
+INFO 2026-06-19 11:09:15,299 extraction 18748 12544 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3150 chars | User: system
+
+INFO 2026-06-19 12:34:08,370 extraction 12568 2960 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2800 chars | User: system
+
+INFO 2026-06-19 12:34:09,844 extraction 12568 8124 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3150 chars | User: system
+
+INFO 2026-06-19 12:40:35,009 extraction 12568 26316 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2800 chars | User: system
+
+INFO 2026-06-19 12:40:35,570 extraction 12568 12796 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3150 chars | User: system
+
+INFO 2026-06-19 12:40:45,038 extraction 15556 9480 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2800 chars | User: system
+
+INFO 2026-06-19 12:40:55,338 extraction 15556 8916 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3150 chars | User: system
+
+INFO 2026-06-19 12:48:06,458 extraction 25568 13124 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 1484 chars | User: system
+
+INFO 2026-06-19 12:48:16,283 extraction 25568 1700 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2800 chars | User: system
+
+INFO 2026-06-19 12:48:17,416 extraction 25568 26376 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3150 chars | User: system
+
+INFO 2026-06-19 12:52:04,432 extraction 20640 17312 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 1484 chars | User: system
+
+INFO 2026-06-19 12:52:12,941 extraction 20640 12544 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2800 chars | User: system
+
+INFO 2026-06-19 12:52:13,463 extraction 20640 20792 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3150 chars | User: system
+
+INFO 2026-06-19 13:55:48,878 extraction 20640 19932 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 1484 chars | User: system
+
+INFO 2026-06-19 13:55:56,785 extraction 20640 26956 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2855 chars | User: system
+
+INFO 2026-06-19 13:55:57,867 extraction 20640 21496 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3231 chars | User: system
+
+INFO 2026-06-19 13:56:13,109 extraction 3384 27580 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2855 chars | User: system
+
+INFO 2026-06-19 13:56:30,051 extraction 3384 21800 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3231 chars | User: system
+
+INFO 2026-06-19 13:56:37,718 extraction 3384 22216 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 1484 chars | User: system
+
+INFO 2026-06-19 16:46:51,450 extraction 26264 21260 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 3186 chars | User: system
+
+INFO 2026-06-19 16:46:51,925 extraction 26264 25292 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3562 chars | User: system
+
+INFO 2026-06-20 14:42:44,203 extraction 2896 4784 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2782 chars | User: system
+
+INFO 2026-06-20 14:42:45,061 extraction 2896 23032 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3197 chars | User: system
+
+INFO 2026-06-20 14:44:32,748 extraction 2896 26108 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2782 chars | User: system
+
+INFO 2026-06-20 14:44:34,250 extraction 2896 28720 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3197 chars | User: system
+
+INFO 2026-06-20 14:47:03,855 extraction 1028 29960 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2782 chars | User: system
+
+INFO 2026-06-20 14:47:04,736 extraction 1028 29712 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3197 chars | User: system
+
+INFO 2026-06-20 14:49:19,171 extraction 1028 11936 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2782 chars | User: system
+
+INFO 2026-06-20 14:49:20,982 extraction 1028 6896 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3197 chars | User: system
+
+INFO 2026-06-20 14:51:37,596 extraction 1028 29164 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2782 chars | User: system
+
+INFO 2026-06-20 14:51:38,760 extraction 1028 26468 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3197 chars | User: system
+
+INFO 2026-06-20 14:53:11,522 extraction 6072 7480 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2782 chars | User: system
+
+INFO 2026-06-20 14:53:11,522 extraction 6072 19656 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2782 chars | User: system
+
+INFO 2026-06-20 14:53:11,523 extraction 6072 28380 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2782 chars | User: system
+
+INFO 2026-06-20 14:53:13,077 extraction 6072 22500 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3197 chars | User: system
+
+INFO 2026-06-20 14:53:13,159 extraction 6072 26868 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3197 chars | User: system
+
+INFO 2026-06-20 14:53:13,235 extraction 6072 20612 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3197 chars | User: system
+
+INFO 2026-06-20 14:55:09,707 extraction 6072 7784 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2782 chars | User: system
+
+INFO 2026-06-20 14:55:10,328 extraction 6072 14820 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2782 chars | User: system
+
+INFO 2026-06-20 14:55:15,168 extraction 6072 27600 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2782 chars | User: system
+
+INFO 2026-06-20 14:55:15,662 extraction 6072 9568 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3197 chars | User: system
+
+INFO 2026-06-20 14:55:15,851 extraction 6072 7684 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3197 chars | User: system
+
+INFO 2026-06-20 14:55:17,489 extraction 6072 5472 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3197 chars | User: system
+
+INFO 2026-06-20 14:57:24,780 extraction 6072 29572 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2782 chars | User: system
+
+INFO 2026-06-20 14:57:29,447 extraction 6072 1664 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2782 chars | User: system
+
+INFO 2026-06-20 14:57:30,637 extraction 6072 7132 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3197 chars | User: system
+
+INFO 2026-06-20 14:57:33,640 extraction 6072 20952 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3197 chars | User: system
+
+INFO 2026-06-20 14:57:33,694 extraction 6072 18076 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2782 chars | User: system
+
+INFO 2026-06-20 14:57:35,930 extraction 6072 27872 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3197 chars | User: system
+
+INFO 2026-06-20 15:51:00,387 extraction 1552 26996 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2465 chars | User: system
+
+INFO 2026-06-20 15:51:00,978 extraction 1552 29192 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 2486 chars | User: system
+
+INFO 2026-06-20 15:51:04,092 extraction 1552 11976 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 2852 chars | User: system
+
+INFO 2026-06-20 15:51:04,738 extraction 1552 5204 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 2951 chars | User: system
+
+INFO 2026-06-20 15:51:06,532 extraction 1552 29652 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 3391 chars | User: system
+
+=== HASH: 0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390 (Invoice: 1007697, Page: 1, Req: ai_1007697_1_1781950860) ===
+INFO 2026-06-20 15:53:48,015 extraction 26840 28680 AI OCR ISOLATED Request | Page: 6 | Prompt Size: 3410 chars | User: system
+
+=== HASH: 9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718 (Invoice: 1007697, Page: 6, Req: ai_1007697_6_1781951028) ===
+INFO 2026-06-20 15:54:16,809 extraction 26840 27844 AI OCR ISOLATED Request | Page: 7 | Prompt Size: 3364 chars | User: system
+
+INFO 2026-06-20 15:54:39,557 extraction 26840 28380 AI OCR ISOLATED Request | Page: 8 | Prompt Size: 3359 chars | User: system
+
+INFO 2026-06-20 15:54:59,033 extraction 26840 4748 AI OCR ISOLATED Request | Page: 9 | Prompt Size: 2540 chars | User: system
+
+INFO 2026-06-20 15:55:19,413 extraction 26840 30480 AI OCR ISOLATED Request | Page: 10 | Prompt Size: 2885 chars | User: system
+
+INFO 2026-06-20 15:58:11,741 extraction 26840 30424 AI OCR ISOLATED Request | Page: 11 | Prompt Size: 3243 chars | User: system
+
+INFO 2026-06-20 16:00:21,019 extraction 26840 14900 AI OCR ISOLATED Request | Page: 12 | Prompt Size: 3235 chars | User: system
+
+INFO 2026-06-20 16:00:37,662 extraction 26840 21140 AI OCR ISOLATED Request | Page: 13 | Prompt Size: 2382 chars | User: system
+
+INFO 2026-06-20 16:02:17,945 extraction 26840 26796 AI OCR ISOLATED Request | Page: 15 | Prompt Size: 2881 chars | User: system
+
+INFO 2026-06-20 16:02:53,667 extraction 26840 6540 AI OCR ISOLATED Request | Page: 15 | Prompt Size: 2881 chars | User: system
+
+INFO 2026-06-20 16:04:59,744 extraction 26840 15148 AI OCR ISOLATED Request | Page: 16 | Prompt Size: 2948 chars | User: system
+
+INFO 2026-06-20 17:34:08,772 extraction 31012 31044 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 2410 chars | User: system
+
+INFO 2026-06-20 17:43:42,424 extraction 10916 26080 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3282 chars | User: system
+
+INFO 2026-06-20 17:43:57,321 extraction 10916 27776 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 3215 chars | User: system
+
+INFO 2026-06-20 17:44:16,542 extraction 10916 4872 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 3407 chars | User: system
+
+INFO 2026-06-20 17:44:30,987 extraction 10916 29432 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 2410 chars | User: system
+
+INFO 2026-06-20 17:44:46,267 extraction 10916 20308 AI OCR ISOLATED Request | Page: 6 | Prompt Size: 2560 chars | User: system
+
+INFO 2026-06-20 17:45:02,440 extraction 10916 10360 AI OCR ISOLATED Request | Page: 7 | Prompt Size: 2767 chars | User: system
+
+INFO 2026-06-20 17:48:19,025 extraction 10916 22760 AI OCR ISOLATED Request | Page: 8 | Prompt Size: 2771 chars | User: system
+
+INFO 2026-06-20 17:48:35,076 extraction 10916 24480 AI OCR ISOLATED Request | Page: 9 | Prompt Size: 2729 chars | User: system
+
+INFO 2026-06-20 17:48:55,749 extraction 10916 28132 AI OCR ISOLATED Request | Page: 10 | Prompt Size: 3187 chars | User: system
+
+INFO 2026-06-20 17:50:31,657 extraction 10916 8524 AI OCR ISOLATED Request | Page: 11 | Prompt Size: 3179 chars | User: system
+
+INFO 2026-06-20 17:50:48,877 extraction 10916 4312 AI OCR ISOLATED Request | Page: 12 | Prompt Size: 3165 chars | User: system
+
+INFO 2026-06-20 23:08:35,131 extraction 11844 7004 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2465 chars | User: system
+
+INFO 2026-06-20 23:08:36,223 extraction 11844 23612 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 2486 chars | User: system
+
+INFO 2026-06-20 23:08:39,700 extraction 11844 4888 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 2852 chars | User: system
+
+INFO 2026-06-20 23:08:40,434 extraction 11844 18616 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 2951 chars | User: system
+
+INFO 2026-06-20 23:08:42,206 extraction 11844 19148 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 3391 chars | User: system
+
+INFO 2026-06-20 23:09:47,457 extraction 20712 19580 AI OCR ISOLATED Request | Page: 6 | Prompt Size: 3410 chars | User: system
+
+INFO 2026-06-20 23:10:09,204 extraction 20712 28112 AI OCR ISOLATED Request | Page: 7 | Prompt Size: 3364 chars | User: system
+
+INFO 2026-06-20 23:10:31,870 extraction 20712 13052 AI OCR ISOLATED Request | Page: 8 | Prompt Size: 3359 chars | User: system
+
+INFO 2026-06-20 23:10:45,001 extraction 20712 18716 AI OCR ISOLATED Request | Page: 9 | Prompt Size: 2540 chars | User: system
+
+INFO 2026-06-20 23:10:56,210 extraction 20712 22088 AI OCR ISOLATED Request | Page: 10 | Prompt Size: 2885 chars | User: system
+
+INFO 2026-06-20 23:11:07,943 extraction 20712 4384 AI OCR ISOLATED Request | Page: 11 | Prompt Size: 3243 chars | User: system
+
+INFO 2026-06-20 23:13:20,247 extraction 1584 20712 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2465 chars | User: system
+
+INFO 2026-06-20 23:13:20,735 extraction 1584 24944 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 2486 chars | User: system
+
+INFO 2026-06-20 23:13:23,737 extraction 1584 24500 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 2852 chars | User: system
+
+INFO 2026-06-20 23:13:24,134 extraction 1584 308 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 2951 chars | User: system
+
+INFO 2026-06-20 23:13:25,767 extraction 1584 15316 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 3391 chars | User: system
+
+INFO 2026-06-20 23:15:31,669 extraction 1584 18668 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2465 chars | User: system
+
+INFO 2026-06-20 23:15:33,997 extraction 1584 17820 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 2486 chars | User: system
+
+INFO 2026-06-20 23:15:38,677 extraction 1584 14840 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 2951 chars | User: system
+
+INFO 2026-06-20 23:15:39,083 extraction 1584 27604 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 2852 chars | User: system
+
+INFO 2026-06-20 23:15:41,544 extraction 1584 28032 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 3391 chars | User: system
+
+INFO 2026-06-20 23:16:36,009 extraction 24936 21512 AI OCR ISOLATED Request | Page: 6 | Prompt Size: 3410 chars | User: system
+
+INFO 2026-06-20 23:16:58,864 extraction 24936 12084 AI OCR ISOLATED Request | Page: 7 | Prompt Size: 3364 chars | User: system
+
+INFO 2026-06-20 23:17:22,158 extraction 24936 27052 AI OCR ISOLATED Request | Page: 8 | Prompt Size: 3359 chars | User: system
+
+INFO 2026-06-20 23:17:38,274 extraction 24936 26916 AI OCR ISOLATED Request | Page: 9 | Prompt Size: 2540 chars | User: system
+
+INFO 2026-06-20 23:17:57,803 extraction 24936 10016 AI OCR ISOLATED Request | Page: 10 | Prompt Size: 2885 chars | User: system
+
+INFO 2026-06-20 23:18:55,217 extraction 24936 21220 AI OCR ISOLATED Request | Page: 11 | Prompt Size: 3243 chars | User: system
+
+INFO 2026-06-20 23:19:12,030 extraction 24936 26056 AI OCR ISOLATED Request | Page: 12 | Prompt Size: 3235 chars | User: system
+
+INFO 2026-06-20 23:19:28,161 extraction 24936 14096 AI OCR ISOLATED Request | Page: 13 | Prompt Size: 2382 chars | User: system
+
+INFO 2026-06-20 23:20:59,175 extraction 24936 2244 AI OCR ISOLATED Request | Page: 14 | Prompt Size: 2384 chars | User: system
+
+INFO 2026-06-20 23:21:24,895 extraction 24936 25928 AI OCR ISOLATED Request | Page: 15 | Prompt Size: 2881 chars | User: system
+
+INFO 2026-06-20 23:22:18,096 extraction 24936 15276 AI OCR ISOLATED Request | Page: 16 | Prompt Size: 2948 chars | User: system
+
+INFO 2026-06-20 23:25:00,461 extraction 1584 18796 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 2410 chars | User: system
+
+INFO 2026-06-20 23:25:11,945 extraction 1584 5584 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 3175 chars | User: system
+
+INFO 2026-06-20 23:25:14,009 extraction 1584 12844 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 3407 chars | User: system
+
+INFO 2026-06-20 23:25:16,121 extraction 1584 12380 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3282 chars | User: system
+
+INFO 2026-06-20 23:25:17,071 extraction 1584 22960 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 3215 chars | User: system
+
+INFO 2026-06-20 23:28:00,352 extraction 24936 8516 AI OCR ISOLATED Request | Page: 6 | Prompt Size: 2560 chars | User: system
+
+INFO 2026-06-20 23:28:13,880 extraction 24936 884 AI OCR ISOLATED Request | Page: 7 | Prompt Size: 2767 chars | User: system
+
+INFO 2026-06-20 23:28:31,974 extraction 24936 3784 AI OCR ISOLATED Request | Page: 8 | Prompt Size: 2771 chars | User: system
+
+INFO 2026-06-20 23:28:55,114 extraction 24936 20492 AI OCR ISOLATED Request | Page: 9 | Prompt Size: 2729 chars | User: system
+
+INFO 2026-06-20 23:29:19,513 extraction 24936 1780 AI OCR ISOLATED Request | Page: 10 | Prompt Size: 3187 chars | User: system
+
+INFO 2026-06-20 23:31:38,699 extraction 24936 1480 AI OCR ISOLATED Request | Page: 11 | Prompt Size: 3179 chars | User: system
+
+INFO 2026-06-20 23:32:11,167 extraction 24936 21692 AI OCR ISOLATED Request | Page: 12 | Prompt Size: 3165 chars | User: system
+
+INFO 2026-06-20 23:45:47,207 extraction 28628 22764 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2779 chars | User: system
+
+INFO 2026-06-20 23:45:48,628 extraction 28628 24868 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3194 chars | User: system
+
+INFO 2026-06-20 23:49:06,243 extraction 28628 21264 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2779 chars | User: system
+
+INFO 2026-06-20 23:49:08,385 extraction 28628 15848 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3194 chars | User: system
+
+INFO 2026-06-21 15:39:39,400 extraction 8720 3484 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 2465 chars | User: system
+
+INFO 2026-06-21 15:39:41,452 extraction 8720 15036 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 2486 chars | User: system
+
+INFO 2026-06-21 15:39:44,468 extraction 8720 3812 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 2852 chars | User: system
+
+INFO 2026-06-21 15:39:44,909 extraction 8720 3936 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 2951 chars | User: system
+
+INFO 2026-06-21 15:39:46,645 extraction 8720 9828 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 3391 chars | User: system
+
+INFO 2026-06-21 15:42:01,695 extraction 20408 27196 AI OCR ISOLATED Request | Page: 6 | Prompt Size: 3410 chars | User: system
+
+INFO 2026-06-21 15:42:17,429 extraction 20408 20852 AI OCR ISOLATED Request | Page: 7 | Prompt Size: 3364 chars | User: system
+
+INFO 2026-06-21 15:42:35,974 extraction 20408 25340 AI OCR ISOLATED Request | Page: 8 | Prompt Size: 3359 chars | User: system
+
+INFO 2026-06-21 15:42:50,622 extraction 20408 5108 AI OCR ISOLATED Request | Page: 9 | Prompt Size: 2540 chars | User: system
+
+INFO 2026-06-21 15:43:09,631 extraction 20408 19128 AI OCR ISOLATED Request | Page: 10 | Prompt Size: 2885 chars | User: system
+
+INFO 2026-06-21 15:44:40,684 extraction 20408 17560 AI OCR ISOLATED Request | Page: 11 | Prompt Size: 3243 chars | User: system
+
+INFO 2026-06-21 15:44:58,975 extraction 20408 18064 AI OCR ISOLATED Request | Page: 12 | Prompt Size: 3235 chars | User: system
+
+INFO 2026-06-21 15:45:13,148 extraction 20408 27388 AI OCR ISOLATED Request | Page: 13 | Prompt Size: 2382 chars | User: system
+
+INFO 2026-06-21 15:45:29,253 extraction 20408 20272 AI OCR ISOLATED Request | Page: 14 | Prompt Size: 2384 chars | User: system
+
+INFO 2026-06-21 15:47:05,874 extraction 20408 7928 AI OCR ISOLATED Request | Page: 15 | Prompt Size: 2881 chars | User: system
+
+INFO 2026-06-21 15:47:24,383 extraction 20408 7220 AI OCR ISOLATED Request | Page: 16 | Prompt Size: 2948 chars | User: system
+
+INFO 2026-06-21 15:51:56,571 extraction 8720 22664 AI OCR ISOLATED Request | Page: 5 | Prompt Size: 2410 chars | User: system
+
+INFO 2026-06-21 15:52:15,921 extraction 8720 11000 AI OCR ISOLATED Request | Page: 1 | Prompt Size: 3175 chars | User: system
+
+INFO 2026-06-21 15:52:22,172 extraction 8720 20096 AI OCR ISOLATED Request | Page: 4 | Prompt Size: 3407 chars | User: system
+
+INFO 2026-06-21 15:52:22,808 extraction 8720 15604 AI OCR ISOLATED Request | Page: 3 | Prompt Size: 3215 chars | User: system
+
+INFO 2026-06-21 15:52:23,782 extraction 8720 16928 AI OCR ISOLATED Request | Page: 2 | Prompt Size: 3282 chars | User: system
+
+INFO 2026-06-21 15:56:59,193 extraction 20408 13172 AI OCR ISOLATED Request | Page: 6 | Prompt Size: 2560 chars | User: system
+
+INFO 2026-06-21 15:57:12,352 extraction 20408 6628 AI OCR ISOLATED Request | Page: 7 | Prompt Size: 2767 chars | User: system
+
+INFO 2026-06-21 15:57:30,177 extraction 20408 27524 AI OCR ISOLATED Request | Page: 8 | Prompt Size: 2771 chars | User: system
+
+INFO 2026-06-21 15:57:47,462 extraction 20408 21776 AI OCR ISOLATED Request | Page: 9 | Prompt Size: 2729 chars | User: system
+
+INFO 2026-06-21 15:58:09,798 extraction 20408 7580 AI OCR ISOLATED Request | Page: 10 | Prompt Size: 3187 chars | User: system
+
+INFO 2026-06-21 15:59:52,298 extraction 20408 25888 AI OCR ISOLATED Request | Page: 11 | Prompt Size: 3179 chars | User: system
+
+INFO 2026-06-21 16:00:06,871 extraction 20408 10028 AI OCR ISOLATED Request | Page: 12 | Prompt Size: 3165 chars | User: system
+

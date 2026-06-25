@@ -23,6 +23,7 @@ class VoucherPurchaseSupplierDetails(BaseModel):
     )
     gstin = models.CharField(max_length=50, null=True, blank=True)
     branch = models.CharField(max_length=255, null=True, blank=True)
+    normalized_invoice_no = models.CharField(max_length=100, null=True, blank=True)
     
     # GRN
     grn_reference = models.CharField(max_length=100, null=True, blank=True)
@@ -45,6 +46,15 @@ class VoucherPurchaseSupplierDetails(BaseModel):
 
     def __str__(self):
         return f"{self.purchase_voucher_no} - {self.vendor_name}"
+
+    def save(self, *args, **kwargs):
+        from vendors.vendor_validation_logic import normalize_invoice_number
+        if self.supplier_invoice_no:
+            self.normalized_invoice_no = normalize_invoice_number(self.supplier_invoice_no)
+        else:
+            self.normalized_invoice_no = ""
+        super().save(*args, **kwargs)
+
 
 
 class VoucherPurchaseSupplyForeignDetails(BaseModel):

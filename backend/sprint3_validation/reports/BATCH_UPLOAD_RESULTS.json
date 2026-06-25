@@ -1,0 +1,368 @@
+{
+  "session_id": "c1311ebd-e123-411b-91fb-7451ba3a0705",
+  "total_invoices": 22,
+  "success_count": 0,
+  "failure_count": 22,
+  "success_rate_pct": 0.0,
+  "completed_at": "2026-06-21T10:29:19.357565+00:00",
+  "results": [
+    {
+      "index": 1,
+      "filename": "IMG_20260319_0001.pdf",
+      "file_hash": "676e64c38aa3a2d3a91c16ac0a203e138b434afa0f58b2c0798c684218b41359",
+      "page_count": 16,
+      "upload": {
+        "filename": "IMG_20260319_0001.pdf",
+        "upload_status": "OK",
+        "http_status": 202,
+        "job_id": "400287bd-7bdf-4a1f-a417-93a568450f1a",
+        "record_id": null,
+        "upload_elapsed_s": 0.65,
+        "response": {
+          "success": true,
+          "job_id": "400287bd-7bdf-4a1f-a417-93a568450f1a",
+          "status": "PROCESSING",
+          "message": "Queued 1 files. 0 skipped (deduplicated).",
+          "total_files": 1,
+          "estimated_delay_seconds": 0.0
+        }
+      },
+      "pipeline": {
+        "final_status": "TIMEOUT",
+        "terminal": false,
+        "poll_count": 120,
+        "session_data": {}
+      },
+      "timestamp": "2026-06-21T10:19:15.559187+00:00"
+    },
+    {
+      "index": 2,
+      "filename": "IMG_20260319_0002.pdf",
+      "file_hash": "4703312bdd26f19e4a18ae50545d4814e4d18b6a11892aed334d4041107391ea",
+      "page_count": 12,
+      "upload": {
+        "filename": "IMG_20260319_0002.pdf",
+        "upload_status": "OK",
+        "http_status": 202,
+        "job_id": "9a02e561-9265-4b57-ac37-13851842f96b",
+        "record_id": null,
+        "upload_elapsed_s": 0.89,
+        "response": {
+          "success": true,
+          "job_id": "9a02e561-9265-4b57-ac37-13851842f96b",
+          "status": "PROCESSING",
+          "message": "Queued 1 files. 0 skipped (deduplicated).",
+          "total_files": 1,
+          "estimated_delay_seconds": 0.0
+        }
+      },
+      "pipeline": {
+        "final_status": "TIMEOUT",
+        "terminal": false,
+        "poll_count": 120,
+        "session_data": {}
+      },
+      "timestamp": "2026-06-21T10:29:18.919294+00:00"
+    },
+    {
+      "index": 3,
+      "filename": "IMG_20260319_0003.pdf",
+      "file_hash": "0094ab82e84ce61469281e14ed273f48c2eaad8fed3a6f0110be9031efb32a7e",
+      "page_count": 5,
+      "upload": {
+        "filename": "IMG_20260319_0003.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.02
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:18.937961+00:00"
+    },
+    {
+      "index": 4,
+      "filename": "IMG_20260319_0004.pdf",
+      "file_hash": "598cb3a1706e45b5b6a9f4d38e947c1f30c858d5a9a2aca7f7788eecbc9d22b3",
+      "page_count": 9,
+      "upload": {
+        "filename": "IMG_20260319_0004.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.02
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:18.956723+00:00"
+    },
+    {
+      "index": 5,
+      "filename": "IMG_20260319_0005.pdf",
+      "file_hash": "9e672a849470ffbd893de38f6507bfd1783fb44dc542c07d0f5fc3b2575ba554",
+      "page_count": 14,
+      "upload": {
+        "filename": "IMG_20260319_0005.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.03
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:18.984388+00:00"
+    },
+    {
+      "index": 6,
+      "filename": "IMG_20260319_0006.pdf",
+      "file_hash": "b25c1006f989aafcf30e6d9cb8dc71671195b4e9d8f374efdbf0410ec6bb3747",
+      "page_count": 12,
+      "upload": {
+        "filename": "IMG_20260319_0006.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.02
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.006910+00:00"
+    },
+    {
+      "index": 7,
+      "filename": "IMG_20260319_0007.pdf",
+      "file_hash": "d66c448fc991e46859ba1c21ef5ecf272770de6f3aabbd2d0cab982dfc7ce405",
+      "page_count": 13,
+      "upload": {
+        "filename": "IMG_20260319_0007.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.02
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.030798+00:00"
+    },
+    {
+      "index": 8,
+      "filename": "IMG_20260319_0008.pdf",
+      "file_hash": "4df296254b97ed7c8e04763262ac147db3f4cda909d4b7ceddb2b8e403bebb87",
+      "page_count": 10,
+      "upload": {
+        "filename": "IMG_20260319_0008.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.02
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.052245+00:00"
+    },
+    {
+      "index": 9,
+      "filename": "IMG_20260319_0009.pdf",
+      "file_hash": "6997e718a124377eca6878719255306835780d39288580176af3e55be8099483",
+      "page_count": 18,
+      "upload": {
+        "filename": "IMG_20260319_0009.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.03
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.078626+00:00"
+    },
+    {
+      "index": 10,
+      "filename": "IMG_20260319_0010.pdf",
+      "file_hash": "eed6f8514c01b99123bc079ab5776b99681aa2028235d59772c6b3fd4018e1bd",
+      "page_count": 17,
+      "upload": {
+        "filename": "IMG_20260319_0010.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.03
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.111781+00:00"
+    },
+    {
+      "index": 11,
+      "filename": "IMG_20260319_0011.pdf",
+      "file_hash": "3a5f035f6ab9d6cb80248022c20f3724422261d3180fa0209196ffa8b1115378",
+      "page_count": 16,
+      "upload": {
+        "filename": "IMG_20260319_0011.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.02
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.136440+00:00"
+    },
+    {
+      "index": 12,
+      "filename": "IMG_20260319_0012.pdf",
+      "file_hash": "48b7b5067a7fe1c612753b6787634b93258ed709ac5ec6fd3cefb6c43ce3cada",
+      "page_count": 12,
+      "upload": {
+        "filename": "IMG_20260319_0012.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.02
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.158113+00:00"
+    },
+    {
+      "index": 13,
+      "filename": "IMG_20260319_0013.pdf",
+      "file_hash": "44858132b364f916c4b0f081c907c23531b5559aa8b824a50cc21828ab13c6aa",
+      "page_count": 5,
+      "upload": {
+        "filename": "IMG_20260319_0013.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.02
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.173338+00:00"
+    },
+    {
+      "index": 14,
+      "filename": "IMG_20260319_0014.pdf",
+      "file_hash": "2cc576679ed7f9de26f6cc8102477813783e50d07f436487fff6dd2061b654f9",
+      "page_count": 5,
+      "upload": {
+        "filename": "IMG_20260319_0014.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.02
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.188988+00:00"
+    },
+    {
+      "index": 15,
+      "filename": "IMG_20260406_0001_Part1.pdf",
+      "file_hash": "33f8828846ba6ecaac6673d749d4874f53867380d75752459676dbb7f9141256",
+      "page_count": 6,
+      "upload": {
+        "filename": "IMG_20260406_0001_Part1.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.03
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.216959+00:00"
+    },
+    {
+      "index": 16,
+      "filename": "IMG_20260406_0001_Part2.pdf",
+      "file_hash": "0f374a8980b478047724f14dbd392bdf5c5cdc8b4ab55009269aa8ebae7cecff",
+      "page_count": 4,
+      "upload": {
+        "filename": "IMG_20260406_0001_Part2.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.02
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.237324+00:00"
+    },
+    {
+      "index": 17,
+      "filename": "IMG_20260406_0001_Part3.pdf",
+      "file_hash": "a82f92be30e49a0c34d6b737e2f657b7c12d32dfc31610fe54d75767c8c2b1f0",
+      "page_count": 3,
+      "upload": {
+        "filename": "IMG_20260406_0001_Part3.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.02
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.253405+00:00"
+    },
+    {
+      "index": 18,
+      "filename": "IMG_20260406_0002.pdf",
+      "file_hash": "91a4135f5f1c6b1161b49e33f8e00ea65d07b2076ba6af432b8ac2e85d3104cd",
+      "page_count": 16,
+      "upload": {
+        "filename": "IMG_20260406_0002.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.03
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.280340+00:00"
+    },
+    {
+      "index": 19,
+      "filename": "IMG_20260406_0003.pdf",
+      "file_hash": "c2ab2f6b5da0b8f9d2e1a86cb4b88c1549439c1bdbe3df267d59c689f529675a",
+      "page_count": 19,
+      "upload": {
+        "filename": "IMG_20260406_0003.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.03
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.307472+00:00"
+    },
+    {
+      "index": 20,
+      "filename": "IMG_20260406_0005.pdf",
+      "file_hash": "7ff8fd5836249fc863d43a02d65543f668ecfbdfd478f0eaf156a6ae969e2a60",
+      "page_count": 11,
+      "upload": {
+        "filename": "IMG_20260406_0005.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.02
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.331761+00:00"
+    },
+    {
+      "index": 21,
+      "filename": "IMG_20260406_0006.pdf",
+      "file_hash": "57da3a2b604c6513ece37079b1dc6b5357a0abeecbd6b8f4a8ebb0572485be3e",
+      "page_count": 2,
+      "upload": {
+        "filename": "IMG_20260406_0006.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.01
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.344357+00:00"
+    },
+    {
+      "index": 22,
+      "filename": "IMG_20260406_0006_TEST.pdf",
+      "file_hash": "f15795e53561f8722286282aabe3856b4be6b403362f206cbbb19ce2e123aeaa",
+      "page_count": 3,
+      "upload": {
+        "filename": "IMG_20260406_0006_TEST.pdf",
+        "upload_status": "HTTP_ERROR",
+        "http_status": 401,
+        "error": "{\"success\":false,\"error_code\":\"token_not_valid\",\"message\":\"{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}\",\"details\":{},\"field\":null}",
+        "upload_elapsed_s": 0.01
+      },
+      "pipeline": {},
+      "timestamp": "2026-06-21T10:29:19.357565+00:00"
+    }
+  ]
+}

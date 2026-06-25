@@ -1226,12 +1226,37 @@ const App: React.FC = () => {
           if (jsonString) {
             const action = JSON.parse(jsonString);
             if (action.tool_use) {
+              // Agentic tool call — execute it
               const actionResult = await handleAgentAction(action);
               replyText = `${actionResult}\n\n(Action: ${action.tool_use})`;
+            } else {
+              // LLM returned a JSON envelope instead of plain text.
+              // Extract the human-readable message from all known response shapes:
+              //   { response: "text" }                   ← Qwen most common
+              //   { response: { message: "text" } }
+              //   { message: "text" }
+              //   { reply: "text" }
+              //   { data: { message: "text" } }
+              //   { answer: "text" }
+              //   { text: "text" }
+              const extractedMessage =
+                (typeof action?.response === 'string' ? action.response : null) ??
+                action?.response?.message ??
+                action?.message ??
+                action?.reply ??
+                action?.answer ??
+                action?.text ??
+                action?.data?.message ??
+                null;
+              if (extractedMessage && typeof extractedMessage === 'string') {
+                replyText = extractedMessage;
+              }
+              // If still no known field found, leave replyText as the raw string
+              // so nothing is silently swallowed.
             }
           }
         } catch (e) {
-
+          // JSON parse failed — replyText remains the original raw string from the model
         }
         // -------------------------------------
 

@@ -1,0 +1,63 @@
+```json
+{
+    "header": {
+        "vendor_name": "SRI VISHNU HEAT TREATERS",
+        "vendor_address": "MSME NO: UDYAM-TN-03-0007011 HEAD OFFICE DOOR NO 56 SF 380 381 CODEA PARK SS KULAM KURUMBAPALAYAM CBE 641107 BRANCH OFFICE SF NO 75/2 B SITE NO 24/1 COSMOFAN FO KUNNATUR VILLAGE ANNUR PIN 641107 BRANCH OFFICE NO.3/325, COSMOFOUNDARY KUNNATUR VILLAGE ANNUR PIN 641107 BRANCH OFFICE NO.2/166 SF NO 472/1D BALAJI INDUSTRIAL PARK MGCP VILLAGE SENTHAMPALAYAM GSTIN/UIN: 33ABYFS6343M1ZC State Name: Tamil Nadu, Code: 33 E-Mail: srivishnuheatreat@gmail.com",
+        "billing_address": "Accuturn Machiners Private Limited 13 A, THUDIYALUR-KANUVAI ROAD APPANAICKENPALAYAM K.VADAMADURAI POST Coimbatore GSTIN/UIN: 33ABACA5718R1ZD State Name: Tamil Nadu, Code: 33",
+        "vendor_gstin": "33ABYFS6343M1ZC",
+        "vendor_state": "Tamil Nadu",
+        "place_of_supply": "Tamil Nadu",
+        "invoice_no": "4742/25-26",
+        "invoice_date": "13-Sep-2025",
+        "total_amount": 69506.67,
+        "taxable_value": 65573.28,
+        "cgst": 3934.39,
+        "sgst": 3934.39,
+        "igst": 0,
+        "gst_taxability_type": "Taxable",
+        "gst_nature_of_transaction": "",
+        "sales_order_no": "JC/043/25-26",
+        "irn": "57bd9abf89e1d6f519d0b5e49b4175efbc9206d96c50e1-2cd721b5541c76642",
+        "ack_no": "152523027902150",
+        "ack_date": "13-Sep-2025"
+    },
+    "items": [
+        {
+            "description": "SQF - CASEHARDENING & TEMPERING(KGS) B65-6008 PIN 1059-NOS",
+            "hsn_code": "998898",
+            "quantity": 910.74,
+            "uom": "kgs",
+            "rate": 60.00,
+            "discount_percent": null,
+            "taxable_value": 54644.40,
+            "igst_rate": 0,
+            "igst_amount": 0,
+            "cgst_rate": 6,
+            "cgst_amount": 3934.39,
+            "sgst_rate": 6,
+            "sgst_amount": 3934.39,
+            "cess_rate": null,
+            "cess_amount": null,
+            "amount": 54644.40
+        },
+        {
+            "description": "SHOT BLASTINGS(KGS) B65-6008 PIN 1059-NOS",
+            "hsn_code": "998898",
+            "quantity": 910.74,
+            "uom": "kgs",
+            "rate": 12.00,
+            "discount_percent": null,
+            "taxable_value": 10928.88,
+            "igst_rate": 0,
+            "igst_amount": 0,
+            "cgst_rate": 6,
+            "cgst_amount": 3934.39,
+            "sgst_rate": 6,
+            "sgst_amount": 3934.39,
+            "cess_rate": null,
+            "cess_amount": null,
+            "amount": 10928.88
+        }
+    ]
+}
+```

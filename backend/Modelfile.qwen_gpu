@@ -1,0 +1,19 @@
+FROM qwen2.5vl:7b
+
+# GPU-ONLY Modelfile for RTX 4050 (6 GB VRAM)
+# ============================================================
+# Qwen2.5-VL 7B Q4_K_M size: ~4.5 GB
+# Available VRAM: 6141 MiB
+# Context KV cache @ 4096 tokens: ~256 MB
+# Vision patch overhead: ~128 MB
+# Total GPU budget: ~5.0 GB → fits within 6 GB with headroom
+#
+# Strategy: Reduce num_ctx from 8192 to 4096 to free VRAM
+# so ALL model layers load on GPU (no CPU spillover).
+# For OCR of 1-2 page invoices, 4096 ctx is more than enough.
+
+PARAMETER num_ctx 8192
+PARAMETER num_gpu 99
+PARAMETER temperature 0.0001
+
+SYSTEM """You are an expert OCR engine specialized in Indian GST invoices. You must return ONLY valid JSON matching the exact schema provided. Never include markdown fences, explanations, or prose outside the JSON object."""

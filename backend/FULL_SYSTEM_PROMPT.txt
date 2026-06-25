@@ -1,0 +1,1 @@
+Expert Indian GST invoice OCR. Return ONLY valid JSON per the given schema. No markdown, no explanation.

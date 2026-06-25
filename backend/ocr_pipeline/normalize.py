@@ -791,7 +791,12 @@ def get_normalized_items(invoice: Any, tenant_id: str = None) -> List[Dict[str, 
         if not desc: continue
         
         taxable = normalize_amount(item.get("taxable_value") or item.get("amount") or item.get("Taxable Value"))
-        qty = normalize_amount(item.get("qty") or item.get("quantity") or item.get("Qty") or 1.0)
+        # Track whether quantity was explicitly provided or is a fallback default.
+        # If Qwen returns quantity=null (e.g. because only rate is visible on the row),
+        # the `or 1.0` below kicks in. We record this so we can derive qty later.
+        _raw_qty_value = item.get("qty") or item.get("quantity") or item.get("Qty")
+        _qty_was_explicit = _raw_qty_value is not None and normalize_amount(_raw_qty_value) > 0
+        qty = normalize_amount(_raw_qty_value or 1.0)
         
         ig_amt = normalize_amount(item.get("igst") or item.get("igst_amount") or item.get("IGST"))
         cg_amt = normalize_amount(item.get("cgst") or item.get("cgst_amount") or item.get("CGST"))
@@ -879,6 +884,19 @@ def get_normalized_items(invoice: Any, tenant_id: str = None) -> List[Dict[str, 
             derived_rate = round(taxable / qty, 2)
         else:
             derived_rate = raw_rate
+
+        # [QTY_DERIVATION] If qty was not explicitly provided by the AI (defaulted to 1.0)
+        # but we have both rate and taxable_value, derive qty = taxable / rate.
+        # This handles the case where Qwen correctly sets quantity=null and rate=12.00,
+        # so normalize.py can still reconstruct the actual quantity.
+        if not _qty_was_explicit and derived_rate > 0 and taxable > 0:
+            derived_qty = round(taxable / derived_rate, 3)
+            if derived_qty != 1.0:  # avoid no-op overwrite
+                logger.info(
+                    f"[QTY_DERIVED_FROM_RATE] desc='{desc}' taxable={taxable} rate={derived_rate} "
+                    f"derived_qty={derived_qty} (qty was null/missing from AI output)"
+                )
+                qty = derived_qty
 
         normalized_item = {
             "description": desc,

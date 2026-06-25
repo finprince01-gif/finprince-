@@ -1,0 +1,23 @@
+{
+  "mined_at": "2026-06-21T10:29:41.440769+00:00",
+  "shadow_mode_active": true,
+  "blocking_activated": false,
+  "summary": {
+    "total_shadow_check_events": 0,
+    "shadow_matches": 0,
+    "shadow_mismatches": 0,
+    "total_duplicate_found_events": 0,
+    "expected_pair_0006_detected": false
+  },
+  "shadow_events": [],
+  "shadow_matches_detail": [],
+  "duplicate_found_events": [],
+  "expected_duplicate_pair": {
+    "files": [
+      "IMG_20260406_0006",
+      "IMG_20260406_0006_TEST"
+    ],
+    "expected_behavior": "Shadow match logged, NO blocking applied",
+    "detected": false
+  }
+}

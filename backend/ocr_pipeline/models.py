@@ -349,7 +349,7 @@ class OCRProcessingLock(models.Model):
     """
     EXACTLY-ONCE EXECUTION GATE.
     Atomic DB lock per (file_hash, tenant_id).
-    A worker INSERTs this row before calling Gemini.
+    A worker INSERTs this row before calling the AI provider.
     If the INSERT conflicts → another worker already claimed it → skip.
     """
     file_hash   = models.CharField(max_length=64)
@@ -541,6 +541,12 @@ class InvoiceTempOCR(models.Model):
     version_rank = models.IntegerField(default=99)
     is_primary = models.BooleanField(default=False)
 
+    # Added fields for Sprint 3
+    normalized_invoice_no = models.CharField(max_length=100, null=True, blank=True)
+    vendor_confidence = models.FloatField(null=True, blank=True)
+    gstin_confidence = models.FloatField(null=True, blank=True)
+    invoice_number_confidence = models.FloatField(null=True, blank=True)
+
     IMMUTABLE_VALIDATION_STATUSES = {'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'}
     OVERWRITE_BLOCKED_STATUSES = {'READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'PENDING', 'NEED_VENDOR', 'VENDOR_MISSING'}
 
@@ -555,6 +561,14 @@ class InvoiceTempOCR(models.Model):
         import json
         from django.utils import timezone
         _log = logging.getLogger(__name__)
+
+        # Auto-update normalized_invoice_no
+        from vendors.vendor_validation_logic import normalize_invoice_number
+        if self.supplier_invoice_no:
+            self.normalized_invoice_no = normalize_invoice_number(self.supplier_invoice_no)
+        else:
+            self.normalized_invoice_no = ""
+
 
         # Auto-update validation_revision in extracted_data before save
         if self.extracted_data is not None:
@@ -777,7 +791,7 @@ class AICache(models.Model):
     """
     PHASE 9: AI INFERENCE CACHE.
     Stores deterministic extraction results for identical OCR text.
-    Reduces redundant Gemini calls for repeated vendor layouts.
+    Reduces redundant AI calls for repeated vendor layouts.
     """
     key_hash = models.CharField(max_length=64, primary_key=True) # SHA256 of cleaned OCR text
     payload = models.JSONField()
@@ -815,7 +829,7 @@ class RescanHistory(models.Model):
 
 class AIUsageAccounting(models.Model):
     """
-    Tracks token counts and costs associated with Gemini AI extraction calls.
+    Tracks token counts and costs associated with Qwen/AI extraction calls.
     Links back to the staging record and optionally the specific rescan run.
     """
     invoice_temp_ocr = models.ForeignKey(

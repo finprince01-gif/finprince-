@@ -224,17 +224,17 @@ class RedisOrchestrator:
             return 0
 
     def clean_stale_slots(self, record_id: str, session_id: str = "unknown"):
-        """Watchdog: releases slots active for > 120 seconds and updates barrier."""
+        """Watchdog: releases slots active for > 900 seconds and updates barrier."""
         slot_key = f"assembly:{record_id}:active_slots"
         try:
             now = time.time()
-            cutoff = now - 120
+            cutoff = now - 900
             # Get expired pages before the Lua script drops them
             stale_pages = self.redis.zrangebyscore(slot_key, 0, cutoff)
             for page_str in stale_pages:
                 try:
                     page_num = int(page_str)
-                    logger.warning(f"[WINDOW_LEAK_DETECTED] record={record_id} page={page_num} exceeded 120s timeout. Watchdog cleanup triggered.")
+                    logger.warning(f"[WINDOW_LEAK_DETECTED] record={record_id} page={page_num} exceeded 900s timeout. Watchdog cleanup triggered.")
                     
                     self.release_ai_slot(record_id, page_num, session_id=session_id, release_reason="WATCHDOG_TIMEOUT")
                     
@@ -258,7 +258,7 @@ class RedisOrchestrator:
                 self._lua_acquire_sha = self.redis.script_load(self.acquire_slot_script)
                 
             now = time.time()
-            expiration = now + 120 # 2 minute max lease
+            expiration = now + 900 # 15 minute max lease
             permit_id = f"{record_id}:{page_number}"
             
             keys = [slot_key, tenant_key if tenant_id != "unknown" else ""]

@@ -8,6 +8,7 @@ import Zap from 'lucide-react/dist/esm/icons/zap';
 import AlertTriangle from 'lucide-react/dist/esm/icons/alert-triangle';
 import { CreateNewInventoryItemModal } from '../../components/CreateNewInventoryItemModal';
 import { MatchExistingItemModal } from '../../components/MatchExistingItemModal';
+import { GstCorrectionModal } from '../../components/GstCorrectionModal';
 import CreateNewVendorFullModal from '../../components/CreateNewVendorFullModal';
 import { EditInvoiceModal, type ScanResult } from '../../components/SmartInvoiceUploadModal';
 import { showSuccess, showError } from '../../utils/toast';
@@ -47,6 +48,46 @@ const VoucherStatusBadge: React.FC<{ status: string }> = ({ status }) => {
   return <span className="bg-gray-100 text-gray-500 border border-gray-200 px-2 py-1 rounded inline-block text-[10px] font-bold uppercase">PENDING</span>;
 };
 
+const getGstStatus = (purchase: any): 'GST_VALID' | 'GST_MISMATCH' | 'GST_CORRECTED' | 'GST_SUPPLIER_ACCEPTED' | 'GST_NOT_CHECKED' => {
+  const ext = purchase.extraction_payload || {};
+  const res = ext.gst_resolution;
+  if (res === 'CORRECTED') return 'GST_CORRECTED';
+  if (res === 'SUPPLIER_VALUES_ACCEPTED') return 'GST_SUPPLIER_ACCEPTED';
+
+  // Duplicate invoices: voucher already exists in ERP, GST was validated at first posting.
+  // Show GST VALID instead of NOT CHECKED.
+  if (purchase.voucher_status === 'VOUCHER_STATUS_EXISTING') {
+    const extAudit = ext.gst_audit_trail;
+    // Only shortcut to GST_VALID if there is no explicit FAIL audit trail
+    if (!extAudit || extAudit.validation_status !== 'FAIL') {
+      return 'GST_VALID';
+    }
+  }
+
+  const audit = ext.gst_audit_trail;
+  if (audit) {
+    if (audit.validation_status === 'FAIL') return 'GST_MISMATCH';
+    if (audit.validation_status === 'PASS') return 'GST_VALID';
+  }
+  return 'GST_NOT_CHECKED';
+};
+
+const renderGstStatusBadge = (status: 'GST_VALID' | 'GST_MISMATCH' | 'GST_CORRECTED' | 'GST_SUPPLIER_ACCEPTED' | 'GST_NOT_CHECKED') => {
+  switch (status) {
+    case 'GST_VALID':
+      return <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded inline-block text-[10px] font-bold uppercase whitespace-nowrap">GST VALID</span>;
+    case 'GST_MISMATCH':
+      return <span className="bg-rose-100 text-rose-800 border border-rose-300 px-2 py-1 rounded inline-block text-[10px] font-bold uppercase whitespace-nowrap animate-pulse">GST MISMATCH</span>;
+    case 'GST_CORRECTED':
+      return <span className="bg-blue-100 text-blue-800 border border-blue-300 px-2 py-1 rounded inline-block text-[10px] font-bold uppercase whitespace-nowrap">CORRECTED</span>;
+    case 'GST_SUPPLIER_ACCEPTED':
+      return <span className="bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 rounded inline-block text-[10px] font-bold uppercase whitespace-nowrap">SUPPLIER ACCEPTED</span>;
+    case 'GST_NOT_CHECKED':
+    default:
+      return <span className="bg-gray-100 text-gray-800 border border-gray-300 px-2 py-1 rounded inline-block text-[10px] font-bold uppercase whitespace-nowrap">NOT CHECKED</span>;
+  }
+};
+
 // ── Helper to resolve line items from various payload structures ────────────
 const getLineItems = (purchase: any) => {
   if (purchase?.review_payload?.items) return purchase.review_payload.items;
@@ -77,6 +118,8 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
   const [vendorResolvingRow, setVendorResolvingRow] = useState<any>(null);
 
   const [editingRow, setEditingRow] = useState<{ pp: any; stagingRow: ScanResult } | null>(null);
+  const [gstCorrectionRow, setGstCorrectionRow] = useState<any | null>(null);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'gst_mismatch'>('all');
 
   // Per-row loading states
   const [revalidating, setRevalidating] = useState<Set<number>>(new Set());
@@ -136,11 +179,22 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
     fetchPurchases();
   }, [fetchPurchases]);
 
+  const countAll = purchases.length;
+  const countGstMismatch = purchases.filter(p => getGstStatus(p) === 'GST_MISMATCH').length;
+
+  const visiblePurchases = purchases.filter(p => {
+    if (activeFilter === 'gst_mismatch') {
+      return getGstStatus(p) === 'GST_MISMATCH';
+    }
+    return true;
+  });
+
   // ── Determine if a row is ready to finalize ─────────────────────────────────
   const isReadyToFinalize = (purchase: any) => {
     const vendorOk = purchase.vendor_status === 'VENDOR_STATUS_EXISTING' || purchase.vendor_status === 'ALREADY_EXIST' || purchase.vendor_status === 'EXISTS';
     const itemOk = purchase.item_status === 'ITEM_STATUS_EXISTING' || purchase.item_status === 'ALREADY_EXIST' || purchase.item_status === 'ALREADY EXIST';
-    return vendorOk && itemOk;
+    const gstOk = getGstStatus(purchase) !== 'GST_MISMATCH';
+    return vendorOk && itemOk && gstOk;
   };
 
   // ── Revalidate (runs validate_and_process on staging record) ────────────────
@@ -208,9 +262,9 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
         item_status: purchase.item_status || '',
         processed: false,
       };
-      
+
       if (onNavigate) {
-        onNavigate('Vouchers', { editOcrRow: scanResult, returnTo: 'Pending Purchases' });
+        setEditingRow({ pp: purchase, stagingRow: scanResult });
       }
     } catch (error: any) {
       showError(error?.response?.data?.error || 'Failed to load staging record for editing');
@@ -271,7 +325,7 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
             const rate = extractedItemData.rate || extractedItemData.unit_price || extractedItemData.price || '0.00';
             const uom = extractedItemData.uom || extractedItemData.unit || 'nos';
             const desc = extractedItemData.description || name || '';
-            
+
             return {
               item_name: name,
               hsn_code: hsn,
@@ -321,6 +375,17 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
         />
       )}
 
+      {gstCorrectionRow && (
+        <GstCorrectionModal
+          stagingId={gstCorrectionRow.source_scan_row_id}
+          record={gstCorrectionRow}
+          onClose={() => setGstCorrectionRow(null)}
+          onSaveSuccess={async () => {
+            await fetchPurchases();
+          }}
+        />
+      )}
+
       {/* Create Vendor Modal */}
       {isCreateVendorModalOpen && vendorResolvingRow && (
         <CreateNewVendorFullModal
@@ -328,7 +393,7 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
             const ext = vendorResolvingRow.extraction_payload || {};
             const supplier = ext.sections?.supplier_details || ext.supplier_details || {};
             const header = ext.header || {};
-            
+
             const vendorName = vendorResolvingRow.vendor_name || ext.vendor_name || header.vendor_name || supplier.vendor_name || '';
             const gstin = vendorResolvingRow.vendor_gstin || ext.canonical_vendor_gstin || ext.vendor_gstin || ext.gstin || '';
             const branch = vendorResolvingRow.branch_id || ext.branch || 'Main Branch';
@@ -336,7 +401,7 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
             const email = supplier.email || ext.email || ext.vendor_email || '';
             const phone = supplier.phone || supplier.contact || ext.phone || ext.contact_no || ext.contact || '';
             const state = supplier.state || ext.state || ext.vendor_state || '';
-            
+
             const rawItems = getLineItems(vendorResolvingRow) || [];
             const supplierItems = rawItems.map((itm: any) => ({
               hsnSacCode: itm.hsn_code || itm.hsn || itm.hsn_sac || itm.hsnSacCode || '',
@@ -345,7 +410,7 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
               supplierItemCode: itm.supplierItemCode || itm.item_code || itm.code || itm.itemCode || '',
               itemCode: itm.item_code || itm.code || itm.itemCode || '',
             }));
-            
+
             return {
               vendor_name: vendorName,
               pan_no: ext.pan_no || ext.pan || '',
@@ -507,6 +572,37 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
           </button>
         </div>
 
+        {/* GST Mismatch Tabs */}
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setActiveFilter('all')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 select-none outline-none ${activeFilter === 'all'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-150 border border-indigo-600'
+                : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-100'
+              }`}
+          >
+            <span>📂 All Pending</span>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${activeFilter === 'all' ? 'bg-indigo-700 text-indigo-100' : 'bg-indigo-200 text-indigo-600'
+              }`}>
+              {countAll}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveFilter('gst_mismatch')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 select-none outline-none ${activeFilter === 'gst_mismatch'
+                ? 'bg-rose-600 text-white shadow-md shadow-rose-150 border border-rose-600'
+                : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-100'
+              }`}
+          >
+            <span>⚠️ GST Mismatch</span>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${activeFilter === 'gst_mismatch' ? 'bg-rose-700 text-rose-100' : 'bg-rose-200 text-rose-600'
+              }`}>
+              {countGstMismatch}
+            </span>
+          </button>
+        </div>
+
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col">
           <div className="overflow-auto flex-1">
             <table className="w-full text-sm text-left">
@@ -522,6 +618,7 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
                   <th className="px-3 py-3 text-right">Amount</th>
                   <th className="px-3 py-3 text-center">Vendor Status</th>
                   <th className="px-3 py-3 text-center">Item Status</th>
+                  <th className="px-3 py-3 text-center">GST Status</th>
                   <th className="px-3 py-3 text-center">Voucher Status</th>
                   <th className="px-3 py-3 text-center">Action</th>
                 </tr>
@@ -529,14 +626,14 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={12} className="px-6 py-8 text-center text-slate-500">
+                    <td colSpan={13} className="px-6 py-8 text-center text-slate-500">
                       <RefreshCw className="w-5 h-5 animate-spin inline-block mr-2" />
                       Loading pending purchases...
                     </td>
                   </tr>
-                ) : purchases.length === 0 ? (
+                ) : visiblePurchases.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="px-6 py-12 text-center">
+                    <td colSpan={13} className="px-6 py-12 text-center">
                       <div className="mx-auto w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mb-4">
                         <CheckCircle className="w-8 h-8 text-emerald-500" />
                       </div>
@@ -545,7 +642,7 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
                     </td>
                   </tr>
                 ) : (
-                  purchases.map((purchase, idx) => {
+                  visiblePurchases.map((purchase, idx) => {
                     const ready = isReadyToFinalize(purchase);
                     const isRevalidating = revalidating.has(purchase.id);
                     const isResolving = resolving.has(purchase.id);
@@ -631,6 +728,21 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
                             </div>
                           </td>
 
+                          {/* GST Status */}
+                          <td className="px-2 py-3 text-center">
+                            {getGstStatus(purchase) === 'GST_MISMATCH' ? (
+                              <button
+                                onClick={() => setGstCorrectionRow(purchase)}
+                                title="Click to resolve GST Mismatch"
+                                className="hover:scale-105 active:scale-95 transition-transform duration-150 outline-none focus:outline-none cursor-pointer"
+                              >
+                                {renderGstStatusBadge('GST_MISMATCH')}
+                              </button>
+                            ) : (
+                              renderGstStatusBadge(getGstStatus(purchase))
+                            )}
+                          </td>
+
                           {/* Voucher Status */}
                           <td className="px-2 py-3 text-center">
                             <VoucherStatusBadge status={purchase.voucher_status} />
@@ -695,7 +807,7 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
                         {/* Expanded Line Items */}
                         {expandedRows.has(purchase.id) && (
                           <tr className="bg-slate-50/30">
-                            <td colSpan={12} className="px-6 py-4">
+                            <td colSpan={13} className="px-6 py-4">
                               <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
                                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                                   <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Line Items Validation</span>
@@ -773,6 +885,22 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
           </div>
         </div>
       </div>
+      {editingRow && (
+        <EditInvoiceModal
+          row={editingRow.stagingRow}
+          voucherType="Purchase"
+          onClose={() => setEditingRow(null)}
+          onSave={async (updatedData, revalidation) => {
+            try {
+              await httpClient.post(`/api/pending-purchases/${editingRow.pp.id}/revalidate/`);
+              await fetchPurchases();
+            } catch (err) {
+              console.error("Failed to revalidate purchase after edit:", err);
+            }
+            setEditingRow(null);
+          }}
+        />
+      )}
     </>
   );
 };

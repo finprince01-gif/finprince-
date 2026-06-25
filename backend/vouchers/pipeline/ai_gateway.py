@@ -7,7 +7,7 @@ State is kept in-process (single-server use case).
 Components:
   - InProcessRateLimiter:  Thread-safe in-memory token bucket
   - InProcessCircuitBreaker: Simple in-memory circuit state
-  - AIGateway.extract(): Direct Gemini call with fallback to rule parser
+  - AIGateway.extract(): Direct Qwen/AI call with fallback to rule parser
 """
 import os
 import time

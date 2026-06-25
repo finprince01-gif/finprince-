@@ -1,0 +1,16 @@
+Created At: 2026-06-23T10:13:07Z
+Completed At: 2026-06-23T10:13:08Z
+File Path: `file:///c:/108/AI-accounting-0.03/backend/ocr_pipeline/pipeline.py`
+Total Lines: 3394
+Total Bytes: 186162
+Showing lines 2713 to 2720
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+2713:             if 'assembled_exports' in record.extracted_data and isinstance(record.extracted_data['assembled_exports'], list) and record.extracted_data['assembled_exports']:
+2714:                 record.extracted_data['assembled_exports'][0]['items'] = items
+2715:                 
+2716:             record.extracted_data['gst_audit_trail'] = {
+2717:                 'validation_status': validation_status,
+2718:                 'expected_tax_values': {
+2719:                     'cgst': expected_cgst_total,
+2720:                     'sgst': expected_sgst_total,
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

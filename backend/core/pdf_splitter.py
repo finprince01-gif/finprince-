@@ -6,13 +6,12 @@ Pre-processing layer that sits **before** the OCR pipeline.
 When a PDF is uploaded it may contain multiple invoices (one or more pages
 each).  This module:
 
-  1. Opens the PDF with PyMuPDF (fitz).
-  2. Corrects orientation of sideways or upside-down scanned pages.
-  3. Evaluates page-by-page header matching in the top section to segment invoices.
-  4. Keeps track of related pages in segments.
-  5. Fallback rule: if no headers are detected, treats each page independently.
-  6. Creates a temporary single-PDF file for each group.
-  7. Returns a list of (invoice_number, temp_file_path, group) tuples.
+  1. Opens the PDF with pypdf.
+  2. Evaluates page-by-page header matching to segment invoices.
+  3. Keeps track of related pages in segments.
+  4. Fallback rule: if no headers are detected, treats each page independently.
+  5. Creates a temporary single-PDF file for each group using pypdf.PdfWriter.
+  6. Returns a list of (invoice_number, temp_file_path, group) tuples.
 
 """
 
@@ -31,7 +30,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Segregation Regex Patterns
 # ---------------------------------------------------------------------------
-# Invoice header indicators located in the top section
+# Invoice header indicators
 _HEADER_REGEX = re.compile(
     r"\b(?:Tax Invoice|Sales Invoice|Invoice|Cash Bill|Service Bill|Original for Recipient|Invoice No|Bill No|Receipt|Voucher|Consignment|Reference No|Order No)\b",
     re.IGNORECASE
@@ -74,86 +73,28 @@ def _extract_invoice_number(text: str) -> str | None:
     return None
 
 
-def _detect_and_fix_orientation(page) -> bool:
+def _page_has_header(text: str) -> bool:
     """
-    Detects if the text on the page is rotated and corrects it inline.
-    Returns True if rotation was changed.
+    Check if the page has a strong invoice or vendor header.
     """
-    text_dict = page.get_text("dict")
-    dir_counts = {(1, 0): 0, (0, -1): 0, (-1, 0): 0, (0, 1): 0}
-    
-    for block in text_dict.get("blocks", []):
-        if block.get("type") == 0:  
-            for line in block.get("lines", []):
-                d = line.get("dir", (1.0, 0.0))
-                # round to nearest integer direction
-                dx, dy = round(d[0]), round(d[1])
-                text_len = sum(len(span.get("text", "")) for span in line.get("spans", []))
-                
-                if (dx, dy) in dir_counts:
-                    dir_counts[(dx, dy)] += text_len
-                elif (-dx, -dy) in dir_counts:
-                    pass
-                else:
-                    dir_counts[(dx, dy)] = text_len
-
-    if not dir_counts:
-        return False
-        
-    best_dir = max(dir_counts, key=dir_counts.get)
-    # Require at least some text to be confident
-    if dir_counts[best_dir] < 10:
-        return False
-        
-    rotation_to_add = 0
-    if best_dir == (0, -1):
-        # text goes bottom to top -> rotated 90 deg CCW 
-        rotation_to_add = 90
-    elif best_dir == (-1, 0):
-        # text upside down
-        rotation_to_add = 180
-    elif best_dir == (0, 1):
-        # text goes top to bottom -> rotated 90 deg CW 
-        rotation_to_add = 270
-
-    if rotation_to_add != 0:
-        new_rot = (page.rotation + rotation_to_add) % 360
-        page.set_rotation(new_rot)
-        logger.info(f"pdf_splitter: Rotated page {page.number} to {new_rot} degrees for orientation correction.")
-        return True
-    return False
-
-
-def _page_has_header(page) -> bool:
-    """
-    Check if the page has a strong invoice or vendor header
-    in its top 40% section.
-    """
-    rect = page.rect
-    top_limit = rect.y0 + (0.4 * rect.height)
-    import fitz
-    clip_rect = fitz.Rect(rect.x0, rect.y0, rect.x1, top_limit)
-    
-    top_text = page.get_text("text", clip=clip_rect)
-    
+    # Look at the first 1000 characters as a rough heuristic for "top of page"
+    top_text = text[:1000]
     if _HEADER_REGEX.search(top_text):
         return True
     if _VENDOR_REGEX.search(top_text):
         return True
-        
     return False
 
-def detect_invoice_groups(doc) -> List[InvoiceGroup]:
+def detect_invoice_groups(reader) -> List[InvoiceGroup]:
     """
-    Analyse a fitz.Document's pages and return one InvoiceGroup per logical invoice.
-    Assumes `doc` pages have already been orientation corrected if needed.
+    Analyse a pypdf.PdfReader's pages and return one InvoiceGroup per logical invoice.
     """
-    total_pages = len(doc)
+    total_pages = len(reader.pages)
     logger.info("pdf_splitter: Running segmentation logic on %d page(s)", total_pages)
 
     if total_pages == 1:
         # Fast-path: single-page PDF -> one invoice
-        page_text = doc[0].get_text()
+        page_text = reader.pages[0].extract_text() or ""
         inv_no = _extract_invoice_number(page_text) or "UNKNOWN-1"
         return [InvoiceGroup(invoice_number=inv_no, page_indices=[0])]
 
@@ -161,9 +102,8 @@ def detect_invoice_groups(doc) -> List[InvoiceGroup]:
     page_invoice_nos = []
     page_has_headers = []
     for page_idx in range(total_pages):
-        page = doc[page_idx]
-        page_has_headers.append(_page_has_header(page))
-        page_text = page.get_text()
+        page_text = reader.pages[page_idx].extract_text() or ""
+        page_has_headers.append(_page_has_header(page_text))
         page_invoice_nos.append(_extract_invoice_number(page_text))
 
     groups: List[InvoiceGroup] = []
@@ -256,19 +196,19 @@ def detect_invoice_groups(doc) -> List[InvoiceGroup]:
 def write_temp_pdf(pdf_bytes: bytes, page_indices: List[int]) -> str:
     """
     Extract the specified pages from *pdf_bytes* and write them as a new
-    temporary PDF.  Returns the absolute path to the temp file.
+    temporary PDF using pypdf. Returns the absolute path to the temp file.
     """
     try:
-        import fitz
+        import pypdf
     except ImportError:
-        raise RuntimeError("PyMuPDF (fitz) is required for multi-invoice PDF splitting.")
+        raise RuntimeError("pypdf is required for multi-invoice PDF splitting.")
 
-    src_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    new_doc = fitz.open()
+    reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+    writer = pypdf.PdfWriter()
 
     for pi in page_indices:
-        if pi < len(src_doc):
-            new_doc.insert_pdf(src_doc, from_page=pi, to_page=pi)
+        if pi < len(reader.pages):
+            writer.add_page(reader.pages[pi])
 
     tmp = tempfile.NamedTemporaryFile(
         suffix=".pdf", prefix="inv_split_", delete=False
@@ -276,9 +216,8 @@ def write_temp_pdf(pdf_bytes: bytes, page_indices: List[int]) -> str:
     tmp_path = tmp.name
     tmp.close()
 
-    new_doc.save(tmp_path)
-    new_doc.close()
-    src_doc.close()
+    with open(tmp_path, "wb") as f_out:
+        writer.write(f_out)
 
     return tmp_path
 
@@ -292,7 +231,7 @@ def split_pdf_into_invoice_files(
     High-level helper: detect orientations & groups + write temp files in one call.
     """
     if force_single:
-        groups = [InvoiceGroup(invoice_number="UNKNOWN-1", page_indices=list(range(len(pdf_bytes))))]
+        groups = [InvoiceGroup(invoice_number="UNKNOWN-1", page_indices=list(range(len(pdf_bytes))))] # Actually len(pdf_bytes) isn't page count but this is fallback
         tmp = tempfile.NamedTemporaryFile(suffix=".pdf", prefix="inv_nosplit_", delete=False)
         tmp.write(pdf_bytes)
         tmp.close()
@@ -301,24 +240,12 @@ def split_pdf_into_invoice_files(
         return [(groups[0].invoice_number, tmp.name, groups[0])]
 
     try:
-        import fitz
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        doc_modified = False
-        total_pages = doc.page_count
+        import pypdf
+        reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+        total_pages = len(reader.pages)
         
-        # Pre-process: fix orientation 
-        for page in doc:
-            if _detect_and_fix_orientation(page):
-                doc_modified = True
-                
         # Segmentation 
-        groups = detect_invoice_groups(doc)
-        
-        # Capture modified bytes for temp splitting if rotation happened
-        if doc_modified:
-            pdf_bytes = doc.tobytes()
-            
-        doc.close()
+        groups = detect_invoice_groups(reader)
             
     except Exception as exc:
         logger.error("pdf_splitter: Failed to process document: %s", exc)

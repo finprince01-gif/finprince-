@@ -31,10 +31,10 @@ class CoreConfig(AppConfig):
 
             # AI Model Validation
             try:
-                from core.ai_proxy import validate_ai_on_startup
+                from core.ai_proxy import validate_ai_on_startup, AI_MODEL_NAME
                 if not validate_ai_on_startup():
-                    print("\033[91m" + "[ERROR] AI Model Connection: FAILED. Check GOOGLE_API_KEY." + "\033[0m")
+                    print("\033[91m" + "[ERROR] AI Model Connection: FAILED. Check QWEN_API_KEY." + "\033[0m")
                 else:
-                    print("\033[92m" + "[OK] AI Model Connection: SUCCESS (gemini-2.5-flash)" + "\033[0m")
+                    print("\033[92m" + f"[OK] AI Model Connection: SUCCESS ({AI_MODEL_NAME})" + "\033[0m")
             except Exception as ai_e:
                 print("\033[91m" + f"[ERROR] AI Startup Error: {str(ai_e)}" + "\033[0m")
