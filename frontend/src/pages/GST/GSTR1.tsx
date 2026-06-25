@@ -1,18 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { httpClient } from '../../services/httpClient';
 
+let savedPeriod: { year: string; month: string } | null = null;
+
 export default function GSTR1Page({ onNavigate, setViewVoucherData, vouchers }: { onNavigate?: (page: string, params?: any) => void, setViewVoucherData?: (data: any) => void, vouchers?: any[] }) {
     const [activeSubTab, setActiveSubTab] = useState('B2B');
-    const [period, setPeriod] = useState(() => {
+    const [period, setPeriodState] = useState(() => {
+        if (savedPeriod) return savedPeriod;
+        
         const today = new Date();
         const currentYear = today.getFullYear();
         const currentMonth = today.getMonth();
         const fyStartYear = currentMonth >= 3 ? currentYear : currentYear - 1;
+        
+        const months = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const currentMonthName = months[currentMonth] || 'January';
+
         return {
             year: `${fyStartYear}-${(fyStartYear + 1).toString().slice(-2)}`,
-            month: 'January'
+            month: currentMonthName
         };
     });
+
+    const setPeriod = (newVal: { year: string; month: string }) => {
+        savedPeriod = newVal;
+        setPeriodState(newVal);
+    };
     const [isLoading, setIsLoading] = useState(false);
     const [b2baData, setB2baData] = useState<any[]>([]);
     const [isFilingReturn, setIsFilingReturn] = useState(false);
