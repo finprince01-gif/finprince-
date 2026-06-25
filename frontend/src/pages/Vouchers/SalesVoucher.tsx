@@ -3123,6 +3123,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                     onChange={handleVoucherNameChange}
                                     options={salesVoucherConfigs.map(c => c.voucher_name)}
                                     placeholder="Select series"
+                                    disabled={gstRegistered}
                                 />
                             </div>
 

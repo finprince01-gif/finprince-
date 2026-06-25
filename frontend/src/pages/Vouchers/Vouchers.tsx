@@ -5034,7 +5034,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     apiService.getVoucher(voucherId, {}, source).then(apiDetails => {
       if (apiDetails) {
         const viewAsGSTFiled = viewVoucherData?._viewAsGSTFiled === true && !isViewingAmended;
-        
+
         let displayData = apiDetails;
         if (viewAsGSTFiled && apiDetails.original_voucher_snapshot) {
           displayData = apiDetails.original_voucher_snapshot;
@@ -5053,7 +5053,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         }
 
         setDrillDownDetails({ ...displayData, _mappedType: mappedType, _rawEntry: viewVoucherData });
-        
+
         // Shadow details so the entire hydration block below reads from displayData (which may be the snapshot)
         const details = displayData;
         // Also hydrate form fields for when user clicks Edit
