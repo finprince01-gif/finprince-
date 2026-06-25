@@ -481,3 +481,9 @@ MEDIA_URL = '/media/'
 # ============================================================================
 MEDIA_ROOT = BASE_DIR / 'media'
 MEDIA_URL = '/media/'
+
+# ============================================================================
+# SIMPLE INVOICE BYPASS SETTINGS (Sprint 1 Shadow Mode Only)
+# ============================================================================
+SIMPLE_INVOICE_BYPASS_SHADOW_MODE = os.getenv('SIMPLE_INVOICE_BYPASS_SHADOW_MODE', 'True').lower() == 'true'
+SIMPLE_INVOICE_BYPASS_ACTIVE = os.getenv('SIMPLE_INVOICE_BYPASS_ACTIVE', 'False').lower() == 'true'

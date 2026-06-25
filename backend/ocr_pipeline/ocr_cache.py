@@ -1,7 +1,7 @@
 """
 OCRResponseCache + ItemExtractionConsensusEngine
 ================================================
-Phase 4: Eliminate Gemini extraction non-determinism by:
+Phase 4: Eliminate AI extraction non-determinism by:
   1. Caching successful high-confidence OCR responses keyed on (file_hash, page_number)
      so identical pages always return the identical extraction.
   2. Running a consensus pass when multiple historic extractions exist for the same
@@ -80,8 +80,8 @@ class OCRResponseCache:
     Tier 2: OCRPageCache DB table - persistent across restarts.
 
     On cache hit: returns stored canonical_payload directly.
-    On cache miss: returns None (caller must call Gemini).
-    After successful Gemini call: caller must call store().
+    On cache miss: returns None (caller must call AI extraction).
+    After successful AI call: caller must call store().
     """
 
     @staticmethod

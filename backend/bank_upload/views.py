@@ -10,7 +10,7 @@ Endpoints:
   DELETE /api/bank-upload/sessions/<sid>/ — clean up staging data
 
 STRICT:
-  - Gemini is ONLY called inside upload() via extraction_service
+  - The AI extraction is ONLY called inside upload() via extraction_service
   - Voucher creation delegates 100% to existing PaymentVoucherSerializer /
     ReceiptVoucherSerializer — no voucher logic is duplicated here
   - No accounting logic in this file
@@ -40,7 +40,7 @@ from .serializers import (
     BankStatementStagingFileSerializer,
     BankStatementStagingFileDetailSerializer,
 )
-# Extraction is the ONLY place Gemini is called
+# Extraction is the ONLY place AI extraction is called
 from .services.extraction_service import extract_transactions
 
 logger = logging.getLogger('bank_upload.views')
@@ -112,7 +112,7 @@ class BankUploadView(APIView):
     POST /api/bank-upload/upload/
 
     Accepts a bank statement file.
-    1. Passes it to extraction_service (Gemini).
+    1. Passes it to extraction_service (Qwen/AI).
     2. Saves result to BankStatementStagingFile (STAGING ONLY).
     3. Enforces 15 record limit and 24h TTL.
     """
@@ -155,7 +155,7 @@ class BankUploadView(APIView):
                 status=status.HTTP_402_PAYMENT_REQUIRED
             )
 
-        # ── Step 1: Extract via Gemini ──
+        # ── Step 1: Extract via Qwen/AI ──
         logger.info(f"📤 BankUpload (Staging): tenant={tenant_id}, file={file_obj.name}")
         try:
             rows, metrics = extract_transactions(file_obj)

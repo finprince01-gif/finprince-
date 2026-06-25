@@ -73,7 +73,7 @@ class GSTINOwnershipClassifier:
                     candidates_info[canon]["scores"]["CONSIGNEE"] += get_proximity_score(consignee_kws)
                     candidates_info[canon]["scores"]["VENDOR"] += get_proximity_score(vendor_kws)
 
-        # Include already extracted GSTIN fields by Gemini if not yet in candidates
+        # Include already extracted GSTIN fields by AI if not yet in candidates
         ext_gstin = extracted_data.get("gstin") or extracted_data.get("vendor_gstin") or ""
         ext_buyer = extracted_data.get("buyer_gstin") or extracted_data.get("bill_to_gstin") or ""
         ext_consignee = extracted_data.get("consignee_gstin") or extracted_data.get("ship_to_gstin") or ""
@@ -88,7 +88,7 @@ class GSTINOwnershipClassifier:
                             "raw_values": {val}
                         }
 
-        # Boost roles based on explicit extraction from AI (Gemini)
+        # Boost roles based on explicit extraction from AI (Qwen)
         if ext_gstin:
             c_ext = canonicalize_gstin_ocr(ext_gstin)
             if c_ext in candidates_info:

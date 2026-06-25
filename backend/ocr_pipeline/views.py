@@ -1286,7 +1286,7 @@ class CleanOCRStagingView(views.APIView):
             
             # Run the authoritative pipeline validation
             from .pipeline import validate_and_process
-            v_res = validate_and_process(record)
+            v_res = validate_and_process(record, user=request.user)
             
             # --- FORCE UPDATE FINALIZED SNAPSHOT ---
             # session_invoices uses FinalizedSnapshot for performance. We must keep it in sync
@@ -2752,3 +2752,131 @@ class OCRStagingSessionRescanView(views.APIView):
             "message": f"Triggered rescan for {triggered_count} records in session.",
             "triggered_count": triggered_count
         })
+
+
+class OCRStagingCorrectGSTView(CleanOCRStagingView):
+    """
+    Exposes POST /api/ocr-staging/<pk>/correct-gst/ to correct CGST, SGST, and IGST values.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        tenant_id = request.user.branch_id
+        try:
+            record = InvoiceTempOCR.objects.get(id=pk, tenant_id=tenant_id)
+        except InvoiceTempOCR.DoesNotExist:
+            return Response({'error': 'Record not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        cgst = request.data.get('cgst')
+        sgst = request.data.get('sgst')
+        igst = request.data.get('igst')
+
+        # Ensure extracted_data exists and is a dictionary
+        if not isinstance(record.extracted_data, dict):
+            record.extracted_data = {}
+
+        # Update corrected values where fields already exist
+        def to_float_or_zero(val):
+            try:
+                if val is None or str(val).strip() == "":
+                    return 0.0
+                return float(str(val).replace('₹', '').replace(',', '').replace(' ', '').strip())
+            except ValueError:
+                return 0.0
+
+        cgst_val = to_float_or_zero(cgst)
+        sgst_val = to_float_or_zero(sgst)
+        igst_val = to_float_or_zero(igst)
+
+        ext = record.extracted_data
+
+        for k in ('total_cgst', 'cgst'):
+            if k in ext:
+                ext[k] = cgst_val
+        for k in ('total_sgst', 'sgst'):
+            if k in ext:
+                ext[k] = sgst_val
+        for k in ('total_igst', 'igst'):
+            if k in ext:
+                ext[k] = igst_val
+
+        # Update sections.supply_details
+        sections = ext.setdefault('sections', {})
+        if isinstance(sections, dict):
+            supply_details = sections.setdefault('supply_details', {})
+            if isinstance(supply_details, dict):
+                for k in ('total_cgst', 'cgst'):
+                    if k in supply_details:
+                        supply_details[k] = cgst_val
+                for k in ('total_sgst', 'sgst'):
+                    if k in supply_details:
+                        supply_details[k] = sgst_val
+                for k in ('total_igst', 'igst'):
+                    if k in supply_details:
+                        supply_details[k] = igst_val
+
+        # Update assembled_exports[0]
+        assembled = ext.get("assembled_exports") or []
+        if isinstance(assembled, list) and assembled:
+            ae = assembled[0]
+            if isinstance(ae, dict):
+                for k in ('total_cgst', 'cgst'):
+                    if k in ae:
+                        ae[k] = cgst_val
+                for k in ('total_sgst', 'sgst'):
+                    if k in ae:
+                        ae[k] = sgst_val
+                for k in ('total_igst', 'igst'):
+                    if k in ae:
+                        ae[k] = igst_val
+                
+                ae_sections = ae.setdefault('sections', {})
+                if isinstance(ae_sections, dict):
+                    ae_supply = ae_sections.setdefault('supply_details', {})
+                    if isinstance(ae_supply, dict):
+                        for k in ('total_cgst', 'cgst'):
+                            if k in ae_supply:
+                                ae_supply[k] = cgst_val
+                        for k in ('total_sgst', 'sgst'):
+                            if k in ae_supply:
+                                ae_supply[k] = sgst_val
+                        for k in ('total_igst', 'igst'):
+                            if k in ae_supply:
+                                ae_supply[k] = igst_val
+
+        # Remove existing gst_resolution
+        if 'gst_resolution' in ext:
+            ext.pop('gst_resolution', None)
+
+        record.save(update_fields=['extracted_data'])
+
+        # Execute run_gst_validation_engine
+        from .pipeline import run_gst_validation_engine
+        run_gst_validation_engine(record, user=request.user)
+
+        # Reload record
+        record.refresh_from_db()
+
+        # Read difference_amount
+        audit_trail = record.extracted_data.get('gst_audit_trail', {})
+        diff_val = 0.0
+        if isinstance(audit_trail, dict):
+            diff_val = audit_trail.get('difference_amount', 0.0)
+
+        # If validation passes (difference <= 1.0)
+        if diff_val <= 1.0:
+            record.extracted_data["gst_resolution"] = "CORRECTED"
+            record.save(update_fields=['extracted_data'])
+            # Run GST engine again to regenerate audit metadata under corrected choice
+            run_gst_validation_engine(record, user=request.user)
+            record.refresh_from_db()
+
+        # Copy updated extracted_data to PendingPurchase.extraction_payload if PendingPurchase exists
+        from pending_purchases.models import PendingPurchase
+        PendingPurchase.objects.filter(source_scan_row_id=record.id).update(
+            extraction_payload=record.extracted_data
+        )
+
+        ui_payload = self._map_record_to_ui_row(record)
+        return Response(ui_payload)
+

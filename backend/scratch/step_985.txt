@@ -1,0 +1,61 @@
+Created At: 2026-06-23T09:33:15Z
+Completed At: 2026-06-23T09:33:17Z
+File Path: `file:///c:/108/AI-accounting-0.03/backend/ocr_pipeline/pipeline.py`
+Total Lines: 3394
+Total Bytes: 186162
+Showing lines 2700 to 2800
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+2700:                                 ae_supply['total_sgst'] = expected_sgst_total
+2701:                                 ae_supply['total_igst'] = expected_igst_total
+2702:                                 ae_supply['total_cess'] = expected_cess_total
+2703:                                 ae_supply['total_invoice_value'] = expected_invoice_total
+2704:                                 ae_supply['total_taxable_value'] = expected_taxable_total
+2705:                 
+2706:                 difference_amount = 0.0
+2707:                 is_mismatch = False
+2708:                 validation_status = 'PASS'
+2709:                 
+2710:             record.extracted_data['items'] = items
+2711:             if 'sections' in record.extracted_data and isinstance(record.extracted_data['sections'], dict):
+2712:                 record.extracted_data['sections']['items'] = items
+2713:             if 'assembled_exports' in record.extracted_data and isinstance(record.extracted_data['assembled_exports'], list) and record.extracted_data['assembled_exports']:
+2714:                 record.extracted_data['assembled_exports'][0]['items'] = items
+2715:                 
+2716:             record.extracted_data['gst_audit_trail'] = {
+2717:                 'validation_status': validation_status,
+2718:                 'expected_tax_values': {
+2719:                     'cgst': expected_cgst_total,
+2720:                     'sgst': expected_sgst_total,
+2721:                     'igst': expected_igst_total,
+2722:                     'cess': expected_cess_total,
+2723:                     'total_gst': expe
+<truncated 3386 bytes>
+session_vendor_map(tenant_id, [record])
+2774:             gstin_key = canonicalize_gstin_ocr(gstin)
+2775:             branch_key = _nb(branch_name or "Main Branch")
+2776:             val_res = _vendor_map.get((gstin_key, branch_key)) or {"status": "CREATE_VENDOR", "vendor_id": None}
+2777:             logger.info(f"[VENDOR_VALIDATION_RESULT] record_id={record.id} result={val_res}")
+2778: 
+2779:             if val_res['status'] == 'EXISTING_VENDOR':
+2780:                 vendor = VendorMasterBasicDetail.objects.filter(id=val_res['vendor_id'], tenant_id=tenant_id).first()
+2781:                 if vendor:
+2782:                     record.vendor_id = vendor.id
+2783:                     record.vendor_status = 'EXISTS'  # [CANONICAL FIX] Persist vendor_status to DB
+2784:                     record.save(update_fields=['vendor_id', 'vendor_status'])
+2785:                     logger.info(
+2786:                         f"[VENDOR_VALIDATION_RESULT] "
+2787:                         f"gstin={gstin_key} "
+2788:                         f"matched_vendor_id={vendor.id} "
+2789:                         f"assigned_status=EXISTING_VENDOR "
+2790:                         f"record_id={record.id}"
+2791:                     )
+2792:                     logger.info(f"[VENDOR_ID_ASSIGNED] record={record.id} vendor_id={vendor.id} path=GSTIN_BRANCH")
+2793:                     logger.info(f"[STAGING_VENDOR_ID_PERSISTED] record={record.id} vendor_id={vendor.id}")
+2794:                     logger.info(f"[PURCHASE_VENDOR_RESOLUTION] record={record.id} vendor_id={vendor.id} name={vendor.vendor_name} path=GSTIN_BRANCH")
+2795:             else:
+2796:                 vendor = None
+2797:                 logger.info(
+2798:                     f"[VENDOR_VALIDATION_RESULT] "
+2799:                     f"gstin={gstin_key} "
+2800:                     f"matched_vendor_id=None "
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

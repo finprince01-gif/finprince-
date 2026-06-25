@@ -40,6 +40,34 @@ def validate_dependencies():
     if current_dir not in sys.path:
         sys.path.insert(0, current_dir)
 
+    # ── Step 0: GPU-ONLY ENFORCEMENT ──────────────────────────────────────────
+    # This MUST be the first check. If GPU is unavailable, we refuse to start.
+    # CPU inference is FORBIDDEN. The cluster will not launch without RTX 4050.
+    try:
+        from core.gpu_validator import validate_gpu_on_startup
+        model_name = os.getenv('QWEN_MODEL', 'qwen2.5vl:7b')
+        logger.info(f"[CLUSTER_GPU_CHECK] Validating GPU for model={model_name}...")
+        gpu_evidence = validate_gpu_on_startup(model_name)
+        logger.info(
+            f"[CLUSTER_GPU_CONFIRMED] "
+            f"gpu={gpu_evidence.get('gpu_name', 'unknown')} | "
+            f"vram={gpu_evidence.get('vram_used_mib_after_load', gpu_evidence.get('vram_used_mib', 0)):.0f} MiB | "
+            f"smoke_tps={gpu_evidence.get('smoke_tokens_per_second', 0):.2f} | "
+            f"compute_mode=GPU_ONLY"
+        )
+    except RuntimeError as gpu_err:
+        logger.critical(
+            f"[CLUSTER_GPU_FATAL] GPU validation failed. Cluster CANNOT start without GPU.\n{gpu_err}"
+        )
+        raise RuntimeError(
+            f"GPU validation failed. Refusing CPU inference. Cluster aborted.\n{gpu_err}"
+        ) from gpu_err
+    except Exception as gpu_exc:
+        logger.critical(f"[CLUSTER_GPU_ERROR] Unexpected GPU validator error: {gpu_exc}")
+        raise RuntimeError(
+            f"GPU validation failed. Refusing CPU inference. Cluster aborted.\n{gpu_exc}"
+        ) from gpu_exc
+
     # A. Redis
     try:
         import redis
@@ -82,8 +110,19 @@ def validate_dependencies():
         logger.error(f"[DEPENDENCY_FAILED] SQS topology verification failed: {e}")
         return False
 
+    # D. AI Endpoint Validation
+    try:
+        from core.ai_proxy import validate_ai_on_startup
+        if not validate_ai_on_startup():
+            logger.critical("[DEPENDENCY_FAILED] AI Provider endpoint validation failed.")
+            return False
+    except Exception as e:
+        logger.error(f"[DEPENDENCY_FAILED] AI validation check failed: {e}")
+        return False
+
     logger.info("[CLUSTER_PRECHECK_SUCCESS] All dependencies satisfied.")
     return True
+
 
 # 3. WORKER ORCHESTRATION
 WORKER_ROLES = ['ingestion', 'ai', 'assembly', 'finalize', 'export', 'materialization']

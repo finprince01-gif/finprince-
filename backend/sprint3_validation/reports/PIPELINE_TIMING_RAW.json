@@ -1,0 +1,79 @@
+{
+  "mined_at": "2026-06-21T10:29:37.868294+00:00",
+  "stage_statistics": {
+    "ocr_ms": {
+      "count": 0,
+      "avg": 0,
+      "median": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "min": 0
+    },
+    "ai_ms": {
+      "count": 103,
+      "avg": 219685.6,
+      "median": 140010.0,
+      "p95": 681920.0,
+      "p99": 1048350.0,
+      "max": 1167950.0,
+      "min": 7600.0
+    },
+    "assembly_ms": {
+      "count": 0,
+      "avg": 0,
+      "median": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "min": 0
+    },
+    "finalize_ms": {
+      "count": 0,
+      "avg": 0,
+      "median": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "min": 0
+    },
+    "total_pipeline_ms": {
+      "count": 0,
+      "avg": 0,
+      "median": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "min": 0
+    }
+  },
+  "bottleneck_ranking": [
+    {
+      "stage": "AI Extraction (Qwen)",
+      "total_ms": 22627620,
+      "pct": 100.0
+    },
+    {
+      "stage": "OCR",
+      "total_ms": 0,
+      "pct": 0.0
+    },
+    {
+      "stage": "Assembly",
+      "total_ms": 0,
+      "pct": 0.0
+    },
+    {
+      "stage": "Finalization",
+      "total_ms": 0,
+      "pct": 0.0
+    }
+  ],
+  "record_timings": [],
+  "raw_counts": {
+    "ocr_events": 0,
+    "ai_events": 103,
+    "assembly_record_count": 0,
+    "finalize_record_count": 0
+  }
+}

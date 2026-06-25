@@ -387,7 +387,11 @@ def sync_record_flattened_fields(record: InvoiceTempOCR, data: Dict[str, Any], c
         'irn': str(canonical.get("irn") or "")[:255],
         'ack_no': str(canonical.get("ack_no") or "")[:255],
         'ack_date': str(canonical.get("ack_date") or "")[:255],
+        'vendor_confidence': data.get('vendor_confidence'),
+        'gstin_confidence': data.get('gstin_confidence'),
+        'invoice_number_confidence': data.get('invoice_number_confidence'),
     }
+
     
     update_fields = []
     for field_name, value in mapping.items():
@@ -489,23 +493,26 @@ def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wa
                 is_reusable = False
 
         # STEP 0.5: Page Count calculation for Phase 3 Barrier
-        import fitz
+        import pypdf
+        import io
         if file_path:
             # Handle Local Protocol (Phase 11 fix for stress tests)
             actual_path = file_path
             if file_path.startswith("LOCAL://"):
                 from core.storage import StorageService
+                
                 storage = StorageService()
                 key = file_path.split("://", 1)[1]
                 actual_path = os.path.normpath(os.path.join(storage.local_root, key.replace('/', os.sep)))
                 logger.info(f"[LOCAL_PATH_RESOLVED] virtual={file_path} actual={actual_path}")
             
-            doc = fitz.open(actual_path)
+            with open(actual_path, "rb") as f:
+                reader = pypdf.PdfReader(f)
+                total_pages = len(reader.pages)
             file_path = actual_path # Update for downstream usage
         else:
-            doc = fitz.open(stream=file_bytes, filetype="pdf")
-        total_pages = len(doc)
-        doc.close()
+            reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+            total_pages = len(reader.pages)
         logger.info(f"[PIPELINE_TOTAL_PAGES] record={record.id} pages={total_pages}")
         metrics.set_gauge("pipeline:pages_count", total_pages)
 
@@ -570,129 +577,132 @@ def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wa
                 record.status = PipelineStatus.EXTRACTING
                 record.save(update_fields=['status'])
 
-                extracted = extract_invoice(
-                    client=None, 
-                    file_bytes=file_bytes, 
-                    voucher_type=record.voucher_type or 'Purchase',
-                    public_ip="0.0.0.0",
-                    user_id='system',
-                    tenant_id=str(record.tenant_id or 'system'),
-                    wait_for_result=wait_for_ai,
-                    record_id=record.id,
-                    item_id=item_id,
-                    upload_session_id=record.upload_session_id,
-                    job_id=job_id,
-                    file_path=file_path,
-                    is_rescan=is_rescan,
-                    rescan_history_id=rescan_history_id
-                )
+        if not record.extracted_data or is_rescan:
+            extracted = extract_invoice(
+                client=None, 
+                file_bytes=file_bytes, 
+                voucher_type=record.voucher_type or 'Purchase',
+                public_ip="0.0.0.0",
+                user_id='system',
+                tenant_id=str(record.tenant_id or 'system'),
+                wait_for_result=wait_for_ai,
+                record_id=record.id,
+                item_id=item_id,
+                upload_session_id=record.upload_session_id,
+                job_id=job_id,
+                file_path=file_path,
+                is_rescan=is_rescan,
+                rescan_history_id=rescan_history_id
+            )
+        else:
+            extracted = record.extracted_data
             
-            if not wait_for_ai:
-                # ── [PHASE 10: ASYNC INTEGRITY GATE] ──
-                # For batches, we check top-level errors before fanout
-                if "_error" in extracted and not extracted.get("_pages"):
-                    logger.error(f"[PIPELINE_TERMINAL_FAILURE] record={record.id} error={extracted.get('_error')}")
-                    record.status = 'FAILED'
-                    record.save(update_fields=['status'])
-                    return {"status": "FAILED", "error": extracted.get('_error')}
-
-                # ── [ASYNC_CACHE_BYPASS_FIX] ──
-                # If any pages were CACHED, they won't go through the AIWorker.
-                # We must manually enqueue them to the finalization queue so 
-                # the barrier correctly increments to 100%.
-                for i in range(total_pages):
-                    res = extracted.get("_pages", {}).get(str(i+1))
-                    
-                    # ── [PHASE 10: CACHE INTEGRITY CHECK] ──
-                    if isinstance(res, dict) and (res.get('status') == 'OCR_FAILED' or '_integrity_blocked' in res):
-                        logger.warning(f"[CACHE_INTEGRITY_BLOCKED] record={record.id} page={i+1} reason='Failed OCR in cache'")
-                        continue # TERMINATE PROPAGATION for this page
-
-                    # If it's a dict but NOT a "queued" status, it's a real result (cache hit, mock, or failure)
-                    if isinstance(res, dict) and res.get('status') != 'queued':
-                        logger.info(f"[ASYNC_CACHE_HIT] record={record.id} page={i+1}. Forwarding to finalization.")
-                        fin_task = {
-                            'record_id': record.id,
-                            'page_index': i + 1,
-                            'item_id': item_id,
-                            'job_id': job_id,
-                            'result': res
-                        }
-                        
-                        # [PHASE 11.5] Push to SQS via Canonical Message Factory
-                        from vouchers.message_factory import message_factory
-                        
-                        assembly_msg = message_factory.create_message(
-                            task_type="ASSEMBLY",
-                            tenant_id=str(record.tenant_id),
-                            session_id=record.upload_session_id,
-                            payload=fin_task,
-                            correlation_id=fin_task.get('correlation_id'),
-                            page_number=i + 1
-                        )
-                        
-                        from copy import deepcopy
-                        assembly_msg_copy = deepcopy(assembly_msg)
-                        
-                        try:
-                            queue_service.push(assembly_msg_copy, queue_type='assembly')
-                            logger.info(f"[QUEUE_FORWARD_SUCCESS] target_queue=assembly msg_id={assembly_msg_copy['id']}")
-                        except Exception as e:
-                            logger.error(f"[QUEUE_FORWARD_FAILURE] target_queue=assembly error={e}")
-                            raise
-                        
-                        logger.info(
-                            f"[PAGE_QUEUED] record_id={record.id} page_number={i+1} "
-                            f"expected_total_pages={total_pages} type=CACHED session={record.upload_session_id}"
-                        )
-                        logger.info(f"[FINALIZATION_ENQUEUE] record={record.id} page={i+1} (via CachePath)")
-
-                logger.info(f"[PIPELINE ASYNC] Extraction enqueued for record {record.id}. Returning early.")
-                return {"status": "ENQUEUED"}
-
-            if "_error" in extracted:
-                logger.error(f"[PIPELINE_ERROR] record={record.id} error={extracted.get('_error')}")
+        if not wait_for_ai:
+            # ── [PHASE 10: ASYNC INTEGRITY GATE] ──
+            # For batches, we check top-level errors before fanout
+            if "_error" in extracted and not extracted.get("_pages"):
+                logger.error(f"[PIPELINE_TERMINAL_FAILURE] record={record.id} error={extracted.get('_error')}")
                 record.status = 'FAILED'
                 record.save(update_fields=['status'])
                 return {"status": "FAILED", "error": extracted.get('_error')}
 
-            # ── [PHASE 10: SYNC INTEGRITY GATE] ──
-            # Validate full payload before normalization
-            enforce_state_transition(str(record.id), extracted, PipelineStage.OCR)
+            # ── [ASYNC_CACHE_BYPASS_FIX] ──
+            # If any pages were CACHED, they won't go through the AIWorker.
+            # We must manually enqueue them to the finalization queue so 
+            # the barrier correctly increments to 100%.
+            for i in range(total_pages):
+                res = extracted.get("_pages", {}).get(str(i+1))
+                
+                # ── [PHASE 10: CACHE INTEGRITY CHECK] ──
+                if isinstance(res, dict) and (res.get('status') == 'OCR_FAILED' or '_integrity_blocked' in res):
+                    logger.warning(f"[CACHE_INTEGRITY_BLOCKED] record={record.id} page={i+1} reason='Failed OCR in cache'")
+                    continue # TERMINATE PROPAGATION for this page
 
-            # Phase 2: Hierarchical Normalization
-            normalized = extracted
-            
-            # ── [PHASE 10: NORMALIZATION INTEGRITY GATE] ──
-            # Validate after mapping/normalization
-            enforce_state_transition(str(record.id), normalized, PipelineStage.NORMALIZATION)
-            
-            # ── [PHASE 10] FORENSIC SNAPSHOT ──
-            # Use a shallow copy to avoid circular reference if we store 'extracted' inside itself
-            normalized["_forensics"] = {
-                "raw_extraction": copy.deepcopy(extracted) if isinstance(extracted, dict) else extracted,
-                "normalized_at": datetime.now().isoformat(),
-                "pipeline_version": "2.1-flattened"
-            }
-            # Remove the circular link from the deep copy to be safe
-            if isinstance(normalized["_forensics"]["raw_extraction"], dict):
-                normalized["_forensics"]["raw_extraction"].pop("_forensics", None)
-
-            # ── [S3_MIGRATION_PERSISTENCE] ──
-            # In the sync path (UnifiedWorker), we MUST persist each page to InvoicePageResult
-            # so that assemble_multi_page_record can find them without Redis.
-            if "_pages" in extracted:
-                for p_no, p_data in extracted["_pages"].items():
-                    p_items = (p_data.get("items") or p_data.get("sections", {}).get("items") or []) if isinstance(p_data, dict) else []
-                    InvoicePageResult.objects.update_or_create(
-                        record_id=record.id,
-                        page_number=int(p_no),
-                        defaults={
-                            'session_id': record.upload_session_id or 'sync',
-                            'canonical_payload': p_data
-                        }
+                # If it's a dict but NOT a "queued" status, it's a real result (cache hit, mock, or failure)
+                if isinstance(res, dict) and res.get('status') != 'queued':
+                    logger.info(f"[ASYNC_CACHE_HIT] record={record.id} page={i+1}. Forwarding to finalization.")
+                    fin_task = {
+                        'record_id': record.id,
+                        'page_index': i + 1,
+                        'item_id': item_id,
+                        'job_id': job_id,
+                        'result': res
+                    }
+                    
+                    # [PHASE 11.5] Push to SQS via Canonical Message Factory
+                    from vouchers.message_factory import message_factory
+                    
+                    assembly_msg = message_factory.create_message(
+                        task_type="ASSEMBLY",
+                        tenant_id=str(record.tenant_id),
+                        session_id=record.upload_session_id,
+                        payload=fin_task,
+                        correlation_id=fin_task.get('correlation_id'),
+                        page_number=i + 1
                     )
-                    logger.info(f"[PERSIST_ITEM_COUNT] record={record.id} page={p_no} items={len(p_items)}")
+                    
+                    from copy import deepcopy
+                    assembly_msg_copy = deepcopy(assembly_msg)
+                    
+                    try:
+                        queue_service.push(assembly_msg_copy, queue_type='assembly')
+                        logger.info(f"[QUEUE_FORWARD_SUCCESS] target_queue=assembly msg_id={assembly_msg_copy['id']}")
+                    except Exception as e:
+                        logger.error(f"[QUEUE_FORWARD_FAILURE] target_queue=assembly error={e}")
+                        raise
+                    
+                    logger.info(
+                        f"[PAGE_QUEUED] record_id={record.id} page_number={i+1} "
+                        f"expected_total_pages={total_pages} type=CACHED session={record.upload_session_id}"
+                    )
+                    logger.info(f"[FINALIZATION_ENQUEUE] record={record.id} page={i+1} (via CachePath)")
+
+            logger.info(f"[PIPELINE ASYNC] Extraction enqueued for record {record.id}. Returning early.")
+            return {"status": "ENQUEUED"}
+
+        if "_error" in extracted:
+            logger.error(f"[PIPELINE_ERROR] record={record.id} error={extracted.get('_error')}")
+            record.status = 'FAILED'
+            record.save(update_fields=['status'])
+            return {"status": "FAILED", "error": extracted.get('_error')}
+
+        # ── [PHASE 10: SYNC INTEGRITY GATE] ──
+        # Validate full payload before normalization
+        enforce_state_transition(str(record.id), extracted, PipelineStage.OCR)
+
+        # Phase 2: Hierarchical Normalization
+        normalized = extracted
+        
+        # ── [PHASE 10: NORMALIZATION INTEGRITY GATE] ──
+        # Validate after mapping/normalization
+        enforce_state_transition(str(record.id), normalized, PipelineStage.NORMALIZATION)
+        
+        # ── [PHASE 10] FORENSIC SNAPSHOT ──
+        # Use a shallow copy to avoid circular reference if we store 'extracted' inside itself
+        normalized["_forensics"] = {
+            "raw_extraction": copy.deepcopy(extracted) if isinstance(extracted, dict) else extracted,
+            "normalized_at": datetime.now().isoformat(),
+            "pipeline_version": "2.1-flattened"
+        }
+        # Remove the circular link from the deep copy to be safe
+        if isinstance(normalized["_forensics"]["raw_extraction"], dict):
+            normalized["_forensics"]["raw_extraction"].pop("_forensics", None)
+
+        # ── [S3_MIGRATION_PERSISTENCE] ──
+        # In the sync path (UnifiedWorker), we MUST persist each page to InvoicePageResult
+        # so that assemble_multi_page_record can find them without Redis.
+        if "_pages" in extracted:
+            for p_no, p_data in extracted["_pages"].items():
+                p_items = (p_data.get("items") or p_data.get("sections", {}).get("items") or []) if isinstance(p_data, dict) else []
+                InvoicePageResult.objects.update_or_create(
+                    record_id=record.id,
+                    page_number=int(p_no),
+                    defaults={
+                        'session_id': record.upload_session_id or 'sync',
+                        'canonical_payload': p_data
+                    }
+                )
+                logger.info(f"[PERSIST_ITEM_COUNT] record={record.id} page={p_no} items={len(p_items)}")
                 logger.info(f"[PERSIST_PAGES_SUCCESS] record={record.id} count={len(extracted['_pages'])}")
 
         # ── [PHASE 5] SYNC FLATTENED FIELDS ──
@@ -718,8 +728,10 @@ def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wa
             )
             record.save(update_fields=[
                 'extracted_data', 'status', 'supplier_invoice_no', 
-                'gstin', 'branch', 'ocr_raw_text'
+                'gstin', 'branch', 'ocr_raw_text', 'normalized_invoice_no',
+                'vendor_confidence', 'gstin_confidence', 'invoice_number_confidence'
             ])
+
             logger.info(f"[STAGING SAVE SUCCESS] Record {record.id} saved. Transitioned to ASSEMBLING.")
             
         # STEP 3: IMMEDIATELY call validation and processing
@@ -1623,7 +1635,26 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                         siblings = reused_siblings
                     
                     # Clean up unused existing siblings (orphans)
-                    unused_siblings = [sib for sib in existing_siblings if sib.id not in used_existing_ids]
+                    from pending_purchases.models import PendingPurchase
+                    sibling_ids = [sib.id for sib in existing_siblings if sib.id is not None]
+                    referenced_by_pp = set(PendingPurchase.objects.filter(
+                        source_scan_row_id__in=sibling_ids
+                    ).values_list('source_scan_row_id', flat=True))
+                    
+                    unused_siblings = [
+                        sib for sib in existing_siblings 
+                        if sib.id not in used_existing_ids and sib.id not in referenced_by_pp
+                    ]
+                    protected_siblings = [
+                        sib for sib in existing_siblings 
+                        if sib.id not in used_existing_ids and sib.id in referenced_by_pp
+                    ]
+                    if protected_siblings:
+                        logger.warning(
+                            f"[STAGING_ROW_CLEANUP_PROTECTED] Preserved unused siblings referenced by PendingPurchase: "
+                            f"{[sib.id for sib in protected_siblings]}"
+                        )
+                    
                     logger.info(
                         f"[DIAGNOSTIC_LOG] unused_siblings count={len(unused_siblings)} details="
                         f"{[{'id': sib.id, 'file_path': getattr(sib, 'file_path', None), 'file_hash': getattr(sib, 'file_hash', None)} for sib in unused_siblings]}"
@@ -1968,7 +1999,8 @@ def trigger_next_fanout(record_id):
                             upload_session_id=record.upload_session_id,
                             job_id=job_id,
                             start_page=page_idx,
-                            limit=1 
+                            limit=1,
+                            voucher_type=record.voucher_type or 'Purchase'
                         )
                         # Redundant success register upon successful call
                         try:
@@ -2071,12 +2103,286 @@ def force_reconcile_stale_barriers():
 
 
 
+def run_gst_validation_engine(record: InvoiceTempOCR, user=None):
+    logger.critical(
+        f"[GST_TRACE_4] GST engine entered "
+        f"record_id={record.id} "
+        f"validation_status='{record.validation_status}' "
+        f"has_gst_audit_trail={'gst_audit_trail' in (record.extracted_data or {})}"
+    )
+    def to_dec(val):
+        try:
+            if not val or str(val).strip() == "": return 0.0
+            clean_val = str(val).replace('₹', '').replace(',', '').replace(' ', '').strip()
+            return float(clean_val)
+        except Exception:
+            return 0.0
+
+    data = record.extracted_data or {}
+    assembled = data.get("assembled_exports") or data.get("_pages_assembled") or []
+    assembled_first = assembled[0] if (isinstance(assembled, list) and assembled) else {}
+
+    canonical_data_src = data
+    if not data.get("sections") and assembled_first:
+        canonical_data_src = assembled_first
+
+    sections = canonical_data_src.get("sections", {})
+    supplier = sections.get("supplier_details", {})
+    supply = sections.get("supply_details", {})
+
+    canonical = get_canonical_export_record(canonical_data_src, tenant_id=record.tenant_id)
+
+    gstin = (canonical.get("gstin") or record.gstin or "").strip().upper()
+    invoice_no = (canonical.get("supplier_invoice_no") or canonical.get("invoice_no") or record.supplier_invoice_no or "").strip()
+    tenant_id = str(record.tenant_id)
+
+    items = data.get("items", []) or []
+    if not items and assembled_first:
+        items = assembled_first.get("items", []) or []
+
+    # ── GST MATHEMATICAL VALIDATION ENGINE ──
+    # ── [PROBE_3] GST block entry ──
+    logger.critical(
+        f"[PROBE_3_GST_ENTRY] record_id={record.id} "
+        f"GST engine ENTERED items_count={len(items)} "
+        f"validation_status='{record.validation_status}'"
+    )
+    try:
+        # Determine Interstate vs Intrastate
+        branch_record = Branch.objects.filter(id=tenant_id).first()
+        company_gstin = branch_record.gstin if branch_record else None
+        is_interstate = False
+        if gstin and company_gstin and len(gstin) >= 2 and len(company_gstin) >= 2:
+            is_interstate = gstin[:2] != company_gstin[:2]
+        
+        # Identify the resolving user
+        resolved_by = None
+        if user:
+            resolved_by = getattr(user, 'email', None) or getattr(user, 'username', None) or str(user)
+        else:
+            resolved_by = "System"
+            
+        resolved_at = timezone.now().isoformat()
+        
+        # Retrieve resolution choice if present
+        gst_resolution = (record.extracted_data or {}).get('gst_resolution')
+        
+        expected_cgst_total = 0.0
+        expected_sgst_total = 0.0
+        expected_igst_total = 0.0
+        expected_cess_total = 0.0
+        expected_taxable_total = 0.0
+        
+        unique_rates = set()
+        
+        for item in items:
+            tx_val = to_dec(item.get('taxable_value') or item.get('amount'))
+            gst_rate = to_dec(item.get('gst_rate') or item.get('tax_rate'))
+            if gst_rate == 0.0:
+                gst_rate = to_dec(item.get('cgst_rate')) + to_dec(item.get('sgst_rate')) + to_dec(item.get('igst_rate'))
+            cess_rate = to_dec(item.get('cess_rate'))
+            
+            if gst_rate > 0.0:
+                unique_rates.add(f"{int(gst_rate)}%")
+                
+            expected_taxable_total += tx_val
+            
+            # Calculations based on tax logic
+            if is_interstate:
+                expected_igst_item = round(tx_val * gst_rate / 100.0, 2)
+                expected_cgst_item = 0.0
+                expected_sgst_item = 0.0
+            else:
+                expected_cgst_item = round(tx_val * (gst_rate / 2.0) / 100.0, 2)
+                expected_sgst_item = round(tx_val * (gst_rate / 2.0) / 100.0, 2)
+                expected_igst_item = 0.0
+                
+            if cess_rate > 0.0:
+                expected_cess_item = round(tx_val * cess_rate / 100.0, 2)
+            else:
+                expected_cess_item = to_dec(item.get('cess_amount') or item.get('cess'))
+                
+            expected_cgst_total += expected_cgst_item
+            expected_sgst_total += expected_sgst_item
+            expected_igst_total += expected_igst_item
+            expected_cess_total += expected_cess_item
+            
+            if gst_resolution == 'CORRECTED':
+                for cgst_k in ('cgst_amount', 'cgst'):
+                    item[cgst_k] = expected_cgst_item
+                for sgst_k in ('sgst_amount', 'sgst'):
+                    item[sgst_k] = expected_sgst_item
+                for igst_k in ('igst_amount', 'igst'):
+                    item[igst_k] = expected_igst_item
+                for cess_k in ('cess_amount', 'cess'):
+                    item[cess_k] = expected_cess_item
+                item_tot = tx_val + expected_cgst_item + expected_sgst_item + expected_igst_item + expected_cess_item
+                for tot_k in ('line_total', 'amount', 'invoiceValue'):
+                    item[tot_k] = item_tot
+
+        expected_invoice_total = expected_taxable_total + expected_cgst_total + expected_sgst_total + expected_igst_total + expected_cess_total
+        gst_rates_str = ", ".join(sorted(list(unique_rates))) or "0%"
+        
+        # Extract totals
+        extracted_cgst_total = to_dec(supply.get('total_cgst') or canonical.get('total_cgst') or record.extracted_data.get('total_cgst') or record.extracted_data.get('cgst'))
+        extracted_sgst_total = to_dec(supply.get('total_sgst') or canonical.get('total_sgst') or record.extracted_data.get('total_sgst') or record.extracted_data.get('sgst'))
+        extracted_igst_total = to_dec(supply.get('total_igst') or canonical.get('total_igst') or record.extracted_data.get('total_igst') or record.extracted_data.get('igst'))
+        extracted_cess_total = to_dec(supply.get('total_cess') or canonical.get('total_cess') or record.extracted_data.get('total_cess') or record.extracted_data.get('cess'))
+        extracted_invoice_total = to_dec(supply.get('total_invoice_value') or canonical.get('total_invoice_value') or record.extracted_data.get('invoice_total') or record.extracted_data.get('total_amount'))
+        
+        extracted_cgst_sum_items = sum(to_dec(item.get('cgst_amount') or item.get('cgst')) for item in items)
+        extracted_sgst_sum_items = sum(to_dec(item.get('sgst_amount') or item.get('sgst')) for item in items)
+        extracted_igst_sum_items = sum(to_dec(item.get('igst_amount') or item.get('igst')) for item in items)
+        extracted_cess_sum_items = sum(to_dec(item.get('cess_amount') or item.get('cess')) for item in items)
+        
+        if extracted_cgst_total == 0.0: extracted_cgst_total = extracted_cgst_sum_items
+        if extracted_sgst_total == 0.0: extracted_sgst_total = extracted_sgst_sum_items
+        if extracted_igst_total == 0.0: extracted_igst_total = extracted_igst_sum_items
+        if extracted_cess_total == 0.0: extracted_cess_total = extracted_cess_sum_items
+        if extracted_invoice_total == 0.0:
+            extracted_invoice_total = expected_taxable_total + extracted_cgst_total + extracted_sgst_total + extracted_igst_total + extracted_cess_total
+            
+        extracted_gst_sum = extracted_cgst_total + extracted_sgst_total + extracted_igst_total
+        expected_gst_sum = expected_cgst_total + expected_sgst_total + expected_igst_total
+        
+        difference_amount = abs(expected_gst_sum - extracted_gst_sum)
+        is_mismatch = difference_amount > 1.0
+        
+        validation_pass = not is_mismatch or (gst_resolution in ('CORRECTED', 'SUPPLIER_VALUES_ACCEPTED'))
+        validation_status = 'PASS' if validation_pass else 'FAIL'
+        
+        if gst_resolution == 'CORRECTED':
+            record.extracted_data['total_cgst'] = expected_cgst_total
+            record.extracted_data['total_sgst'] = expected_sgst_total
+            record.extracted_data['total_igst'] = expected_igst_total
+            record.extracted_data['total_cess'] = expected_cess_total
+            record.extracted_data['total_invoice_value'] = expected_invoice_total
+            record.extracted_data['invoice_total'] = expected_invoice_total
+            record.extracted_data['total_amount'] = expected_invoice_total
+            
+            if 'sections' in record.extracted_data and isinstance(record.extracted_data['sections'], dict):
+                supply_details = record.extracted_data['sections'].setdefault('supply_details', {})
+                if isinstance(supply_details, dict):
+                    supply_details['total_cgst'] = expected_cgst_total
+                    supply_details['total_sgst'] = expected_sgst_total
+                    supply_details['total_igst'] = expected_igst_total
+                    supply_details['total_cess'] = expected_cess_total
+                    supply_details['total_invoice_value'] = expected_invoice_total
+                    supply_details['total_taxable_value'] = expected_taxable_total
+            
+            if 'assembled_exports' in record.extracted_data and isinstance(record.extracted_data['assembled_exports'], list) and record.extracted_data['assembled_exports']:
+                ae = record.extracted_data['assembled_exports'][0]
+                if isinstance(ae, dict):
+                    ae['total_cgst'] = expected_cgst_total
+                    ae['total_sgst'] = expected_sgst_total
+                    ae['total_igst'] = expected_igst_total
+                    ae['total_cess'] = expected_cess_total
+                    ae['total_invoice_value'] = expected_invoice_total
+                    ae['invoice_total'] = expected_invoice_total
+                    ae['total_amount'] = expected_invoice_total
+                    if 'sections' in ae and isinstance(ae['sections'], dict):
+                        ae_supply = ae['sections'].setdefault('supply_details', {})
+                        if isinstance(ae_supply, dict):
+                            ae_supply['total_cgst'] = expected_cgst_total
+                            ae_supply['total_sgst'] = expected_sgst_total
+                            ae_supply['total_igst'] = expected_igst_total
+                            ae_supply['total_cess'] = expected_cess_total
+                            ae_supply['total_invoice_value'] = expected_invoice_total
+                            ae_supply['total_taxable_value'] = expected_taxable_total
+            
+            difference_amount = 0.0
+            is_mismatch = False
+            validation_status = 'PASS'
+            
+        record.extracted_data['items'] = items
+        if 'sections' in record.extracted_data and isinstance(record.extracted_data['sections'], dict):
+            record.extracted_data['sections']['items'] = items
+        if 'assembled_exports' in record.extracted_data and isinstance(record.extracted_data['assembled_exports'], list) and record.extracted_data['assembled_exports']:
+            record.extracted_data['assembled_exports'][0]['items'] = items
+            
+        # ── [PROBE_4] gst_audit_trail about to be written ──
+        logger.critical(
+            f"[PROBE_4_GST_WRITE] record_id={record.id} "
+            f"writing gst_audit_trail validation_status='{validation_status}' "
+            f"is_mismatch={is_mismatch} difference_amount={difference_amount}"
+        )
+        record.extracted_data['gst_audit_trail'] = {
+            'validation_status': validation_status,
+            'expected_tax_values': {
+                'cgst': expected_cgst_total,
+                'sgst': expected_sgst_total,
+                'igst': expected_igst_total,
+                'cess': expected_cess_total,
+                'total_gst': expected_gst_sum,
+                'total': expected_invoice_total
+            },
+            'extracted_tax_values': {
+                'cgst': extracted_cgst_total,
+                'sgst': extracted_sgst_total,
+                'igst': extracted_igst_total,
+                'cess': extracted_cess_total,
+                'total_gst': extracted_gst_sum,
+                'total': extracted_invoice_total
+            },
+            'difference_amount': difference_amount,
+            'resolution_choice': gst_resolution,
+            'resolved_by': resolved_by,
+            'resolved_at': resolved_at,
+            'taxable_value': expected_taxable_total,
+            'gst_rate': gst_rates_str
+        }
+        
+        record.save(update_fields=['extracted_data'])
+        logger.critical(
+            f"[GST_TRACE_5] GST audit trail written to extracted_data and saved "
+            f"record_id={record.id} "
+            f"validation_status_in_trail='{validation_status}' "
+            f"difference_amount={difference_amount} "
+            f"is_mismatch={is_mismatch}"
+        )
+        # ── [PROBE_5] gst_audit_trail saved to DB ──
+        logger.critical(
+            f"[PROBE_5_GST_SAVED] record_id={record.id} "
+            f"gst_audit_trail SAVED to extracted_data in DB. "
+            f"Key now present: {'gst_audit_trail' in record.extracted_data}"
+        )
+        
+        if is_mismatch and not gst_resolution:
+            record.validation_status = 'GST_MISMATCH'
+            record.save(update_fields=['validation_status'])
+        else:
+            if record.validation_status == 'GST_MISMATCH':
+                record.validation_status = 'NEED_TO_SAVE'
+                record.save(update_fields=['validation_status'])
+                
+    except Exception as gst_err:
+        logger.exception(
+            f"[GST_VALIDATION_ERR] record={record.id} invoice={invoice_no} "
+            f"items_count={len(items)} gstin={gstin} error={gst_err}"
+        )
+
 @transaction.atomic
 def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwargs):
     """
     CORE VALIDATION FUNCTION: 
     Checks for Vendor, Duplicates, and optionally creates Voucher.
     """
+    logger.critical(
+        f"[GST_TRACE_1] entering validate_and_process "
+        f"record_id={record.id} "
+        f"validation_status='{record.validation_status}' "
+        f"status='{record.status}' "
+        f"processed={record.processed} "
+        f"has_gst_audit_trail={'gst_audit_trail' in (record.extracted_data or {})}"
+    )
+    def to_dec(val):
+        try:
+            if not val or str(val).strip() == "": return 0.0
+            clean_val = str(val).replace('₹', '').replace(',', '').replace(' ', '').strip()
+            return float(clean_val)
+        except Exception:
+            return 0.0
+
     import hashlib
     tenant_id = getattr(record, 'tenant_id', None)
     session_id = getattr(record, 'upload_session_id', None)
@@ -2157,9 +2463,31 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             or getattr(record, 'processed', False) is True
             or record.validation_status in ['VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']
         )
+        # ── [PROBE_1] GATE1 computed value ──
+        logger.critical(
+            f"[PROBE_1_GATE1_CHECK] record_id={record.id} "
+            f"is_already_finalized={is_already_finalized} "
+            f"validation_status='{record.validation_status}' "
+            f"status='{record.status}' "
+            f"processed={record.processed}"
+        )
+        logger.critical(
+            f"[GST_TRACE_3] is_already_finalized={is_already_finalized} "
+            f"record_id={record.id} "
+            f"validation_status='{record.validation_status}' "
+            f"status='{record.status}' "
+            f"processed={record.processed} "
+            f"has_gst_audit_trail={'gst_audit_trail' in (record.extracted_data or {})}"
+        )
         if is_already_finalized:
             logger.info(f"[POST_FINALIZATION_MUTATION_BLOCKED] record_id={record.id} status={record.status} processed={record.processed}")
             logger.info(f"[CANONICAL_FREEZE_CONFIRMED] record_id={record.id}")
+            # ── [PROBE_2] GATE1 early return ──
+            logger.critical(
+                f"[PROBE_2_GATE1_RETURN] record_id={record.id} "
+                f"RETURNING EARLY -- GST engine will NOT execute. "
+                f"trigger=validation_status='{record.validation_status}'"
+            )
             return {"status": record.validation_status or "SUCCESS"}
 
         # Block any mutation or re-validation on frozen DTOs unless we are executing the final save
@@ -2405,7 +2733,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         # 🔹 AUTHORITATIVE STRICT DUPLICATE CHECK (Invoice No + GSTIN + Branch within tenant_id)
         is_duplicate = False
         if invoice_no and gstin:
-            from vendors.vendor_validation_logic import canonicalize_gstin_ocr
+            from vendors.vendor_validation_logic import canonicalize_gstin_ocr, normalize_invoice_number, append_shadow_evidence
             canonical_gst = canonicalize_gstin_ocr(gstin)
             is_duplicate = VoucherPurchaseSupplierDetails.objects.filter(
                 supplier_invoice_no__iexact=invoice_no,
@@ -2413,9 +2741,37 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 branch__iexact=branch_name,
                 tenant_id=tenant_id
             ).exists()
+            
+            # Shadow check
+            norm_inv_no = normalize_invoice_number(invoice_no)
+            new_match = False
+            if norm_inv_no:
+                new_match = VoucherPurchaseSupplierDetails.objects.filter(
+                    normalized_invoice_no=norm_inv_no,
+                    gstin__iexact=canonical_gst,
+                    branch__iexact=branch_name,
+                    tenant_id=tenant_id
+                ).exists()
+                
+            old_match = is_duplicate
+            
+            logger.info(
+                f"[DUPLICATE_SHADOW_CHECK] "
+                f"record_id={record.id} "
+                f"invoice_no='{invoice_no}' "
+                f"normalized_invoice_no='{norm_inv_no}' "
+                f"old_match={old_match} "
+                f"new_match={new_match}"
+            )
+            append_shadow_evidence(record.id, invoice_no, norm_inv_no, old_match, new_match)
+
 
         if is_duplicate:
             logger.warning(f"[DUPLICATE_MATCH_FOUND] id={record.id} inv_no='{invoice_no}' gstin='{gstin}' branch='{branch_name}' tenant='{tenant_id}'")
+            logger.critical(
+                f"[GST_TRACE_2] duplicate detection result: is_duplicate=True "
+                f"record_id={record.id} inv_no='{invoice_no}' gstin='{gstin}'"
+            )
             record.status = "EXTRACTED"
             record.validation_status = "DUPLICATE"
             record.save()
@@ -2480,11 +2836,22 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         record.extracted_data["missing_items"] = inv_val["missing_items"]
         record.extracted_data["items"] = inv_val["items"]  # Enforce dto.items
         
+        # ── [GST ENGINE FIX] Refresh local 'items' variable to use validated items
+        # This ensures the GST engine at the next block uses the same items that were
+        # persisted to extracted_data, not the stale pre-inventory-validation list.
+        items = inv_val["items"]
+        
         if "assembled_exports" in record.extracted_data and record.extracted_data["assembled_exports"]:
             record.extracted_data["assembled_exports"][0]["items"] = inv_val["items"]
             record.extracted_data["assembled_exports"][0]["item_status"] = inv_val["item_status"]
             record.extracted_data["assembled_exports"][0]["missing_items"] = inv_val["missing_items"]
         record.save(update_fields=['extracted_data'])
+
+        # ── GST MATHEMATICAL VALIDATION ENGINE ──
+        user_val = kwargs.get('user')
+        if not user_val and kwargs.get('request'):
+            user_val = getattr(kwargs.get('request'), 'user', None)
+        run_gst_validation_engine(record, user=user_val)
 
         # ⚫ FAST PATH: vendor_id already validated and stored in staging — skip re-validation.
         # Expand status list to include READY, FINALIZED, VOUCHER_CREATED to cover all valid states.
@@ -2633,14 +3000,30 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             record.save()
             return {"status": "DUPLICATE"}
 
+        # Check if unresolved GST mismatch exists
+        is_gst_mismatch = False
+        if record.extracted_data and isinstance(record.extracted_data, dict):
+            gst_trail = record.extracted_data.get('gst_audit_trail', {})
+            if isinstance(gst_trail, dict) and gst_trail.get('validation_status') == 'FAIL':
+                is_gst_mismatch = True
+
         # 🔹 CREATE PURCHASE VOUCHER (ONLY IF auto_save IS TRUE)
         # Finalize & Save must only create vouchers — Pending Purchase creation happens above.
         if not auto_save:
             record.status = "EXTRACTED"
-            record.validation_status = "NEED_TO_SAVE"
+            if is_gst_mismatch:
+                record.validation_status = "GST_MISMATCH"
+            else:
+                record.validation_status = "NEED_TO_SAVE"
             record.save()
-            logger.info(f"[FINAL_STATUS] NEED_TO_SAVE record={record.id}")
-            return {"status": "NEED_TO_SAVE"}
+            logger.info(f"[FINAL_STATUS] {record.validation_status} record={record.id}")
+            return {"status": record.validation_status}
+
+        if is_gst_mismatch:
+            logger.error(f"[GST_SAVE_BLOCKED] Save blocked for record {record.id} because of unresolved GST mismatch.")
+            record.validation_status = "GST_MISMATCH"
+            record.save()
+            return {"status": "ERROR", "validation_message": "Voucher save blocked: unresolved GST Calculation Mismatch."}
 
         # Enforce backend hard validation to block voucher saves unless the item status is 'ALREADY EXIST'
         if inv_val["item_status"] != "ALREADY EXIST":

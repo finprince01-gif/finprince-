@@ -1,0 +1,716 @@
+{
+  "mined_at": "2026-06-21T10:29:24.969106+00:00",
+  "summary": {
+    "total_prefix_cache_events": 57,
+    "total_invoices_with_cache_data": 8,
+    "cache_consistent_invoices": 5,
+    "cache_invalidated_invoices": 2,
+    "single_page_invoices": 1,
+    "global_unique_prefix_hashes": 2,
+    "modal_prefix_hash": "9e3dc329126df12e...",
+    "modal_prefix_occurrence_count": 31,
+    "identical_prefix_ratio_pct": 54.4
+  },
+  "invoice_analysis": [
+    {
+      "invoice_id": "1007704",
+      "page_count": 2,
+      "unique_prefix_hash_count": 1,
+      "unique_prompt_hash_count": 2,
+      "verdict": "CACHE_CONSISTENT",
+      "pages": [
+        {
+          "page": 1,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "95a057b2b296a143466cf1e3651c53a7dfe10c70fcabf4f61dd2af44379cc46d",
+          "request_id": "ai_1007704_1_1781977400"
+        },
+        {
+          "page": 2,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "51c1afd89ec2f59be450cc06814838a52b3f82f6bd8a5ae110d742b35eab62a7",
+          "request_id": "ai_1007704_2_1781977400"
+        }
+      ]
+    },
+    {
+      "invoice_id": "1007705",
+      "page_count": 5,
+      "unique_prefix_hash_count": 1,
+      "unique_prompt_hash_count": 5,
+      "verdict": "CACHE_CONSISTENT",
+      "pages": [
+        {
+          "page": 4,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "15c27eb6ba52fb1009a514f663f253e54d2448bc2cc161c964628d2d4302b40a",
+          "request_id": "ai_1007705_4_1781977539"
+        },
+        {
+          "page": 6,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "98d3101eabea5091516211b5021b06688d1e653f3e45eaceb539b901e88d2543",
+          "request_id": "ai_1007705_6_1781977596"
+        },
+        {
+          "page": 9,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "9d531eea55c52ccea2121e4e4831649dfb617d9294e23cf2ff4b843fa0472ce9",
+          "request_id": "ai_1007705_9_1781977658"
+        },
+        {
+          "page": 10,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "592e67169ce5a580e31167323c9cfdb90988482745fd152aee1dd9104c610901",
+          "request_id": "ai_1007705_10_1781977677"
+        },
+        {
+          "page": 11,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "3783126a2a2c2f23ea1e2192db5dc4bbfb6347fc5dc21476eeae03372b590f09",
+          "request_id": "ai_1007705_11_1781977735"
+        }
+      ]
+    },
+    {
+      "invoice_id": "1007706",
+      "page_count": 4,
+      "unique_prefix_hash_count": 1,
+      "unique_prompt_hash_count": 4,
+      "verdict": "CACHE_CONSISTENT",
+      "pages": [
+        {
+          "page": 5,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "2249e5fcce8cee3303a090e99ad71df034c3d7b18665c958c2f6e3018dc4357d",
+          "request_id": "ai_1007706_5_1781978100"
+        },
+        {
+          "page": 6,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "fd97ac5c46ea905948d5f75cabe255cef3e1d3448132425d4a64793fbc9f9f8f",
+          "request_id": "ai_1007706_6_1781978280"
+        },
+        {
+          "page": 10,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "0ba5c9ebb66b212e9e9f3aef56a1b8b9a03ddc46ab2d7ba3c9bff4838baab792",
+          "request_id": "ai_1007706_10_1781978359"
+        },
+        {
+          "page": 12,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "5f38246d6384e8d53a621c50c904166374662b1c8c8ef6478e11857b12b6bcb7",
+          "request_id": "ai_1007706_12_1781978531"
+        }
+      ]
+    },
+    {
+      "invoice_id": "1007709",
+      "page_count": 6,
+      "unique_prefix_hash_count": 1,
+      "unique_prompt_hash_count": 6,
+      "verdict": "CACHE_CONSISTENT",
+      "pages": [
+        {
+          "page": 1,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "95a057b2b296a143466cf1e3651c53a7dfe10c70fcabf4f61dd2af44379cc46d",
+          "request_id": "ai_1007709_1_1782036579"
+        },
+        {
+          "page": 2,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "51c1afd89ec2f59be450cc06814838a52b3f82f6bd8a5ae110d742b35eab62a7",
+          "request_id": "ai_1007709_2_1782036581"
+        },
+        {
+          "page": 4,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "15c27eb6ba52fb1009a514f663f253e54d2448bc2cc161c964628d2d4302b40a",
+          "request_id": "ai_1007709_4_1782036584"
+        },
+        {
+          "page": 5,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "dfe4d046f3596f8c198d5da15607b77dbd454cb53e98c2fc20dbffd97d5694c5",
+          "request_id": "ai_1007709_5_1782036586"
+        },
+        {
+          "page": 6,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "98d3101eabea5091516211b5021b06688d1e653f3e45eaceb539b901e88d2543",
+          "request_id": "ai_1007709_6_1782036721"
+        },
+        {
+          "page": 15,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "68239e14b6c336843530f49fbfa1153634262ad32aaac7ca3aa4190598de43ec",
+          "request_id": "ai_1007709_15_1782037025"
+        }
+      ]
+    },
+    {
+      "invoice_id": "1007710",
+      "page_count": 2,
+      "unique_prefix_hash_count": 1,
+      "unique_prompt_hash_count": 2,
+      "verdict": "CACHE_CONSISTENT",
+      "pages": [
+        {
+          "page": 2,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "e744c383dbf5a3fe29f94715cb94b33236d62dd5b0135db3c1034740f12f405e",
+          "request_id": "ai_1007710_2_1782037343"
+        },
+        {
+          "page": 6,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "fd97ac5c46ea905948d5f75cabe255cef3e1d3448132425d4a64793fbc9f9f8f",
+          "request_id": "ai_1007710_6_1782037619"
+        }
+      ]
+    },
+    {
+      "invoice_id": "1007697",
+      "page_count": 26,
+      "unique_prefix_hash_count": 2,
+      "unique_prompt_hash_count": 15,
+      "verdict": "CACHE_INVALIDATED",
+      "pages": [
+        {
+          "page": 1,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "95a057b2b296a143466cf1e3651c53a7dfe10c70fcabf4f61dd2af44379cc46d",
+          "request_id": "ai_1007697_1_1781950860"
+        },
+        {
+          "page": 2,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "51c1afd89ec2f59be450cc06814838a52b3f82f6bd8a5ae110d742b35eab62a7",
+          "request_id": "ai_1007697_2_1781950860"
+        },
+        {
+          "page": 3,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "9946dc526a68c1ea8d46b8342fc77101d07695b406e99ff622d8fa1d81878335",
+          "request_id": "ai_1007697_3_1781950864"
+        },
+        {
+          "page": 4,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "15c27eb6ba52fb1009a514f663f253e54d2448bc2cc161c964628d2d4302b40a",
+          "request_id": "ai_1007697_4_1781950864"
+        },
+        {
+          "page": 5,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "dfe4d046f3596f8c198d5da15607b77dbd454cb53e98c2fc20dbffd97d5694c5",
+          "request_id": "ai_1007697_5_1781950866"
+        },
+        {
+          "page": 6,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "035a2591fccae51316f9bad07d2511ead1ffe6ba05ff7893ef839360324ea74d",
+          "request_id": "ai_1007697_6_1781951028",
+          "deviation": true
+        },
+        {
+          "page": 7,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "53b106bc3ca53f783d4ef3a6466b2033fbc53aa047421d676f4279a0bb6ea557",
+          "request_id": "ai_1007697_7_1781951056",
+          "deviation": true
+        },
+        {
+          "page": 7,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "53b106bc3ca53f783d4ef3a6466b2033fbc53aa047421d676f4279a0bb6ea557",
+          "request_id": "ai_1007697_7_1781951056",
+          "deviation": true
+        },
+        {
+          "page": 8,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "9f512c1f4798bf46ed5a4c5c072ea4df7fb87f548b111bd561db67444a49740e",
+          "request_id": "ai_1007697_8_1781951079",
+          "deviation": true
+        },
+        {
+          "page": 8,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "9f512c1f4798bf46ed5a4c5c072ea4df7fb87f548b111bd561db67444a49740e",
+          "request_id": "ai_1007697_8_1781951079",
+          "deviation": true
+        },
+        {
+          "page": 9,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "9ea8cca1113a07fa16fa2f0dca7728ebdfeca1b5fc79cdaac49513b0b1cc6148",
+          "request_id": "ai_1007697_9_1781951099",
+          "deviation": true
+        },
+        {
+          "page": 9,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "9ea8cca1113a07fa16fa2f0dca7728ebdfeca1b5fc79cdaac49513b0b1cc6148",
+          "request_id": "ai_1007697_9_1781951099",
+          "deviation": true
+        },
+        {
+          "page": 10,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "2eefe1d43f9639e65dbdce9609a5ec268a146a9dd7367e05e1bf2ac94d18c53c",
+          "request_id": "ai_1007697_10_1781951119",
+          "deviation": true
+        },
+        {
+          "page": 10,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "2eefe1d43f9639e65dbdce9609a5ec268a146a9dd7367e05e1bf2ac94d18c53c",
+          "request_id": "ai_1007697_10_1781951119",
+          "deviation": true
+        },
+        {
+          "page": 11,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "8fd1014c2f7fbc09131a5ecea99127c870b296514f955a92e671b2e3e1b17931",
+          "request_id": "ai_1007697_11_1781951291",
+          "deviation": true
+        },
+        {
+          "page": 11,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "8fd1014c2f7fbc09131a5ecea99127c870b296514f955a92e671b2e3e1b17931",
+          "request_id": "ai_1007697_11_1781951291",
+          "deviation": true
+        },
+        {
+          "page": 12,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "b98aa253b84903d598f481a0e1ffdc02d4b5acd0f7fc042f411dc4657023368b",
+          "request_id": "ai_1007697_12_1781951421",
+          "deviation": true
+        },
+        {
+          "page": 12,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "b98aa253b84903d598f481a0e1ffdc02d4b5acd0f7fc042f411dc4657023368b",
+          "request_id": "ai_1007697_12_1781951421",
+          "deviation": true
+        },
+        {
+          "page": 13,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "e597653a7061097baa38df84a9b8e8eed4401e5ce6513017e89d79169c017fd1",
+          "request_id": "ai_1007697_13_1781951437",
+          "deviation": true
+        },
+        {
+          "page": 13,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "e597653a7061097baa38df84a9b8e8eed4401e5ce6513017e89d79169c017fd1",
+          "request_id": "ai_1007697_13_1781951437",
+          "deviation": true
+        },
+        {
+          "page": 15,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "cca8ca4aa5e5baba0e99760c25a3b6b2aebd8ff495339c104c281eef94eaee65",
+          "request_id": "ai_1007697_15_1781951537",
+          "deviation": true
+        },
+        {
+          "page": 15,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "cca8ca4aa5e5baba0e99760c25a3b6b2aebd8ff495339c104c281eef94eaee65",
+          "request_id": "ai_1007697_15_1781951573",
+          "deviation": true
+        },
+        {
+          "page": 15,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "cca8ca4aa5e5baba0e99760c25a3b6b2aebd8ff495339c104c281eef94eaee65",
+          "request_id": "ai_1007697_15_1781951537",
+          "deviation": true
+        },
+        {
+          "page": 15,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "cca8ca4aa5e5baba0e99760c25a3b6b2aebd8ff495339c104c281eef94eaee65",
+          "request_id": "ai_1007697_15_1781951573",
+          "deviation": true
+        },
+        {
+          "page": 16,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "35413e7c0d0d685dd5e6832af1a6a543242996e874b1e5059e6e69d9ae0e6aef",
+          "request_id": "ai_1007697_16_1781951699",
+          "deviation": true
+        },
+        {
+          "page": 16,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "35413e7c0d0d685dd5e6832af1a6a543242996e874b1e5059e6e69d9ae0e6aef",
+          "request_id": "ai_1007697_16_1781951699",
+          "deviation": true
+        }
+      ]
+    },
+    {
+      "invoice_id": "1007700",
+      "page_count": 11,
+      "unique_prefix_hash_count": 2,
+      "unique_prompt_hash_count": 11,
+      "verdict": "CACHE_INVALIDATED",
+      "pages": [
+        {
+          "page": 2,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "284b1713c3bd2ab2a9024d96168a72a100e5e561995c10594cacb3e8f3ff55b9",
+          "request_id": "ai_1007700_2_1781957622"
+        },
+        {
+          "page": 3,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "a39fdaab7edaedb94b371a6657cfda71bbf048ede3737f4084b9b73985317dc4",
+          "request_id": "ai_1007700_3_1781957637"
+        },
+        {
+          "page": 4,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "e56101cca9d7cbaa71f38941c708aca845b8f74b2f9795c9a546e2c8e367f87c",
+          "request_id": "ai_1007700_4_1781957656"
+        },
+        {
+          "page": 5,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "2249e5fcce8cee3303a090e99ad71df034c3d7b18665c958c2f6e3018dc4357d",
+          "request_id": "ai_1007700_5_1781957048",
+          "deviation": true
+        },
+        {
+          "page": 6,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "335befa8852cb964b6337d5e8d589c16893a156d15c0c7b8386d4e3be1d71e2e",
+          "request_id": "ai_1007700_6_1781957686"
+        },
+        {
+          "page": 7,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "a929a3ef8d8ef2f569b0f9e70affce1c957b23062a6b7f1b3763716dfc968426",
+          "request_id": "ai_1007700_7_1781957702"
+        },
+        {
+          "page": 8,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "6db1565bcab070f4a29a4d63d6686b490934f5bc8e1c04f04d688d7a44d21a0e",
+          "request_id": "ai_1007700_8_1781957899"
+        },
+        {
+          "page": 9,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "6e2a4b2cceba0f053d94a5a190de6ecde58700b68ebd9812595626d2dce2f49c",
+          "request_id": "ai_1007700_9_1781957915"
+        },
+        {
+          "page": 10,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "28a84cb33a06f16f43201d4fe46540bec2780e383d78c342598ce998b3650451",
+          "request_id": "ai_1007700_10_1781957935"
+        },
+        {
+          "page": 11,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "21abbf135e50fe707265297ec11690eb5fde742bd2cc336b2f9a2d7806542df2",
+          "request_id": "ai_1007700_11_1781958031"
+        },
+        {
+          "page": 12,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "5a06e99567b5b7864b5c02f6fe767de91bf3c11a19466853fb048db7de2d9a78",
+          "request_id": "ai_1007700_12_1781958048"
+        }
+      ]
+    },
+    {
+      "invoice_id": "1007703",
+      "page_count": 1,
+      "unique_prefix_hash_count": 1,
+      "unique_prompt_hash_count": 1,
+      "verdict": "SINGLE_PAGE",
+      "pages": [
+        {
+          "page": 2,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "51c1afd89ec2f59be450cc06814838a52b3f82f6bd8a5ae110d742b35eab62a7",
+          "request_id": "ai_1007703_2_1781977116"
+        }
+      ]
+    }
+  ],
+  "invalidated_invoices": [
+    {
+      "invoice_id": "1007697",
+      "page_count": 26,
+      "unique_prefix_hash_count": 2,
+      "unique_prompt_hash_count": 15,
+      "verdict": "CACHE_INVALIDATED",
+      "pages": [
+        {
+          "page": 1,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "95a057b2b296a143466cf1e3651c53a7dfe10c70fcabf4f61dd2af44379cc46d",
+          "request_id": "ai_1007697_1_1781950860"
+        },
+        {
+          "page": 2,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "51c1afd89ec2f59be450cc06814838a52b3f82f6bd8a5ae110d742b35eab62a7",
+          "request_id": "ai_1007697_2_1781950860"
+        },
+        {
+          "page": 3,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "9946dc526a68c1ea8d46b8342fc77101d07695b406e99ff622d8fa1d81878335",
+          "request_id": "ai_1007697_3_1781950864"
+        },
+        {
+          "page": 4,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "15c27eb6ba52fb1009a514f663f253e54d2448bc2cc161c964628d2d4302b40a",
+          "request_id": "ai_1007697_4_1781950864"
+        },
+        {
+          "page": 5,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "dfe4d046f3596f8c198d5da15607b77dbd454cb53e98c2fc20dbffd97d5694c5",
+          "request_id": "ai_1007697_5_1781950866"
+        },
+        {
+          "page": 6,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "035a2591fccae51316f9bad07d2511ead1ffe6ba05ff7893ef839360324ea74d",
+          "request_id": "ai_1007697_6_1781951028",
+          "deviation": true
+        },
+        {
+          "page": 7,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "53b106bc3ca53f783d4ef3a6466b2033fbc53aa047421d676f4279a0bb6ea557",
+          "request_id": "ai_1007697_7_1781951056",
+          "deviation": true
+        },
+        {
+          "page": 7,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "53b106bc3ca53f783d4ef3a6466b2033fbc53aa047421d676f4279a0bb6ea557",
+          "request_id": "ai_1007697_7_1781951056",
+          "deviation": true
+        },
+        {
+          "page": 8,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "9f512c1f4798bf46ed5a4c5c072ea4df7fb87f548b111bd561db67444a49740e",
+          "request_id": "ai_1007697_8_1781951079",
+          "deviation": true
+        },
+        {
+          "page": 8,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "9f512c1f4798bf46ed5a4c5c072ea4df7fb87f548b111bd561db67444a49740e",
+          "request_id": "ai_1007697_8_1781951079",
+          "deviation": true
+        },
+        {
+          "page": 9,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "9ea8cca1113a07fa16fa2f0dca7728ebdfeca1b5fc79cdaac49513b0b1cc6148",
+          "request_id": "ai_1007697_9_1781951099",
+          "deviation": true
+        },
+        {
+          "page": 9,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "9ea8cca1113a07fa16fa2f0dca7728ebdfeca1b5fc79cdaac49513b0b1cc6148",
+          "request_id": "ai_1007697_9_1781951099",
+          "deviation": true
+        },
+        {
+          "page": 10,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "2eefe1d43f9639e65dbdce9609a5ec268a146a9dd7367e05e1bf2ac94d18c53c",
+          "request_id": "ai_1007697_10_1781951119",
+          "deviation": true
+        },
+        {
+          "page": 10,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "2eefe1d43f9639e65dbdce9609a5ec268a146a9dd7367e05e1bf2ac94d18c53c",
+          "request_id": "ai_1007697_10_1781951119",
+          "deviation": true
+        },
+        {
+          "page": 11,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "8fd1014c2f7fbc09131a5ecea99127c870b296514f955a92e671b2e3e1b17931",
+          "request_id": "ai_1007697_11_1781951291",
+          "deviation": true
+        },
+        {
+          "page": 11,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "8fd1014c2f7fbc09131a5ecea99127c870b296514f955a92e671b2e3e1b17931",
+          "request_id": "ai_1007697_11_1781951291",
+          "deviation": true
+        },
+        {
+          "page": 12,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "b98aa253b84903d598f481a0e1ffdc02d4b5acd0f7fc042f411dc4657023368b",
+          "request_id": "ai_1007697_12_1781951421",
+          "deviation": true
+        },
+        {
+          "page": 12,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "b98aa253b84903d598f481a0e1ffdc02d4b5acd0f7fc042f411dc4657023368b",
+          "request_id": "ai_1007697_12_1781951421",
+          "deviation": true
+        },
+        {
+          "page": 13,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "e597653a7061097baa38df84a9b8e8eed4401e5ce6513017e89d79169c017fd1",
+          "request_id": "ai_1007697_13_1781951437",
+          "deviation": true
+        },
+        {
+          "page": 13,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "e597653a7061097baa38df84a9b8e8eed4401e5ce6513017e89d79169c017fd1",
+          "request_id": "ai_1007697_13_1781951437",
+          "deviation": true
+        },
+        {
+          "page": 15,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "cca8ca4aa5e5baba0e99760c25a3b6b2aebd8ff495339c104c281eef94eaee65",
+          "request_id": "ai_1007697_15_1781951537",
+          "deviation": true
+        },
+        {
+          "page": 15,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "cca8ca4aa5e5baba0e99760c25a3b6b2aebd8ff495339c104c281eef94eaee65",
+          "request_id": "ai_1007697_15_1781951573",
+          "deviation": true
+        },
+        {
+          "page": 15,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "cca8ca4aa5e5baba0e99760c25a3b6b2aebd8ff495339c104c281eef94eaee65",
+          "request_id": "ai_1007697_15_1781951537",
+          "deviation": true
+        },
+        {
+          "page": 15,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "cca8ca4aa5e5baba0e99760c25a3b6b2aebd8ff495339c104c281eef94eaee65",
+          "request_id": "ai_1007697_15_1781951573",
+          "deviation": true
+        },
+        {
+          "page": 16,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "35413e7c0d0d685dd5e6832af1a6a543242996e874b1e5059e6e69d9ae0e6aef",
+          "request_id": "ai_1007697_16_1781951699",
+          "deviation": true
+        },
+        {
+          "page": 16,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "35413e7c0d0d685dd5e6832af1a6a543242996e874b1e5059e6e69d9ae0e6aef",
+          "request_id": "ai_1007697_16_1781951699",
+          "deviation": true
+        }
+      ]
+    },
+    {
+      "invoice_id": "1007700",
+      "page_count": 11,
+      "unique_prefix_hash_count": 2,
+      "unique_prompt_hash_count": 11,
+      "verdict": "CACHE_INVALIDATED",
+      "pages": [
+        {
+          "page": 2,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "284b1713c3bd2ab2a9024d96168a72a100e5e561995c10594cacb3e8f3ff55b9",
+          "request_id": "ai_1007700_2_1781957622"
+        },
+        {
+          "page": 3,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "a39fdaab7edaedb94b371a6657cfda71bbf048ede3737f4084b9b73985317dc4",
+          "request_id": "ai_1007700_3_1781957637"
+        },
+        {
+          "page": 4,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "e56101cca9d7cbaa71f38941c708aca845b8f74b2f9795c9a546e2c8e367f87c",
+          "request_id": "ai_1007700_4_1781957656"
+        },
+        {
+          "page": 5,
+          "prefix_hash": "0d4e4febb51ff816d64f5582586f1759d58c3d39a4d39a17440683d247b53390",
+          "prompt_hash": "2249e5fcce8cee3303a090e99ad71df034c3d7b18665c958c2f6e3018dc4357d",
+          "request_id": "ai_1007700_5_1781957048",
+          "deviation": true
+        },
+        {
+          "page": 6,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "335befa8852cb964b6337d5e8d589c16893a156d15c0c7b8386d4e3be1d71e2e",
+          "request_id": "ai_1007700_6_1781957686"
+        },
+        {
+          "page": 7,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "a929a3ef8d8ef2f569b0f9e70affce1c957b23062a6b7f1b3763716dfc968426",
+          "request_id": "ai_1007700_7_1781957702"
+        },
+        {
+          "page": 8,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "6db1565bcab070f4a29a4d63d6686b490934f5bc8e1c04f04d688d7a44d21a0e",
+          "request_id": "ai_1007700_8_1781957899"
+        },
+        {
+          "page": 9,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "6e2a4b2cceba0f053d94a5a190de6ecde58700b68ebd9812595626d2dce2f49c",
+          "request_id": "ai_1007700_9_1781957915"
+        },
+        {
+          "page": 10,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "28a84cb33a06f16f43201d4fe46540bec2780e383d78c342598ce998b3650451",
+          "request_id": "ai_1007700_10_1781957935"
+        },
+        {
+          "page": 11,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "21abbf135e50fe707265297ec11690eb5fde742bd2cc336b2f9a2d7806542df2",
+          "request_id": "ai_1007700_11_1781958031"
+        },
+        {
+          "page": 12,
+          "prefix_hash": "9e3dc329126df12ee8215ddc38f240b08805020c40233724e6829c68a066b718",
+          "prompt_hash": "5a06e99567b5b7864b5c02f6fe767de91bf3c11a19466853fb048db7de2d9a78",
+          "request_id": "ai_1007700_12_1781958048"
+        }
+      ]
+    }
+  ]
+}

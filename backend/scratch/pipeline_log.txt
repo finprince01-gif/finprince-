@@ -1,0 +1,422 @@
+commit bf14dba7aeb54e7178fc382b8d1096c8eabf3e7d
+Author: UlaganathanK <ulaganathank38@gmail.com>
+Date:   Tue Jun 16 17:26:41 2026 +0530
+
+    changes
+
+diff --git a/backend/ocr_pipeline/pipeline.py b/backend/ocr_pipeline/pipeline.py
+index 3c82975..0a9f583 100644
+--- a/backend/ocr_pipeline/pipeline.py
++++ b/backend/ocr_pipeline/pipeline.py
+@@ -413,7 +413,7 @@ def sync_record_flattened_fields(record: InvoiceTempOCR, data: Dict[str, Any], c
+             logger.exception(f"[FLATTENING_SAVE_FAILED] record={record.id} error={e}")
+             raise
+ 
+-def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wait_for_ai: bool = True, item_id: int = None, job_id=None, chaos_mode: str = None, file_path: str = None) -> dict:
++def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wait_for_ai: bool = True, item_id: int = None, job_id=None, chaos_mode: str = None, file_path: str = None, is_rescan: bool = False, rescan_history_id: int = None) -> dict:
+     """
+     SINGLE ENTRY POINT for OCR extraction and immediate validation.
+     """
+@@ -423,7 +423,7 @@ def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wa
+     logger.info(f"[PIPELINE_STAGE_ENTER] stage=START record={record.id} item={item_id} job={job_id}")
+     
+     logger.info("OCR Pipeline initialization: ASYNC_SQS_ACTIVE")
+-    logger.info(f"Processing record {record.id} | item={item_id} | job={job_id} | wait_for_ai={wait_for_ai} | chaos={chaos_mode}")
++    logger.info(f"Processing record {record.id} | item={item_id} | job={job_id} | wait_for_ai={wait_for_ai} | chaos={chaos_mode} | is_rescan={is_rescan}")
+     
+     if chaos_mode == 'CRASH_IN_PIPELINE':
+         logger.critical("[CHAOS] Simulating pipeline crash")
+@@ -436,7 +436,7 @@ def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wa
+         # record integrity.  Corrupted sources bypass dedup and force
+         # fresh OCR extraction instead of propagating bad data.
+         is_reusable = False
+-        if record.extracted_data:
++        if record.extracted_data and not is_rescan:
+             logger.info(f"[PIPELINE_BYPASS_ENTER] record_id={record.id}")
+ 
+             # ── [PHASE 4] RUN REPLAY SOURCE INTEGRITY VALIDATION ──
+@@ -536,14 +536,24 @@ def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wa
+             
+             if not created:
+                 # If it already existed (e.g. from a retry or stub row), just update expected_pages
+-                # Do NOT reset snapshot_created, export_complete, or materialization_complete!
+                 state.expected_pages = total_pages
+                 state.total_pages_expected = total_pages
+-                state.save(update_fields=['expected_pages', 'total_pages_expected'])
++                if is_rescan:
++                    state.completed_pages = 0
++                    state.failed_pages = 0
++                    state.ai_completed_pages = 0
++                    state.total_pages_completed = 0
++                    state.ai_complete = False
++                    state.snapshot_created = False
++                    state.snapshot_complete = False
++                    state.export_complete = False
++                    state.materialization_complete = False
++                    state.status = 'PROCESSING'
++                state.save()
+ 
+             logger.info(f"[ASSEMBLY_BARRIER_CREATED] record={record.id} expected={total_pages}")
+             
+-            if not record.extracted_data:
++            if not record.extracted_data or is_rescan:
+                 # ── [RECOVERY_IDEMPOTENCY_FIX] ──
+                 # If the record is already past OCR stage, do NOT re-enqueue AI tasks.
+                 in_flight_statuses = [
+@@ -552,7 +562,7 @@ def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wa
+                     PipelineStatus.FINALIZING, 
+                     PipelineStatus.FINALIZED
+                 ]
+-                if record.status in in_flight_statuses and not is_reusable:
++                if record.status in in_flight_statuses and not is_reusable and not is_rescan:
+                      logger.info(f"[PIPELINE_RECOVERY_SKIP] record={record.id} already in stage {record.status}. Bypassing re-extraction.")
+                      return {"status": "ENQUEUED"}
+ 
+@@ -572,7 +582,9 @@ def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wa
+                     item_id=item_id,
+                     upload_session_id=record.upload_session_id,
+                     job_id=job_id,
+-                    file_path=file_path
++                    file_path=file_path,
++                    is_rescan=is_rescan,
++                    rescan_history_id=rescan_history_id
+                 )
+             
+             if not wait_for_ai:
+@@ -1415,8 +1427,15 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
+                 
+                 logger.info(f"[MATERIALIZATION_START] session={record.upload_session_id} tenant={record.tenant_id}")
+ 
+-                # A. Explosion (Bulk Create)
++                # A. Explosion (Bulk Create / Reuse)
++                existing_siblings = list(InvoiceTempOCR.objects.filter(upload_session_id=record.upload_session_id).exclude(id=record.id))
++                logger.info(
++                    f"[DIAGNOSTIC_LOG] existing_siblings count={len(existing_siblings)} details="
++                    f"{[{'id': sib.id, 'file_path': getattr(sib, 'file_path', None), 'file_hash': getattr(sib, 'file_hash', None)} for sib in existing_siblings]}"
++                )
+                 siblings = []
++                used_existing_ids = set()
++
+                 for idx, inv_ui in enumerate(final_invoices):
+                     # ── [PHASE 13: STABLE IDENTITY HASH (EXPANDED)] ──
+                     # Replaces fuzzy deduplication with semantic deterministic hash
+@@ -1477,19 +1496,58 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
+ 
+                         logger.info(f"[STAGING_ROW_CREATED] primary={is_primary} index={idx} invoice_no={inv_ui.get('invoice_no')} stable_hash={stable_hash[:8]}")
+                     else:
+-                        sibling = InvoiceTempOCR(
+-                            tenant_id=record.tenant_id,
+-                            upload_session_id=record.upload_session_id,
+-                            file_path=record.file_path,
+-                            file_hash=stable_hash,
+-                            group_id=record.group_id,
+-                            status=PipelineStatus.FINALIZED,
+-                            is_primary=is_primary,
+-                            processed=False,
+-                            voucher_type=record.voucher_type,
+-                            upload_type=record.upload_type  # [UPLOAD_TYPE ISOLATION FIX]
+-                        )
+-                        sync_record_flattened_fields(sibling, inv_ui, commit=False)
++                        # Find a matching existing sibling to reuse
++                        matched_sib = None
++                        # 1. Match by stable hash
++                        for sib in existing_siblings:
++                            if sib.id not in used_existing_ids and sib.file_hash == stable_hash:
++                                matched_sib = sib
++                                break
++                        # 2. Match by invoice number & gstin
++                        if not matched_sib and inv_no:
++                            for sib in existing_siblings:
++                                if sib.id not in used_existing_ids and sib.supplier_invoice_no == inv_no and sib.gstin == gstin:
++                                    matched_sib = sib
++                                    break
++                        # 3. Match by invoice number only
++                        if not matched_sib and inv_no:
++                            for sib in existing_siblings:
++                                if sib.id not in used_existing_ids and sib.supplier_invoice_no == inv_no:
++                                    matched_sib = sib
++                                    break
++                        # 4. Fallback: match any unused sibling sequentially
++                        if not matched_sib:
++                            for sib in existing_siblings:
++                                if sib.id not in used_existing_ids:
++                                    matched_sib = sib
++                                    break
++
++                        if matched_sib:
++                            used_existing_ids.add(matched_sib.id)
++                            sibling = matched_sib
++                            sibling.file_hash = stable_hash
++                            sibling.is_primary = is_primary
++                            sibling.status = PipelineStatus.FINALIZED
++                            sibling.processed = False
++                            sibling.voucher_type = record.voucher_type
++                            sibling.upload_type = record.upload_type
++                            sync_record_flattened_fields(sibling, inv_ui, commit=False)
++                            logger.info(f"[STAGING_ROW_REUSED] sibling_id={sibling.id} index={idx} invoice_no={inv_ui.get('invoice_no')} stable_hash={stable_hash[:8]}")
++                        else:
++                            sibling = InvoiceTempOCR(
++                                tenant_id=record.tenant_id,
++                                upload_session_id=record.upload_session_id,
++                                file_path=record.file_path,
++                                file_hash=stable_hash,
++                                group_id=record.group_id,
++                                status=PipelineStatus.FINALIZED,
++                                is_primary=is_primary,
++                                processed=False,
++                                voucher_type=record.voucher_type,
++                                upload_type=record.upload_type  # [UPLOAD_TYPE ISOLATION FIX]
++                            )
++                            sync_record_flattened_fields(sibling, inv_ui, commit=False)
++                            logger.info(f"[STAGING_ROW_CREATED] sibling index={idx} invoice_no={inv_ui.get('invoice_no')} stable_hash={stable_hash[:8]}")
+ 
+                         # 🔹 RUN AUTHORITATIVE STRICT DUPLICATE VALIDATION IMMEDIATELY FOR SIBLING
+                         from accounting.models_voucher_purchase import VoucherPurchaseSupplierDetails
+@@ -1510,7 +1568,6 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
+                         logger.info(f"[DUPLICATE_STATUS_PERSISTED] sibling status={sibling.validation_status}")
+ 
+                         siblings.append(sibling)
+-                        logger.info(f"[STAGING_ROW_CREATED] primary={is_primary} index={idx} invoice_no={inv_ui.get('invoice_no')} stable_hash={stable_hash[:8]}")
+             
+                 # Enforce Phase 4 Hard Canonical Freeze and Validation Revision on primary/siblings
+                 from ocr_pipeline.integrity_enforcer import get_dto_hash
+@@ -1544,11 +1601,42 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
+                             f"[PERSISTENCE_ATTEMPT] invoice_no={sib.supplier_invoice_no} "
+                             f"group_key=sibling page_count=1 session={record.upload_session_id}"
+                         )
+-                    # Clear stale sibling records for the session to prevent unique key violation
+-                    InvoiceTempOCR.objects.filter(upload_session_id=record.upload_session_id).exclude(id=record.id).delete()
+-                    InvoiceTempOCR.objects.bulk_create(siblings)
+                     
+-                    # Re-associate any existing PendingPurchase records with the new sibling IDs
++                    # Split siblings into reused vs new
++                    reused_siblings = [sib for sib in siblings if sib.id is not None]
++                    new_siblings = [sib for sib in siblings if sib.id is None]
++                    
++                    # Save reused siblings
++                    for sib in reused_siblings:
++                        sib.save()
++                    
++                    # Create new siblings
++                    if new_siblings:
++                        InvoiceTempOCR.objects.bulk_create(new_siblings)
++                        new_siblings_hashes = [sib.file_hash for sib in new_siblings]
++                        created_siblings = list(InvoiceTempOCR.objects.filter(
++                            upload_session_id=record.upload_session_id,
++                            file_hash__in=new_siblings_hashes
++                        ))
++                        siblings = reused_siblings + created_siblings
++                    else:
++                        siblings = reused_siblings
++                    
++                    # Clean up unused existing siblings (orphans)
++                    unused_siblings = [sib for sib in existing_siblings if sib.id not in used_existing_ids]
++                    logger.info(
++                        f"[DIAGNOSTIC_LOG] unused_siblings count={len(unused_siblings)} details="
++                        f"{[{'id': sib.id, 'file_path': getattr(sib, 'file_path', None), 'file_hash': getattr(sib, 'file_hash', None)} for sib in unused_siblings]}"
++                    )
++                    if unused_siblings:
++                        unused_ids = [sib.id for sib in unused_siblings]
++                        logger.info(f"[DIAGNOSTIC_LOG] unused_ids={unused_ids}")
++                        logger.warning(f"[STAGING_ROW_CLEANUP] Deleting unused siblings: {unused_ids}")
++                        logger.info(f"[DIAGNOSTIC_LOG] Executing delete operation on InvoiceTempOCR for ids={unused_ids}")
++                        InvoiceTempOCR.objects.filter(id__in=unused_ids).delete()
++                        logger.info(f"[DIAGNOSTIC_LOG] Delete operation execution complete for ids={unused_ids}")
++                    
++                    # Re-associate any existing PendingPurchase records with the sibling IDs
+                     try:
+                         from pending_purchases.models import PendingPurchase
+                         for sib in siblings:
+@@ -1795,6 +1883,15 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
+         logger.exception(f"[ASSEMBLY_FATAL_ERROR] record={record.id}: {str(e)}")
+         import traceback
+         logger.exception(traceback.format_exc())
++        try:
++            from ocr_pipeline.models import PipelineStatus
++            InvoiceTempOCR.objects.filter(id=record.id).update(
++                status=PipelineStatus.FAILED,
++                validation_status='ERROR'
++            )
++            logger.info(f"[ASSEMBLY_FAIL_SAFE_PERSISTED] record={record.id} status=FAILED validation_status=ERROR")
++        except Exception as e_persist:
++            logger.error(f"[ASSEMBLY_FAIL_SAFE_PERSIST_FAILED] record={record.id} error={e_persist}")
+         return {"status": "ERROR", "error": str(e)}
+     finally:
+         for lock_n in acquired_canonical_locks:
+@@ -2985,11 +3082,15 @@ def process_invoice_upload_sync(task: dict):
+             return False
+             
+         # Call the unified pipeline
++        is_rescan = payload.get('is_rescan', False)
++        rescan_history_id = payload.get('rescan_history_id')
+         result = run_ocr_pipeline(
+             record=record,
+             wait_for_ai=False, # Trigger async fanout
+-            job_id=task.get('job_id'),
+-            file_path=abs_file_path
++            job_id=task.get('job_id') or payload.get('job_id'),
++            file_path=abs_file_path,
++            is_rescan=is_rescan,
++            rescan_history_id=rescan_history_id
+         )
+         
+         # [PHASE 11.9] Check for Terminal Pipeline Failures
+
+commit 46642d43495b3eca8c6346744e1a2b77b7a77135
+Author: UlaganathanK <ulaganathank38@gmail.com>
+Date:   Sat Jun 13 16:43:26 2026 +0530
+
+    changes
+
+diff --git a/backend/ocr_pipeline/pipeline.py b/backend/ocr_pipeline/pipeline.py
+index 8a1f5c2..3c82975 100644
+--- a/backend/ocr_pipeline/pipeline.py
++++ b/backend/ocr_pipeline/pipeline.py
+@@ -2040,6 +2040,9 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
+     try:
+         try:
+             record = InvoiceTempOCR.objects.select_for_update().get(id=record.id)
++            if record.extracted_data:
++                sync_record_flattened_fields(record, record.extracted_data, commit=False)
++                record.save(update_fields=['supplier_invoice_no', 'gstin', 'branch', 'irn', 'ack_no', 'ack_date'])
+         except InvoiceTempOCR.DoesNotExist:
+             logger.error(f"[VALIDATION_ABORT] Record {record.id} not found in database.")
+             return {"status": "ERROR"}
+
+commit 52c7189990cd1f1fe0cf5db34188371a1a252abd
+Author: UlaganathanK <ulaganathank38@gmail.com>
+Date:   Sat Jun 13 16:15:15 2026 +0530
+
+    changes
+
+diff --git a/backend/ocr_pipeline/pipeline.py b/backend/ocr_pipeline/pipeline.py
+index 801e066..8a1f5c2 100644
+--- a/backend/ocr_pipeline/pipeline.py
++++ b/backend/ocr_pipeline/pipeline.py
+@@ -1547,6 +1547,27 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
+                     # Clear stale sibling records for the session to prevent unique key violation
+                     InvoiceTempOCR.objects.filter(upload_session_id=record.upload_session_id).exclude(id=record.id).delete()
+                     InvoiceTempOCR.objects.bulk_create(siblings)
++                    
++                    # Re-associate any existing PendingPurchase records with the new sibling IDs
++                    try:
++                        from pending_purchases.models import PendingPurchase
++                        for sib in siblings:
++                            if sib.id and sib.supplier_invoice_no:
++                                updated_count = PendingPurchase.objects.filter(
++                                    scan_session_id=record.upload_session_id,
++                                    invoice_number=sib.supplier_invoice_no
++                                ).update(
++                                    source_scan_row_id=sib.id,
++                                    source_document_hash=sib.file_hash
++                                )
++                                if updated_count > 0:
++                                    logger.critical(
++                                        f"[PENDING_PURCHASE_REASSOCIATED] Updated PP for invoice={sib.supplier_invoice_no} "
++                                        f"new_source_scan_row_id={sib.id} count={updated_count}"
++                                    )
++                    except Exception as e_reassoc:
++                        logger.error(f"[PENDING_PURCHASE_REASSOCIATE_ERROR] Failed to update sibling references: {e_reassoc}")
++
+                     for sib in siblings:
+                         logger.info(
+                             f"[DB_RECORD_CREATED] record_id={sib.id} invoice_no={sib.supplier_invoice_no} "
+
+commit caf13df93b9db3da3c3ce3388ccc6d5431dc83bf
+Author: UlaganathanK <ulaganathank38@gmail.com>
+Date:   Thu Jun 11 15:43:31 2026 +0530
+
+    fix: edit persistence sync - snapshot matching, pending purchase vendor_name, SearchableSelect blur commit
+
+diff --git a/backend/ocr_pipeline/pipeline.py b/backend/ocr_pipeline/pipeline.py
+index 8791aea..801e066 100644
+--- a/backend/ocr_pipeline/pipeline.py
++++ b/backend/ocr_pipeline/pipeline.py
+@@ -2006,7 +2006,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
+         time.sleep(0.05)
+         if not acquire_redis_lock(canonical_lock_name, expiry_s=120):
+             logger.warning(f"[DISTRIBUTED_LOCK_REJECTED] canonical lock held for hash={canonical_invoice_hash} in validation/finalization on retry - returning current status")
+-            return {"status": record.validation_status or "PROCESSING"}
++            return {"status": "LOCK_HELD", "message": "Record is currently being processed."}
+ 
+     if not acquire_redis_lock(lock_name, expiry_s=120):
+         logger.warning(f"[DISTRIBUTED_LOCK_REJECTED] validation_lock rejected for record={record.id} - sleeping 50ms and retrying...")
+@@ -2014,7 +2014,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
+         if not acquire_redis_lock(lock_name, expiry_s=120):
+             logger.warning(f"[DISTRIBUTED_LOCK_REJECTED] validation_lock rejected for record={record.id} on retry - returning current status")
+             release_redis_lock(canonical_lock_name)
+-            return {"status": record.validation_status or "PROCESSING"}
++            return {"status": "LOCK_HELD", "message": "Record is currently being processed."}
+ 
+     try:
+         try:
+@@ -2460,8 +2460,10 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
+                 pass
+ 
+         # Sync vendor name from master if found
+-        if vendor:
+-             vendor_name = vendor.vendor_name
++        # NOTE: keep the user-edited vendor_name from extracted_data for the ui_row
++        # (so PendingPurchase shows what the user entered, not just the master name).
++        # The master_vendor_name is used only for internal validation logic.
++        master_vendor_name = vendor.vendor_name if vendor else None
+ 
+         # Validation has been performed earlier in validate_and_process_entry
+         pass
+@@ -2479,10 +2481,14 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
+         vendor_status_enum = ValidationEnums.VENDOR_STATUS_EXISTING if vendor else ValidationEnums.VENDOR_STATUS_CREATE
+         voucher_status_enum = ValidationEnums.VOUCHER_STATUS_EXISTING if is_duplicate else ValidationEnums.VOUCHER_STATUS_NEW
+         item_status_enum = ValidationEnums.ITEM_STATUS_EXISTING if inv_val["item_status"] == "ALREADY EXIST" else ValidationEnums.ITEM_STATUS_CREATE
++        # Use the user-edited vendor_name from extracted_data for ui_row so that
++        # PendingPurchase.vendor_name reflects the manually edited value, not the
++        # master vendor name that may differ (e.g. short form vs full form).
++        _ed_vendor_name = (record.extracted_data or {}).get('vendor_name') or vendor_name
+         ui_row = {
+             'invoice_no': invoice_no,
+             'invoice_date': (canonical.get('invoice_date') or supplier.get('invoice_date') or supply.get('invoice_date') or ''),
+-            'vendor_name': vendor_name,
++            'vendor_name': _ed_vendor_name,
+             'vendor_gstin': gstin,
+             'total_amount': (canonical.get('total_amount') or canonical.get('grand_total') or due.get('total_amount') or None),
+         }
+
+commit 10c10c6947b06f49ab6659f9db00ae2d1fef0d49
+Author: UlaganathanK <ulaganathank38@gmail.com>
+Date:   Tue Jun 9 12:12:29 2026 +0530
+
+    Stabilize pending purchase revalidation parity audit, live row status tracing, and sync handlers
+
+diff --git a/backend/ocr_pipeline/pipeline.py b/backend/ocr_pipeline/pipeline.py
+index 1842389..8791aea 100644
+--- a/backend/ocr_pipeline/pipeline.py
++++ b/backend/ocr_pipeline/pipeline.py
+@@ -1037,7 +1037,9 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
+             # Run item validation during assembly before final freeze
+             try:
+                 from .inventory_validation import InventoryItemValidationService
+-                inv_val = InventoryItemValidationService.validate_items(record.tenant_id, items)
++                v_id = ui_pay.get("vendor_id") or record.vendor_id
++                v_gst = ui_pay.get("vendor_gstin") or ui_pay.get("gstin") or record.gstin
++                inv_val = InventoryItemValidationService.validate_items(record.tenant_id, items, v_id, v_gst)
+                 ui_pay["items"] = inv_val["items"]
+                 ui_pay["item_status"] = inv_val["item_status"]
+                 ui_pay["missing_items"] = inv_val["missing_items"]
+@@ -2312,7 +2314,9 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
+         )
+ 
+         from .inventory_validation import InventoryItemValidationService
+-        inv_val = InventoryItemValidationService.validate_items(tenant_id, items)
++        v_id = record.vendor_id
++        v_gst = gstin or record.gstin
++        inv_val = InventoryItemValidationService.validate_items(tenant_id, items, v_id, v_gst, record=record)
+ 
+         # PHASE 2: PRINT REAL STRUCTURES - after validation
+         logger.critical(
+@@ -2391,6 +2395,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
+                 if vendor:
+                     record.vendor_id = vendor.id
+                     record.vendor_status = 'EXISTS'  # [CANONICAL FIX] Persist vendor_status to DB
++                    record.save(update_fields=['vendor_id', 'vendor_status'])
+                     logger.info(
+                         f"[VENDOR_VALIDATION_RESULT] "
+                         f"gstin={gstin_key} "

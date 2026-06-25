@@ -177,8 +177,15 @@ class InvoiceOCRTemp(models.Model):
     gstin = models.CharField(max_length=50, null=True, blank=True)
     branch = models.CharField(max_length=255, null=True, blank=True)
     validation_message = models.TextField(null=True, blank=True)
+
+    # Added fields for Sprint 3
+    normalized_invoice_no = models.CharField(max_length=100, null=True, blank=True)
+    vendor_confidence = models.FloatField(null=True, blank=True)
+    gstin_confidence = models.FloatField(null=True, blank=True)
+    invoice_number_confidence = models.FloatField(null=True, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
+
 
     class Meta:
         managed = False
@@ -231,28 +238,22 @@ class UploadSession(models.Model):
     class Meta:
         db_table = 'upload_sessions'
 
-class GeminiQuota(models.Model):
-    """Tracks active Gemini API calls for concurrency governance (Phase 11)."""
+class AIQuota(models.Model):
+    """Tracks active AI API calls for concurrency governance (Phase 11).
+    Formerly named GeminiQuota. Renamed to be provider-agnostic.
+    DB table kept as 'gemini_quotas' for backward compatibility — no migration needed.
+    """
     tenant_id = models.CharField(max_length=100, unique=True)
     active_calls = models.IntegerField(default=0)
     max_concurrent = models.IntegerField(default=10)
-    tokens = models.FloatField(default=15.0) # Current available tokens
+    tokens = models.FloatField(default=15.0)  # Current available tokens
     bucket_capacity = models.FloatField(default=15.0)
-    refill_rate = models.FloatField(default=1.0) # tokens per second
+    refill_rate = models.FloatField(default=1.0)  # tokens per second
     last_refill_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        # Keep existing table name — avoids a destructive migration
         db_table = 'gemini_quotas'
-    """Tracks active Gemini API calls for concurrency governance (Phase 11)."""
-    tenant_id = models.CharField(max_length=100, unique=True)
-    active_calls = models.IntegerField(default=0)
-    max_concurrent = models.IntegerField(default=10)
-    tokens = models.FloatField(default=15.0) # Current available tokens
-    bucket_capacity = models.FloatField(default=15.0)
-    refill_rate = models.FloatField(default=1.0) # tokens per second
-    last_refill_at = models.DateTimeField(default=timezone.now)
-    updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        db_table = 'gemini_quotas'
+

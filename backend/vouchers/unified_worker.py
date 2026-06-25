@@ -100,6 +100,13 @@ def main():
     logger.info(f"[WORKER_VERSION_ACTIVE] version='1.0.0-distributed' role='{args.role}'")
     logger.info(f"[PIPELINE_MODE] mode='distributed' backend='sqs' coordinator='redis'")
     logger.info(f"[QUEUE_BINDING_ACTIVE] role='{args.role}' queue='{args.role}' status='ACTIVE'")
+
+    if args.role == 'ai':
+        from core.ai_proxy import validate_ai_on_startup
+        if not validate_ai_on_startup():
+            logger.critical("[AI_PROVIDER_STARTUP_FAILURE] AI provider endpoint validation failed during worker startup. Refusing to start worker.")
+            sys.exit(1)
+
     worker = worker_class()
     
     try:

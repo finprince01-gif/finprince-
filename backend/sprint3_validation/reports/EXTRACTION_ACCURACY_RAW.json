@@ -1,0 +1,134 @@
+{
+  "audited_at": "2026-06-21T10:29:41.467777+00:00",
+  "session_id": "c1311ebd-e123-411b-91fb-7451ba3a0705",
+  "tier_a": {
+    "description": "Human Verified Ground Truth (10 invoices)",
+    "invoice_count": 0,
+    "field_accuracy": {
+      "vendor_name": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "gstin": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "invoice_no": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "invoice_date": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "taxable_value": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "cgst": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "sgst": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "igst": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "total_amount": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      }
+    },
+    "avg_accuracy_pct": null,
+    "results": []
+  },
+  "tier_b": {
+    "description": "Automated Validation (remaining 12 invoices)",
+    "invoice_count": 0,
+    "field_accuracy": {
+      "vendor_name": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "gstin": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "invoice_no": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "invoice_date": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "taxable_value": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "cgst": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "sgst": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "igst": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      },
+      "total_amount": {
+        "matches": 0,
+        "misses": 0,
+        "total": 0,
+        "accuracy_pct": null
+      }
+    },
+    "avg_accuracy_pct": null,
+    "results": []
+  },
+  "combined": {
+    "total_invoices": 0,
+    "avg_accuracy_pct": null
+  },
+  "worst_20_invoices": [],
+  "ground_truth_status": "TEMPLATE_ONLY_FILL_MANUALLY"
+}

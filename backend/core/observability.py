@@ -91,7 +91,7 @@ class ForensicObservability:
         self.info(f"[PIPELINE_METRIC] {event}", **kwargs)
 
     def ai_metric(self, **kwargs):
-        """[AI_METRIC] - Tracks Gemini latency, 429s, token usage."""
+        """[AI_METRIC] - Tracks AI provider latency, 429s, token usage."""
         event = kwargs.pop("event", "OP")
         self.info(f"[AI_METRIC] {event}", **kwargs)
 

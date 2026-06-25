@@ -1,0 +1,450 @@
+{
+  "mined_at": "2026-06-21T10:29:24.529901+00:00",
+  "log_file": "C:\\108\\AI-accounting-0.03\\backend\\logs\\debug.log",
+  "log_size_mb": 180.35,
+  "data_source_note": "Using OCR_RETRY_CHAIN_START, LOW_CONFIDENCE_SCORE_BREAKDOWN, QWEN_INFERENCE_PERF (actual log tags). Legacy OCR_TELEMETRY/OCR_RESULT not present in this log version.",
+  "summary": {
+    "unique_pages_with_ocr_retry": 305,
+    "unique_records_with_ocr_retry": 79,
+    "total_ocr_retry_chain_starts": 513,
+    "total_ocr_recovery_passes": 674,
+    "total_low_confidence_events": 303,
+    "avg_confidence_score": 100.0,
+    "avg_vendor_score": 1.0,
+    "total_qwen_inference_events": 103,
+    "avg_qwen_latency_s": 219.7,
+    "max_qwen_latency_s": 1168.0,
+    "avg_prompt_tokens": 4704,
+    "avg_tokens_per_second": 8.56,
+    "total_slot_acquisitions": 87,
+    "legacy_ocr_telemetry_events": 0,
+    "legacy_dpi_upgrade_events": 0,
+    "legacy_ocr_result_events": 0
+  },
+  "low_confidence_events_sample": [
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    },
+    {
+      "confidence_score": 100,
+      "vendor_score": 1.0,
+      "invoice_no_score": 1.0,
+      "gstin_score": 1.0,
+      "totals_score": 1.0
+    }
+  ],
+  "qwen_perf_sample": [
+    {
+      "timestamp": "2026-06-18 12:58:01",
+      "latency_s": 201.97,
+      "prompt_tokens": 4762,
+      "completion_tokens": 976,
+      "total_tokens": 5738,
+      "tokens_per_sec": 4.83
+    },
+    {
+      "timestamp": "2026-06-18 13:05:06",
+      "latency_s": 203.01,
+      "prompt_tokens": 4762,
+      "completion_tokens": 1037,
+      "total_tokens": 5799,
+      "tokens_per_sec": 5.11
+    },
+    {
+      "timestamp": "2026-06-18 13:07:48",
+      "latency_s": 323.6,
+      "prompt_tokens": 4705,
+      "completion_tokens": 705,
+      "total_tokens": 5410,
+      "tokens_per_sec": 2.18
+    },
+    {
+      "timestamp": "2026-06-18 13:09:20",
+      "latency_s": 243.6,
+      "prompt_tokens": 4705,
+      "completion_tokens": 692,
+      "total_tokens": 5397,
+      "tokens_per_sec": 2.84
+    },
+    {
+      "timestamp": "2026-06-18 14:18:59",
+      "latency_s": 129.89,
+      "prompt_tokens": 4762,
+      "completion_tokens": 1046,
+      "total_tokens": 5808,
+      "tokens_per_sec": 8.05
+    },
+    {
+      "timestamp": "2026-06-18 14:24:06",
+      "latency_s": 105.32,
+      "prompt_tokens": 4762,
+      "completion_tokens": 1046,
+      "total_tokens": 5808,
+      "tokens_per_sec": 9.93
+    },
+    {
+      "timestamp": "2026-06-18 14:42:16",
+      "latency_s": 95.63,
+      "prompt_tokens": 4705,
+      "completion_tokens": 688,
+      "total_tokens": 5393,
+      "tokens_per_sec": 7.19
+    },
+    {
+      "timestamp": "2026-06-18 14:42:45",
+      "latency_s": 125.24,
+      "prompt_tokens": 4762,
+      "completion_tokens": 1046,
+      "total_tokens": 5808,
+      "tokens_per_sec": 8.35
+    },
+    {
+      "timestamp": "2026-06-18 14:54:16",
+      "latency_s": 12.78,
+      "prompt_tokens": 64,
+      "completion_tokens": 39,
+      "total_tokens": 103,
+      "tokens_per_sec": 3.05
+    },
+    {
+      "timestamp": "2026-06-18 15:13:06",
+      "latency_s": 83.01,
+      "prompt_tokens": 4705,
+      "completion_tokens": 688,
+      "total_tokens": 5393,
+      "tokens_per_sec": 8.29
+    },
+    {
+      "timestamp": "2026-06-18 15:14:45",
+      "latency_s": 137.67,
+      "prompt_tokens": 4762,
+      "completion_tokens": 1045,
+      "total_tokens": 5807,
+      "tokens_per_sec": 7.59
+    },
+    {
+      "timestamp": "2026-06-18 15:15:14",
+      "latency_s": 104.45,
+      "prompt_tokens": 4762,
+      "completion_tokens": 1047,
+      "total_tokens": 5809,
+      "tokens_per_sec": 10.02
+    },
+    {
+      "timestamp": "2026-06-18 15:43:58",
+      "latency_s": 180.38,
+      "prompt_tokens": 6122,
+      "completion_tokens": 1171,
+      "total_tokens": 7293,
+      "tokens_per_sec": 6.49
+    },
+    {
+      "timestamp": "2026-06-18 15:49:42",
+      "latency_s": 90.14,
+      "prompt_tokens": 4079,
+      "completion_tokens": 686,
+      "total_tokens": 4765,
+      "tokens_per_sec": 7.61
+    },
+    {
+      "timestamp": "2026-06-18 15:51:25",
+      "latency_s": 193.05,
+      "prompt_tokens": 4136,
+      "completion_tokens": 1017,
+      "total_tokens": 5153,
+      "tokens_per_sec": 5.27
+    },
+    {
+      "timestamp": "2026-06-18 15:57:43",
+      "latency_s": 12.05,
+      "prompt_tokens": 64,
+      "completion_tokens": 39,
+      "total_tokens": 103,
+      "tokens_per_sec": 3.24
+    },
+    {
+      "timestamp": "2026-06-19 10:56:28",
+      "latency_s": 32.06,
+      "prompt_tokens": 5093,
+      "completion_tokens": 1020,
+      "total_tokens": 6113,
+      "tokens_per_sec": 31.81
+    },
+    {
+      "timestamp": "2026-06-19 10:57:01",
+      "latency_s": 31.59,
+      "prompt_tokens": 5093,
+      "completion_tokens": 1020,
+      "total_tokens": 6113,
+      "tokens_per_sec": 32.29
+    },
+    {
+      "timestamp": "2026-06-19 10:57:29",
+      "latency_s": 39.5,
+      "prompt_tokens": 5093,
+      "completion_tokens": 1020,
+      "total_tokens": 6113,
+      "tokens_per_sec": 25.82
+    },
+    {
+      "timestamp": "2026-06-19 10:57:58",
+      "latency_s": 35.17,
+      "prompt_tokens": 5093,
+      "completion_tokens": 1020,
+      "total_tokens": 6113,
+      "tokens_per_sec": 29.0
+    }
+  ],
+  "ocr_retry_sample": [
+    {
+      "timestamp": "2026-06-16 14:06:46",
+      "record_id": "1007526",
+      "page": 2,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 14:06:47",
+      "record_id": "1007526",
+      "page": 1,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 14:06:47",
+      "record_id": "1007526",
+      "page": 5,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 14:06:47",
+      "record_id": "1007526",
+      "page": 3,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 14:06:47",
+      "record_id": "1007526",
+      "page": 4,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 14:55:56",
+      "record_id": "1007528",
+      "page": 3,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 14:55:56",
+      "record_id": "1007528",
+      "page": 1,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 14:55:56",
+      "record_id": "1007528",
+      "page": 2,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 14:55:57",
+      "record_id": "1007528",
+      "page": 4,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 14:55:57",
+      "record_id": "1007528",
+      "page": 5,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 15:12:18",
+      "record_id": "1007536",
+      "page": 4,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 15:12:19",
+      "record_id": "1007536",
+      "page": 2,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 15:12:19",
+      "record_id": "1007536",
+      "page": 1,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 15:12:19",
+      "record_id": "1007536",
+      "page": 3,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 15:12:19",
+      "record_id": "1007536",
+      "page": 5,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 15:13:01",
+      "record_id": "1007536",
+      "page": 3,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 15:13:01",
+      "record_id": "1007536",
+      "page": 4,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 15:13:01",
+      "record_id": "1007536",
+      "page": 5,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 15:13:01",
+      "record_id": "1007536",
+      "page": 1,
+      "max_passes": 5
+    },
+    {
+      "timestamp": "2026-06-16 15:13:01",
+      "record_id": "1007536",
+      "page": 2,
+      "max_passes": 5
+    }
+  ]
+}

@@ -31,7 +31,7 @@ async def segment_pdf_activity(file_path: str, record_id: str, tenant_id: str) -
 @activity.defn
 async def ai_extraction_activity(record_id: str, tenant_id: str, page_idx: int) -> Dict[str, Any]:
     """
-    Wraps the Gemini Extraction Proxy.
+    Wraps the Qwen / AI Extraction Proxy.
     Will automatically throw TerminalTaskError on auth/quota blocks.
     """
     logger.info(f"[ACTIVITY] ai_extraction | record_id={record_id} page={page_idx}")

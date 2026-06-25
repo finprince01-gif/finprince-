@@ -1,0 +1,88 @@
+{
+  "capture_label": "PRE_BATCH",
+  "captured_at": "2026-06-21T11:01:14.876490+00:00",
+  "captured_at_epoch": 1782039674.8764904,
+  "redis": {
+    "status": "UP",
+    "host": "localhost",
+    "port": 6379,
+    "used_memory_mb": 0.98,
+    "used_memory_human": "999.85K",
+    "peak_memory_mb": 1.2,
+    "ops_per_sec": 6,
+    "connected_clients": 16,
+    "total_key_count": 88,
+    "lock_key_count": 0,
+    "session_key_count": 2,
+    "assembly_key_count": 66,
+    "worker_heartbeat_key_count": 6,
+    "redis_version": "3.0.504",
+    "uptime_seconds": 3396,
+    "keyspace_hits": 4245,
+    "keyspace_misses": 81,
+    "latency_latest": "{}"
+  },
+  "sqs": {
+    "status": "OK",
+    "queue_depths": {
+      "ingestion": 0,
+      "ai": 9,
+      "assembly": 0,
+      "finalize": 0,
+      "export": 0,
+      "materialization": 0,
+      "dlq": 0
+    },
+    "total_depth": 9
+  },
+  "gpu": {
+    "status": "GPU_AVAILABLE",
+    "gpu_name": "NVIDIA GeForce RTX 4050 Laptop GPU",
+    "vram_used_mib": 4878,
+    "vram_free_mib": 1044,
+    "vram_total_mib": 6141,
+    "vram_used_pct": 79.4,
+    "gpu_utilization_pct": 0,
+    "temperature_c": 51
+  },
+  "cpu": {
+    "status": "OK",
+    "cpu_utilization_pct": 5.8,
+    "cpu_count_logical": 16,
+    "cpu_count_physical": 10,
+    "ram_total_gb": 23.71,
+    "ram_used_gb": 14.93,
+    "ram_available_gb": 8.79,
+    "ram_used_pct": 62.9
+  },
+  "workers": {
+    "alive_count": 6,
+    "total_roles": 6,
+    "workers": {
+      "INGESTION": {
+        "alive": true,
+        "ttl_seconds": 81
+      },
+      "AI": {
+        "alive": true,
+        "ttl_seconds": 85
+      },
+      "ASSEMBLY": {
+        "alive": true,
+        "ttl_seconds": 85
+      },
+      "FINALIZE": {
+        "alive": true,
+        "ttl_seconds": 85
+      },
+      "EXPORT": {
+        "alive": true,
+        "ttl_seconds": 85
+      },
+      "MATERIALIZE": {
+        "alive": true,
+        "ttl_seconds": 86
+      }
+    }
+  }
+}

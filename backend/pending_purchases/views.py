@@ -20,6 +20,34 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
     serializer_class = PendingPurchaseSerializer
     permission_classes = [IsAuthenticated]
 
+    def _get_and_verify_staging_record(self, pp):
+        """
+        Retrieves the staging record for the PendingPurchase.
+        If the linked source_scan_row_id is not found in the DB,
+        tries to automatically repair the link by finding another staging record
+        in the same upload session that matches the invoice number.
+        """
+        from ocr_pipeline.models import InvoiceTempOCR
+        
+        staging = InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).first()
+        if not staging and pp.scan_session_id and pp.invoice_number:
+            clean_inv = str(pp.invoice_number).strip().upper()
+            if clean_inv not in ('', 'MISSING', '—'):
+                relinked = InvoiceTempOCR.objects.filter(
+                    upload_session_id=pp.scan_session_id,
+                    supplier_invoice_no__iexact=clean_inv
+                ).first()
+                if relinked:
+                    logger.critical(
+                        f"[AUTO_REPAIR_LINKAGE] PendingPurchase id={pp.id} orphaned from staging_id={pp.source_scan_row_id}. "
+                        f"Found valid staging_id={relinked.id} for invoice={pp.invoice_number} in session={pp.scan_session_id}. Relinking."
+                    )
+                    pp.source_scan_row_id = relinked.id
+                    pp.source_document_hash = relinked.file_hash
+                    pp.save(update_fields=['source_scan_row_id', 'source_document_hash'])
+                    staging = relinked
+        return staging
+
     def _sync_related_rows(self, pp):
         """
         Surgical fix: Automatically revalidate other pending purchases from the same vendor 
@@ -43,7 +71,7 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
                 return
 
             for related_pp in related_qs:
-                staging = InvoiceTempOCR.objects.filter(id=related_pp.source_scan_row_id).first()
+                staging = self._get_and_verify_staging_record(related_pp)
                 if staging:
                     InvoiceTempOCR.objects.filter(id=related_pp.source_scan_row_id).update(
                         processed=False,
@@ -80,9 +108,7 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
         """
         try:
             pp = self.get_object()
-            from ocr_pipeline.models import InvoiceTempOCR
-
-            staging = InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).first()
+            staging = self._get_and_verify_staging_record(pp)
             if not staging:
                 return Response(
                     {'error': f'Staging record {pp.source_scan_row_id} not found'},
@@ -120,8 +146,7 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
         """
         try:
             pp = self.get_object()
-            from ocr_pipeline.models import InvoiceTempOCR
-            staging = InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).first()
+            staging = self._get_and_verify_staging_record(pp)
             staging_exists = staging is not None
             logger.critical(
                 f"[PENDING_REVALIDATE]\n"
@@ -149,6 +174,15 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
                 status='FINALIZED'
             )
             staging = InvoiceTempOCR.objects.get(id=pp.source_scan_row_id)
+            if staging.extracted_data and isinstance(staging.extracted_data, dict):
+                staging.extracted_data.pop('gst_resolution', None)
+                staging.extracted_data.pop('gst_audit_trail', None)
+                if 'assembled_exports' in staging.extracted_data and isinstance(staging.extracted_data['assembled_exports'], list) and staging.extracted_data['assembled_exports']:
+                    ae = staging.extracted_data['assembled_exports'][0]
+                    if isinstance(ae, dict):
+                        ae.pop('gst_resolution', None)
+                        ae.pop('gst_audit_trail', None)
+                staging.save(update_fields=['extracted_data'])
 
             from ocr_pipeline.pipeline import validate_and_process
             # Pass auto_save=False: revalidate only updates status badges.
@@ -157,7 +191,7 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
             # collapse voucher_unresolved and validation_unresolved flags in
             # _needs_pending_queue(), making is_pending=False the moment vendor+item
             # exist — which prematurely marks the row RESOLVED before any voucher is saved.
-            result = validate_and_process(staging, auto_save=False)
+            result = validate_and_process(staging, auto_save=False, user=request.user)
             
             if isinstance(result, dict) and result.get("status") == "LOCK_HELD":
                 return Response({'error': 'Record is currently being processed by another background task. Please try again in a few seconds.'}, status=409)
@@ -192,8 +226,7 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
         """
         try:
             pp = self.get_object()
-            from ocr_pipeline.models import InvoiceTempOCR
-            staging = InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).first()
+            staging = self._get_and_verify_staging_record(pp)
             if not staging:
                 return Response(
                     {'error': f'Staging record {pp.source_scan_row_id} not found'},
@@ -237,8 +270,7 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
                 if pp.pending_purchase_status == 'RESOLVED':
                     return Response({'status': 'already_resolved', 'message': 'This pending purchase has already been resolved.'})
 
-                from ocr_pipeline.models import InvoiceTempOCR
-                staging = InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).first()
+                staging = self._get_and_verify_staging_record(pp)
                 if not staging:
                     return Response(
                         {'error': f'Staging record {pp.source_scan_row_id} not found. Cannot finalize.'},
@@ -255,7 +287,7 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
                 logger.info(f"[PENDING_STAGING_UNBLOCKED] staging_id={staging.id} reset for finalization")
 
                 from ocr_pipeline.pipeline import validate_and_process
-                result = validate_and_process(staging, auto_save=True)
+                result = validate_and_process(staging, auto_save=True, user=request.user)
                 
                 if isinstance(result, dict) and result.get("status") == "LOCK_HELD":
                     return Response({'error': 'Record is currently being processed by another background task. Please try again in a few seconds.'}, status=409)
@@ -369,7 +401,7 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
         for pp in eligible_records:
             try:
                 with transaction.atomic():
-                    staging = InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).first()
+                    staging = self._get_and_verify_staging_record(pp)
                     if not staging:
                         raise ValueError(f'Staging record {pp.source_scan_row_id} not found')
 

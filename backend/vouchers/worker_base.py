@@ -20,7 +20,7 @@ CONCURRENCY_LIMIT = int(os.getenv('WORKER_CONCURRENCY', '50'))
 LEASE_EXTENSION_INTERVAL = int(os.getenv('SQS_LEASE_EXTEND_INTERVAL', '10'))
 
 class SqsLeaseExtender:
-    def __init__(self, handle: str, queue_type: str, interval: int = 10, max_duration: int = 900):
+    def __init__(self, handle: str, queue_type: str, interval: int = 10, max_duration: int = 3600):
         self.handle = handle
         self.queue_type = queue_type
         # Force interval to be at most 10 seconds to guarantee we run well before the 30s SQS visibility timeout.
@@ -35,14 +35,14 @@ class SqsLeaseExtender:
             logger.info(f"[VISIBILITY_EXTENDER_START] role={self.queue_type} handle={self.handle[:10]}...")
             logger.debug(f"[SQS_VISIBILITY_START] handle={self.handle[:10]}... queue={self.queue_type}")
             
-            # Immediately extend visibility to 300s to cover the first interval safely
+            # Immediately extend visibility to 1800s to cover the first interval safely
             loop = asyncio.get_running_loop()
             try:
                 extended = await loop.run_in_executor(
                     None,
                     lambda: queue_service.change_visibility(
                         self.handle,
-                        timeout=300,
+                        timeout=1800,
                         queue_type=self.queue_type
                     )
                 )
@@ -90,7 +90,7 @@ class SqsLeaseExtender:
                         None,
                         lambda: queue_service.change_visibility(
                             self.handle,
-                            timeout=300,
+                            timeout=1800,
                             queue_type=self.queue_type
                         )
                     ))
@@ -116,6 +116,7 @@ class BaseWorker(ABC):
         self.allowed_task_types = [] # Must be set by subclass
         self.last_task_time = time.time()
         self._stop_event = asyncio.Event()
+        self._was_idle = False
         
         # CHAOS_MODE for Phase 10
         self.chaos_mode = os.getenv('CHAOS_MODE', 'False').lower() == 'true'
@@ -154,39 +155,80 @@ class BaseWorker(ABC):
 
     async def _resource_monitor(self):
         """
-        [PHASE 12.1] Large PDF Governance & Memory Telemetry.
-        Monitors worker RSS memory and initiates a safe recycle if limits are breached.
+        [WORKER_RESOURCE] - Background telemetry & Large PDF Governance.
+        Monitors worker RSS memory and initiates a safe recycle if limits are breached,
+        and logs database connection diagnostics.
         """
         import psutil
         import os
+        import signal
+        
+        logger.info(f"[RESOURCE_MONITOR_START] role={self.role}")
+        logger.info(f"[MEMORY_GOVERNANCE_ACTIVE] role={self.role}")
+        
         process = psutil.Process(os.getpid())
         MAX_RSS_MB = 600.0  # Safe threshold before OOM
         SUSTAINED_SECONDS = 60
-        CHECK_INTERVAL = 15
         
         sustained_count = 0
-        threshold_hits_required = max(1, SUSTAINED_SECONDS // CHECK_INTERVAL)
+        last_db_check = 0.0
+        last_heartbeat_log = 0.0
         
         while self.running:
             try:
-                await asyncio.sleep(CHECK_INTERVAL)
-                if not self.running: break
+                # Dynamic check interval config (Phase 7)
+                try:
+                    check_interval = int(os.getenv('WORKER_RESOURCE_INTERVAL_SECONDS', '15'))
+                except (ValueError, TypeError):
+                    check_interval = 15
                 
+                await asyncio.sleep(check_interval)
+                if not self.running:
+                    break
+                
+                current_time = time.time()
+                
+                # A. Basic health heartbeat metrics
+                metrics.increment_counter("worker:heartbeat_total", tags={"role": self.role})
+                
+                # B. CPU & RSS Memory Telemetry
                 rss_bytes = process.memory_info().rss
                 rss_mb = rss_bytes / (1024 * 1024)
-                logger.info(f"[WORKER_MEMORY_USAGE] role={self.role} pid={os.getpid()} rss_mb={rss_mb:.2f} active_tasks={len(self.active_tasks)}")
+                cpu = process.cpu_percent(interval=None)
                 
-                if rss_mb > MAX_RSS_MB:
+                # Telemetry log
+                logger.debug(f"[WORKER_RESOURCE] role={self.role} cpu={cpu} rss_mb={rss_mb:.2f} active={len(self.active_tasks)}")
+                
+                # Metrics
+                metrics.set_gauge("worker:cpu", cpu, tags={"role": self.role})
+                metrics.set_gauge("worker:rss", rss_mb, tags={"role": self.role})
+                metrics.set_gauge("worker:active_tasks", len(self.active_tasks), tags={"role": self.role})
+                
+                # C. Heartbeat Logging (every 60 seconds)
+                if current_time - last_heartbeat_log >= 60:
+                    last_heartbeat_log = current_time
+                    logger.info(f"[RESOURCE_MONITOR_HEARTBEAT] role={self.role}")
+                
+                # D. Large PDF Governance Memory Threshold Check & Force Recycle (Phase 3)
+                force_recycle = os.getenv('FORCE_WORKER_RECYCLE', 'false').lower() == 'true' or os.getenv('WORKER_TEST_RECYCLE', 'false').lower() == 'true'
+                threshold_hits_required = max(1, SUSTAINED_SECONDS // check_interval)
+                
+                if rss_mb > MAX_RSS_MB or force_recycle:
                     sustained_count += 1
-                    logger.warning(f"[WORKER_SUSTAINED_MEMORY_PRESSURE] role={self.role} rss_mb={rss_mb:.2f} limit={MAX_RSS_MB} sustained={sustained_count}/{threshold_hits_required}")
-                    if sustained_count >= threshold_hits_required:
+                    if force_recycle:
+                        logger.warning(f"[WORKER_SUSTAINED_MEMORY_PRESSURE] role={self.role} rss_mb={rss_mb:.2f} limit={MAX_RSS_MB} (FORCED RECYCLE)")
+                    else:
+                        logger.warning(f"[WORKER_SUSTAINED_MEMORY_PRESSURE] role={self.role} rss_mb={rss_mb:.2f} limit={MAX_RSS_MB} sustained={sustained_count}/{threshold_hits_required}")
+                    
+                    if sustained_count >= threshold_hits_required or force_recycle:
                         logger.critical(f"[WORKER_RECYCLE_TRIGGERED] role={self.role} rss_mb={rss_mb:.2f} limit={MAX_RSS_MB}. Initiating graceful exit.")
                         logger.info(f"[WORKER_RECYCLE_STARTED] role={self.role} active_tasks={len(self.active_tasks)}")
-                        # Graceful exit: Stop accepting new tasks, wait for current ones to finish
+                        
                         self.running = False
                         if self.active_tasks:
                             logger.info(f"[WORKER_GRACEFUL_DRAIN] Waiting for {len(self.active_tasks)} active tasks to finish before exit...")
                             await asyncio.gather(*self.active_tasks.values(), return_exceptions=True)
+                        
                         logger.info(f"[WORKER_RECYCLE_COMPLETED] role={self.role} pid={os.getpid()}")
                         self.shutdown(signum=signal.SIGTERM, frame=None)
                         break
@@ -194,8 +236,43 @@ class BaseWorker(ABC):
                     if sustained_count > 0:
                         logger.info(f"[WORKER_RECYCLE_ABORTED] role={self.role} RSS recovered to {rss_mb:.2f}MB")
                     sustained_count = 0
+
+                # E. [DB_CONNECTION_FORENSICS] SHOW PROCESSLIST check (Phase 8 - throttled to 60s)
+                if current_time - last_db_check >= 60:
+                    last_db_check = current_time
+                    try:
+                        from django.db import connection, close_old_connections
+                        def query_processlist():
+                            close_old_connections()
+                            with connection.cursor() as cursor:
+                                cursor.execute("SHOW PROCESSLIST")
+                                columns = [col[0] for col in cursor.description]
+                                return [dict(zip(columns, row)) for row in cursor.fetchall()]
+                        
+                        loop = asyncio.get_running_loop()
+                        processes = await loop.run_in_executor(self.executor, query_processlist)
+                        
+                        total_conn = len(processes)
+                        sleeping_conn = sum(1 for p in processes if p.get('Command') == 'Sleep')
+                        active_conn = total_conn - sleeping_conn
+                        
+                        logger.info(
+                            f"[DB_CONNECTION_FORENSICS] role={self.role} PID={os.getpid()} "
+                            f"total_connections={total_conn} sleeping_connections={sleeping_conn} "
+                            f"active_connections={active_conn}"
+                        )
+                    except Exception as db_err:
+                        logger.error(f"[DB_FORENSICS_ERR] {db_err}")
+                    finally:
+                        from django.db import close_old_connections
+                        loop_current = asyncio.get_running_loop()
+                        await loop_current.run_in_executor(None, close_old_connections)
+
+            except asyncio.CancelledError:
+                break
             except Exception as e:
                 logger.error(f"[RESOURCE_MONITOR_ERROR] {e}")
+
 
     async def run(self):
         # Autoreload protection (Phase 4)
@@ -304,7 +381,8 @@ class BaseWorker(ABC):
                             r.expire(self._lock_key, 90)
                             r.expire(self._heartbeat_key, 90)
                             r.hset("worker_heartbeats", f"{self.role}_{cluster_env}", time.time())
-                            logger.debug(f"[WORKER_LOCK_REFRESH] role={self.role} pid={os.getpid()}")
+                            if not self._was_idle:
+                                logger.debug(f"[WORKER_LOCK_REFRESH] role={self.role} pid={os.getpid()}")
                         except Exception as e:
                             logger.error(f"[LOCK_RENEW_ERROR] {e}")
 
@@ -322,7 +400,8 @@ class BaseWorker(ABC):
         logger.info(f"[WORKER_LOOP_STARTED] role={self.role}")
         
         while self.running:
-            logger.info(f"[WORKER_POLLING] role={self.role} active={len(self.active_tasks)}")
+            if not self._was_idle:
+                logger.info(f"[WORKER_POLLING] role={self.role} active={len(self.active_tasks)}")
             try:
                 # [DB_STABILITY_FIX] Release stale DB connections at loop boundaries (Phase 3)
                 from django.db import close_old_connections
@@ -357,7 +436,8 @@ class BaseWorker(ABC):
                     lambda: queue_service.receive(
                         queue_type=self.queue_type,
                         max_messages=min(10, current_limit - len(self.active_tasks)),
-                        wait_time=20
+                        wait_time=20,
+                        suppress_empty_log=self._was_idle
                     )
                 )
 
@@ -372,9 +452,15 @@ class BaseWorker(ABC):
                     logger.error(f"[POLL_TIMESTAMP_ERR] {e}")
 
                 if not messages:
-                    logger.info(f"[WORKER_IDLE_WAIT] role={self.role} queue={self.queue_type} status=EMPTY")
-                    logger.info(f"[POLL_EMPTY_TICK] role={self.role} active={len(self.active_tasks)} running={self.running}")
+                    if not self._was_idle:
+                        logger.info(f"[WORKER_IDLE_STATE_ENTERED] role={self.role} queue={self.queue_type}")
+                        logger.info(f"[WORKER_IDLE_WAIT] role={self.role} queue={self.queue_type} status=EMPTY")
+                        logger.info(f"[POLL_EMPTY_TICK] role={self.role} active={len(self.active_tasks)} running={self.running}")
+                        self._was_idle = True
                 else:
+                    if self._was_idle:
+                        self._was_idle = False
+                        logger.info(f"[WORKER_IDLE_STATE_EXITED] role={self.role} queue={self.queue_type}")
                     for msg in messages:
                         msg_id = msg.get('_sqs_message_id', 'unknown')
                         task_id = msg.get('id', 'unknown')
@@ -407,7 +493,8 @@ class BaseWorker(ABC):
                                 
                         task_obj.add_done_callback(_on_done)
                         
-                logger.info(f"[WORKER_LOOP_CONTINUES] role={self.role}")
+                if not self._was_idle:
+                    logger.info(f"[WORKER_LOOP_CONTINUES] role={self.role}")
                 
             except asyncio.CancelledError:
                 # [PHASE 11.9] Forensic: This is where premature exits happen.
@@ -465,63 +552,7 @@ class BaseWorker(ABC):
 
         logger.info(f"[WORKER_FINAL_EXIT] role={self.role}")
 
-    async def _resource_monitor(self):
-        """[WORKER_RESOURCE] - Background telemetry."""
-        while self.running:
-            try:
-                # Basic health heartbeat
-                metrics.increment_counter("worker:heartbeat_total", tags={"role": self.role})
-                
-                try:
-                    import psutil
-                    process = psutil.Process(os.getpid())
-                    mem = process.memory_info().rss / 1024 / 1024 # MB
-                    cpu = process.cpu_percent(interval=None) # Non-blocking call
-                    
-                    # Log resource usage at DEBUG level to reduce noise
-                    logger.debug(f"[WORKER_RESOURCE] role={self.role} cpu={cpu} rss_mb={mem} active={len(self.active_tasks)}")
-                    metrics.set_gauge("worker:cpu", cpu, tags={"role": self.role})
-                    metrics.set_gauge("worker:rss", mem, tags={"role": self.role})
-                except ImportError:
-                    pass # psutil not installed
-                
-                metrics.set_gauge("worker:active_tasks", len(self.active_tasks), tags={"role": self.role})
 
-                # [DB_CONNECTION_FORENSICS] SHOW PROCESSLIST instrument (Phase 4)
-                try:
-                    from django.db import connection, close_old_connections
-                    def query_processlist():
-                        close_old_connections()
-                        with connection.cursor() as cursor:
-                            cursor.execute("SHOW PROCESSLIST")
-                            columns = [col[0] for col in cursor.description]
-                            return [dict(zip(columns, row)) for row in cursor.fetchall()]
-                    
-                    loop = asyncio.get_running_loop()
-                    processes = await loop.run_in_executor(self.executor, query_processlist)
-                    
-                    total_conn = len(processes)
-                    sleeping_conn = sum(1 for p in processes if p.get('Command') == 'Sleep')
-                    active_conn = total_conn - sleeping_conn
-                    
-                    logger.info(
-                        f"[DB_CONNECTION_FORENSICS] role={self.role} PID={os.getpid()} "
-                        f"total_connections={total_conn} sleeping_connections={sleeping_conn} "
-                        f"active_connections={active_conn}"
-                    )
-                except Exception as db_err:
-                    logger.error(f"[DB_FORENSICS_ERR] {db_err}")
-                finally:
-                    from django.db import close_old_connections
-                    # Ensure background monitor connection is released immediately
-                    await loop.run_in_executor(None, close_old_connections)
-
-                await asyncio.sleep(15)
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"[RESOURCE_MONITOR_ERR] {e}")
-                await asyncio.sleep(30)
 
     async def _safe_handle_task(self, raw_task: Dict[str, Any]):
         msg_id = raw_task.get('_sqs_message_id', 'unknown')
@@ -539,7 +570,7 @@ class BaseWorker(ABC):
         worker_pid = os.getpid()
         hostname = platform.node()
         retry_count = 1
-        visibility_timeout = 300
+        visibility_timeout = 1800
         
         try:
             # [PHASE 11.5] STRICT MESSAGE PARSING
@@ -584,7 +615,7 @@ class BaseWorker(ABC):
             logger.info(f"[WORKER_MESSAGE_RECEIVED] correlation_id={correlation_id} upload_session_id={session_id} tenant_id={tenant_id} job_id={job_id} record_id={record_id} invoice_no={invoice_no} queue_name={queue_name} worker_id={worker_id} worker_pid={worker_pid} hostname={hostname} retry_count={retry_count} visibility_timeout={visibility_timeout}")
             logger.info(f"[MESSAGE_RECEIVED] id={task_id} queue={queue_name} correlation_id={correlation_id}")
 
-            if receive_count >= 3:
+            if receive_count >= 10:
                 logger.warning(f"[ZOMBIE_MESSAGE_DETECTED] id={task_id} queue={queue_name} receive_count={receive_count}")
                 logger.warning(f"[MESSAGE_RETRY_EXCEEDED] id={task_id} queue={queue_name} receive_count={receive_count}")
                 logger.warning(f"[MESSAGE_DLQ_REDIRECT] id={task_id} queue={queue_name}")
@@ -743,18 +774,81 @@ class BaseWorker(ABC):
                         return
                         
                     if exc_class == 'ProviderSaturatedError':
-                        logger.warning(f"[PROVIDER_SATURATED] id={task_id} queue={queue_name} - Backing off without quarantine.")
+                        sat_retries = int(raw_task.get('_saturated_retry_count', 0))
+                        logger.warning(
+                            f"[PROVIDER_SATURATED] id={task_id} queue={queue_name} "
+                            f"sat_retries={sat_retries} - Backing off."
+                        )
+                        
+                        if sat_retries >= 10:
+                            logger.error(
+                                f"[PROVIDER_SATURATED_LIMIT_EXCEEDED] id={task_id} record={record_id} "
+                                f"Reached maximum saturation retries ({sat_retries}). Marking as failed."
+                            )
+                            # Treat as terminal failure to unblock barrier
+                            await self._quarantine_poison_document(raw_task, f"ProviderSaturatedError retry exhaustion limit: {sat_retries}")
+                            if record_id and record_id != 'unknown':
+                                if self.role == "AI":
+                                    page_num = task.get('page_number') or task.get('payload', {}).get('page_index') or task.get('payload', {}).get('page_number') or 1
+                                    def _write_terminal_fail():
+                                        from vouchers.coordinator import terminalize_page_state
+                                        terminalize_page_state(
+                                            record_id=str(record_id),
+                                            page_number=page_num,
+                                            session_id=session_id,
+                                            is_failed=True,
+                                            canonical_payload={'status': 'OCR_FAILED', 'error': f'PROVIDER_SATURATED_LIMIT_EXCEEDED: sat_retries={sat_retries}'},
+                                            worker_id=self.role,
+                                            queue_source=self.queue_type,
+                                            tenant_id=tenant_id,
+                                            correlation_id=correlation_id,
+                                            job_id=job_id,
+                                            item_id=task.get('item_id'),
+                                        )
+                                    loop = asyncio.get_running_loop()
+                                    await loop.run_in_executor(None, _write_terminal_fail)
+                            
+                            if handle:
+                                loop = asyncio.get_running_loop()
+                                await asyncio.shield(loop.run_in_executor(None, lambda: queue_service.delete(handle, queue_type=self.queue_type)))
+                                logger.info(f"[QUEUE_MESSAGE_DELETE] id={msg_id} queue={queue_name}")
+                            return
+
+                        # Calculate exponential backoff based on saturation retry count
+                        backoff_seconds = min(900, (2 ** sat_retries) * 20)
+                        
+                        # Increment saturation count in payload
+                        new_task = dict(raw_task)
+                        new_task['_saturated_retry_count'] = sat_retries + 1
+                        new_task['id'] = str(uuid.uuid4())  # Generate a new unique Message Instance ID
+                        
+                        # Strip SQS metadata from enqueued payload
+                        new_task.pop('_sqs_handle', None)
+                        new_task.pop('_sqs_message_id', None)
+                        new_task.pop('_sqs_receive_count', None)
+                        
+                        # Re-enqueue copy as delayed message to reset SQS native ReceiveCount
+                        loop = asyncio.get_running_loop()
+                        await loop.run_in_executor(
+                            None,
+                            lambda: queue_service.push(
+                                message=new_task,
+                                queue_type=self.queue_type,
+                                delay_seconds=backoff_seconds
+                            )
+                        )
+                        logger.info(f"[MESSAGE_REQUEUED_DELAYED] id={task_id} queue={queue_name} delay={backoff_seconds}s next_sat_retry={sat_retries + 1}")
+                        
+                        # Delete the old message from queue (ACK)
                         if handle:
-                            backoff_seconds = min(900, (2 ** receive_count) * 20)
-                            loop = asyncio.get_running_loop()
-                            await loop.run_in_executor(None, lambda: queue_service.change_visibility(handle, backoff_seconds, queue_type=self.queue_type))
-                            logger.info(f"[MESSAGE_NACK] id={task_id} queue={queue_name} reason=PROVIDER_SATURATED backoff={backoff_seconds}s")
+                            await asyncio.shield(loop.run_in_executor(None, lambda: queue_service.delete(handle, queue_type=self.queue_type)))
+                            logger.info(f"[QUEUE_MESSAGE_DELETE] id={msg_id} queue={queue_name}")
                         return
                     # [PHASE 5: POISON DOCUMENT FORENSICS]
                     # Logic to move to PoisonDocument model if retry count exceeded
                     receive_count = int(task.get('_sqs_receive_count', 1))
                     logger.info(f"[QUEUE_MESSAGE_RETRY] correlation_id={correlation_id} retry_count={receive_count}")
-                    if receive_count >= 3:
+                    if receive_count >= 10:
                         logger.info(f"[WORKER_RETRY] correlation_id={correlation_id} upload_session_id={session_id} retry_count={receive_count} - Threshold reached. Quarantining.")
                         await self._quarantine_poison_document(task, str(e))
                         if handle:

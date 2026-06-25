@@ -180,6 +180,9 @@ class QueueService:
             if effective_delay > 0:
                 args['DelaySeconds'] = min(effective_delay, 900)
 
+            # Add message_created_at timestamp
+            coerced_message['message_created_at'] = time.time()
+
             # Add ownership metadata
             coerced_message['_ownership'] = {
                 'cluster_env': str(_CLUSTER_ENV),
@@ -224,7 +227,7 @@ class QueueService:
             logger.error(f"[SQS_PUSH_ERR] {e}")
             return False
 
-    def receive(self, queue_type: str, max_messages: int = 1, wait_time: int = 20) -> List[Dict[str, Any]]:
+    def receive(self, queue_type: str, max_messages: int = 1, wait_time: int = 20, suppress_empty_log: bool = False) -> List[Dict[str, Any]]:
         """
         Hardened SQS Receiver with Phase 11.9 Forensics.
         """
@@ -248,14 +251,15 @@ class QueueService:
                 AttributeNames=['All'],
                 MessageAttributeNames=['All']
             )
-
+ 
             messages = response.get('Messages', [])
             if not messages:
                 # [FORENSIC] Include url + env in empty-poll log — helps verify worker is polling correct queue
-                logger.debug(
-                    f"[RECEIVE_MESSAGE_EMPTY] queue={queue_type} url={queue_url} "
-                    f"cluster_env={_CLUSTER_ENV} host={_HOSTNAME}"
-                )
+                if not suppress_empty_log:
+                    logger.debug(
+                        f"[RECEIVE_MESSAGE_EMPTY] queue={queue_type} url={queue_url} "
+                        f"cluster_env={_CLUSTER_ENV} host={_HOSTNAME}"
+                    )
                 return []
             
             # [FORENSIC] Log consumer identity — if cluster_env=local appears in EC2 logs, a local worker stole the message
@@ -275,6 +279,22 @@ class QueueService:
                     body['_sqs_handle'] = msg['ReceiptHandle']
                     body['_sqs_message_id'] = msg['MessageId']
                     body['_sqs_receive_count'] = msg['Attributes'].get('ApproximateReceiveCount', 1)
+                    
+                    # Phase 6: Calculate SQS latency / queue wait seconds
+                    created_at = body.get('message_created_at')
+                    if created_at:
+                        received_at = time.time()
+                        queue_wait_seconds = received_at - float(created_at)
+                        body['message_created_at'] = created_at
+                        body['message_received_at'] = received_at
+                        body['queue_wait_seconds'] = queue_wait_seconds
+                        
+                        logger.info(
+                            f"[QUEUE_LATENCY] queue={queue_type} msg_id={body.get('id', 'unknown')} "
+                            f"message_created_at={created_at:.6f} message_received_at={received_at:.6f} "
+                            f"queue_wait_seconds={queue_wait_seconds:.6f}"
+                        )
+                    
                     results.append(body)
                 except Exception as e:
                     logger.error(f"Failed to parse SQS message body: {e}")

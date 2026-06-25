@@ -1,0 +1,2277 @@
+[
+  {
+    "timestamp": "2026-06-22T05:44:47.711711+00:00",
+    "cpu_util_pct": 0.0,
+    "ram_util_pct": 44.4,
+    "gpu": {
+      "vram_used_mib": 0.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 47.0,
+      "power_w": 1.52,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:44:52.809292+00:00",
+    "cpu_util_pct": 5.6,
+    "ram_util_pct": 44.4,
+    "gpu": {
+      "vram_used_mib": 0.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 47.0,
+      "power_w": 1.53,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:44:57.910209+00:00",
+    "cpu_util_pct": 6.5,
+    "ram_util_pct": 44.4,
+    "gpu": {
+      "vram_used_mib": 0.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 47.0,
+      "power_w": 1.53,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:45:02.997973+00:00",
+    "cpu_util_pct": 6.6,
+    "ram_util_pct": 45.0,
+    "gpu": {
+      "vram_used_mib": 0.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 47.0,
+      "power_w": 1.54,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:45:08.090462+00:00",
+    "cpu_util_pct": 6.2,
+    "ram_util_pct": 45.2,
+    "gpu": {
+      "vram_used_mib": 0.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 47.0,
+      "power_w": 1.54,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:45:13.191480+00:00",
+    "cpu_util_pct": 12.3,
+    "ram_util_pct": 48.2,
+    "gpu": {
+      "vram_used_mib": 4251.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 13.0,
+      "mem_util_pct": 1.0,
+      "temp_c": 50.0,
+      "power_w": 16.31,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:45:18.282391+00:00",
+    "cpu_util_pct": 17.7,
+    "ram_util_pct": 54.0,
+    "gpu": {
+      "vram_used_mib": 4857.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 51.0,
+      "power_w": 17.22,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:45:23.373698+00:00",
+    "cpu_util_pct": 10.7,
+    "ram_util_pct": 54.4,
+    "gpu": {
+      "vram_used_mib": 4857.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 49.0,
+      "power_w": 2.95,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:45:28.473724+00:00",
+    "cpu_util_pct": 10.1,
+    "ram_util_pct": 54.8,
+    "gpu": {
+      "vram_used_mib": 4857.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 49.0,
+      "power_w": 1.62,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:45:33.576289+00:00",
+    "cpu_util_pct": 22.2,
+    "ram_util_pct": 56.6,
+    "gpu": {
+      "vram_used_mib": 4857.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 50.0,
+      "power_w": 6.39,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:45:38.669398+00:00",
+    "cpu_util_pct": 27.5,
+    "ram_util_pct": 58.8,
+    "gpu": {
+      "vram_used_mib": 4857.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 51.0,
+      "power_w": 1.82,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:45:43.772126+00:00",
+    "cpu_util_pct": 17.3,
+    "ram_util_pct": 60.3,
+    "gpu": {
+      "vram_used_mib": 4857.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 51.0,
+      "power_w": 1.77,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:45:48.860922+00:00",
+    "cpu_util_pct": 61.7,
+    "ram_util_pct": 65.0,
+    "gpu": {
+      "vram_used_mib": 4857.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 52.0,
+      "power_w": 1.76,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:45:53.971946+00:00",
+    "cpu_util_pct": 100.0,
+    "ram_util_pct": 79.7,
+    "gpu": {
+      "vram_used_mib": 4857.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 54.0,
+      "power_w": 1.71,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:45:59.103397+00:00",
+    "cpu_util_pct": 46.1,
+    "ram_util_pct": 57.5,
+    "gpu": {
+      "vram_used_mib": 4857.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 54.0,
+      "power_w": 1.8,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:46:04.211284+00:00",
+    "cpu_util_pct": 41.8,
+    "ram_util_pct": 66.2,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 55.0,
+      "power_w": 9.28,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:46:09.315779+00:00",
+    "cpu_util_pct": 56.1,
+    "ram_util_pct": 65.9,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 55.0,
+      "power_w": 1.82,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:46:14.433179+00:00",
+    "cpu_util_pct": 59.7,
+    "ram_util_pct": 65.9,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 56.0,
+      "power_w": 1.78,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:46:19.554169+00:00",
+    "cpu_util_pct": 59.5,
+    "ram_util_pct": 65.2,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 56.0,
+      "power_w": 1.8,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:46:24.674150+00:00",
+    "cpu_util_pct": 57.0,
+    "ram_util_pct": 65.4,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 56.0,
+      "power_w": 1.82,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:46:29.797138+00:00",
+    "cpu_util_pct": 58.1,
+    "ram_util_pct": 65.5,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 57.0,
+      "power_w": 1.81,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:46:34.918485+00:00",
+    "cpu_util_pct": 58.2,
+    "ram_util_pct": 65.5,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 57.0,
+      "power_w": 1.82,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:46:40.041645+00:00",
+    "cpu_util_pct": 61.1,
+    "ram_util_pct": 65.6,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 57.0,
+      "power_w": 1.86,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:46:45.168905+00:00",
+    "cpu_util_pct": 57.3,
+    "ram_util_pct": 65.7,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 58.0,
+      "power_w": 1.93,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:46:50.296344+00:00",
+    "cpu_util_pct": 58.6,
+    "ram_util_pct": 65.7,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 58.0,
+      "power_w": 1.87,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:46:55.433355+00:00",
+    "cpu_util_pct": 58.7,
+    "ram_util_pct": 65.4,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 58.0,
+      "power_w": 1.9,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:47:00.563540+00:00",
+    "cpu_util_pct": 57.9,
+    "ram_util_pct": 65.5,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 58.0,
+      "power_w": 1.93,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:47:05.691154+00:00",
+    "cpu_util_pct": 58.2,
+    "ram_util_pct": 65.5,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 58.0,
+      "power_w": 1.95,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:47:10.823985+00:00",
+    "cpu_util_pct": 56.8,
+    "ram_util_pct": 65.5,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 58.0,
+      "power_w": 2.02,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:47:15.955633+00:00",
+    "cpu_util_pct": 58.1,
+    "ram_util_pct": 65.4,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 58.0,
+      "power_w": 2.04,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:47:21.086726+00:00",
+    "cpu_util_pct": 61.5,
+    "ram_util_pct": 65.5,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 58.0,
+      "power_w": 1.99,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:47:26.220591+00:00",
+    "cpu_util_pct": 65.6,
+    "ram_util_pct": 65.9,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 58.0,
+      "power_w": 2.45,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:47:31.397719+00:00",
+    "cpu_util_pct": 66.4,
+    "ram_util_pct": 66.3,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 58.0,
+      "power_w": 1.94,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:47:36.533415+00:00",
+    "cpu_util_pct": 56.9,
+    "ram_util_pct": 66.1,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 58.0,
+      "power_w": 1.96,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:47:41.657126+00:00",
+    "cpu_util_pct": 43.5,
+    "ram_util_pct": 65.9,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 100.0,
+      "mem_util_pct": 34.0,
+      "temp_c": 74.0,
+      "power_w": 77.82,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:47:46.770508+00:00",
+    "cpu_util_pct": 13.4,
+    "ram_util_pct": 66.0,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 97.0,
+      "mem_util_pct": 100.0,
+      "temp_c": 72.0,
+      "power_w": 80.1,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:47:51.865096+00:00",
+    "cpu_util_pct": 13.0,
+    "ram_util_pct": 65.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 96.0,
+      "mem_util_pct": 100.0,
+      "temp_c": 73.0,
+      "power_w": 79.94,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:47:56.965323+00:00",
+    "cpu_util_pct": 12.3,
+    "ram_util_pct": 65.7,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 96.0,
+      "mem_util_pct": 100.0,
+      "temp_c": 73.0,
+      "power_w": 79.92,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:48:02.065062+00:00",
+    "cpu_util_pct": 17.7,
+    "ram_util_pct": 67.0,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 67.0,
+      "power_w": 56.72,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:48:07.205851+00:00",
+    "cpu_util_pct": 65.3,
+    "ram_util_pct": 67.0,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 62.0,
+      "power_w": 8.3,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:48:12.333725+00:00",
+    "cpu_util_pct": 58.1,
+    "ram_util_pct": 66.9,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 61.0,
+      "power_w": 2.17,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:48:17.455974+00:00",
+    "cpu_util_pct": 59.2,
+    "ram_util_pct": 66.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 61.0,
+      "power_w": 2.15,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:48:22.578995+00:00",
+    "cpu_util_pct": 60.1,
+    "ram_util_pct": 66.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 60.0,
+      "power_w": 2.11,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:48:27.704469+00:00",
+    "cpu_util_pct": 58.6,
+    "ram_util_pct": 66.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 60.0,
+      "power_w": 2.05,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:48:32.838753+00:00",
+    "cpu_util_pct": 56.9,
+    "ram_util_pct": 66.7,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 60.0,
+      "power_w": 2.11,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:48:37.970158+00:00",
+    "cpu_util_pct": 59.7,
+    "ram_util_pct": 66.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 60.0,
+      "power_w": 2.04,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:48:43.091909+00:00",
+    "cpu_util_pct": 58.9,
+    "ram_util_pct": 66.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 60.0,
+      "power_w": 2.03,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:48:48.229584+00:00",
+    "cpu_util_pct": 59.3,
+    "ram_util_pct": 66.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 60.0,
+      "power_w": 2.08,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:48:53.349495+00:00",
+    "cpu_util_pct": 56.9,
+    "ram_util_pct": 66.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 60.0,
+      "power_w": 2.05,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:48:58.495542+00:00",
+    "cpu_util_pct": 58.1,
+    "ram_util_pct": 66.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 60.0,
+      "power_w": 2.12,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:49:03.635977+00:00",
+    "cpu_util_pct": 56.9,
+    "ram_util_pct": 66.7,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 60.0,
+      "power_w": 2.02,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:49:08.783448+00:00",
+    "cpu_util_pct": 56.1,
+    "ram_util_pct": 67.3,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 60.0,
+      "power_w": 2.03,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:49:13.973446+00:00",
+    "cpu_util_pct": 65.5,
+    "ram_util_pct": 67.1,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 59.0,
+      "power_w": 2.15,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:49:19.107053+00:00",
+    "cpu_util_pct": 58.3,
+    "ram_util_pct": 67.0,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 59.0,
+      "power_w": 1.99,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:49:24.231239+00:00",
+    "cpu_util_pct": 60.5,
+    "ram_util_pct": 67.1,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 59.0,
+      "power_w": 1.93,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:49:29.373683+00:00",
+    "cpu_util_pct": 58.9,
+    "ram_util_pct": 67.1,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 59.0,
+      "power_w": 2.02,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:49:34.503194+00:00",
+    "cpu_util_pct": 60.5,
+    "ram_util_pct": 67.3,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 59.0,
+      "power_w": 1.92,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:49:39.633821+00:00",
+    "cpu_util_pct": 60.1,
+    "ram_util_pct": 67.3,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 59.0,
+      "power_w": 1.98,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:49:44.765289+00:00",
+    "cpu_util_pct": 55.4,
+    "ram_util_pct": 67.0,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 59.0,
+      "power_w": 1.94,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:49:49.896512+00:00",
+    "cpu_util_pct": 27.4,
+    "ram_util_pct": 67.0,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 95.0,
+      "mem_util_pct": 100.0,
+      "temp_c": 73.0,
+      "power_w": 79.92,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:49:54.988409+00:00",
+    "cpu_util_pct": 14.0,
+    "ram_util_pct": 67.3,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 94.0,
+      "mem_util_pct": 100.0,
+      "temp_c": 74.0,
+      "power_w": 80.0,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:50:00.103283+00:00",
+    "cpu_util_pct": 14.2,
+    "ram_util_pct": 67.3,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 96.0,
+      "mem_util_pct": 100.0,
+      "temp_c": 75.0,
+      "power_w": 79.93,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:50:05.198549+00:00",
+    "cpu_util_pct": 14.6,
+    "ram_util_pct": 67.2,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 96.0,
+      "mem_util_pct": 100.0,
+      "temp_c": 76.0,
+      "power_w": 79.98,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:50:10.301684+00:00",
+    "cpu_util_pct": 12.3,
+    "ram_util_pct": 67.2,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 96.0,
+      "mem_util_pct": 100.0,
+      "temp_c": 76.0,
+      "power_w": 79.94,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:50:15.387827+00:00",
+    "cpu_util_pct": 15.5,
+    "ram_util_pct": 66.7,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 94.0,
+      "mem_util_pct": 100.0,
+      "temp_c": 77.0,
+      "power_w": 79.89,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:50:20.491107+00:00",
+    "cpu_util_pct": 11.6,
+    "ram_util_pct": 66.6,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 64.0,
+      "power_w": 11.05,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:50:25.600236+00:00",
+    "cpu_util_pct": 5.1,
+    "ram_util_pct": 66.0,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 61.0,
+      "power_w": 2.3,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:50:30.716515+00:00",
+    "cpu_util_pct": 4.7,
+    "ram_util_pct": 65.9,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 59.0,
+      "power_w": 2.11,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:50:35.827524+00:00",
+    "cpu_util_pct": 4.0,
+    "ram_util_pct": 65.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 58.0,
+      "power_w": 2.03,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:50:40.934721+00:00",
+    "cpu_util_pct": 5.8,
+    "ram_util_pct": 65.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 57.0,
+      "power_w": 1.89,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:50:46.028656+00:00",
+    "cpu_util_pct": 5.4,
+    "ram_util_pct": 65.9,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 56.0,
+      "power_w": 1.79,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:50:51.141959+00:00",
+    "cpu_util_pct": 5.5,
+    "ram_util_pct": 65.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 55.0,
+      "power_w": 1.75,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:50:56.240184+00:00",
+    "cpu_util_pct": 3.5,
+    "ram_util_pct": 65.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 54.0,
+      "power_w": 1.72,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:51:01.342650+00:00",
+    "cpu_util_pct": 4.6,
+    "ram_util_pct": 65.7,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 53.0,
+      "power_w": 1.73,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:51:06.450681+00:00",
+    "cpu_util_pct": 5.2,
+    "ram_util_pct": 65.6,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 52.0,
+      "power_w": 1.66,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:51:11.559145+00:00",
+    "cpu_util_pct": 3.3,
+    "ram_util_pct": 65.7,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 52.0,
+      "power_w": 1.65,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:51:16.668099+00:00",
+    "cpu_util_pct": 3.8,
+    "ram_util_pct": 65.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 51.0,
+      "power_w": 1.66,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:51:21.765695+00:00",
+    "cpu_util_pct": 4.4,
+    "ram_util_pct": 65.7,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 51.0,
+      "power_w": 1.61,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:51:26.869909+00:00",
+    "cpu_util_pct": 3.5,
+    "ram_util_pct": 65.7,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 50.0,
+      "power_w": 1.62,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:51:31.988380+00:00",
+    "cpu_util_pct": 4.3,
+    "ram_util_pct": 65.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 50.0,
+      "power_w": 1.59,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:51:37.093916+00:00",
+    "cpu_util_pct": 4.7,
+    "ram_util_pct": 65.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 49.0,
+      "power_w": 1.58,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:51:42.206382+00:00",
+    "cpu_util_pct": 5.5,
+    "ram_util_pct": 65.7,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 49.0,
+      "power_w": 1.58,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:51:47.311585+00:00",
+    "cpu_util_pct": 4.3,
+    "ram_util_pct": 65.7,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 49.0,
+      "power_w": 1.57,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:51:52.456228+00:00",
+    "cpu_util_pct": 4.0,
+    "ram_util_pct": 65.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 48.0,
+      "power_w": 1.55,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:51:57.563165+00:00",
+    "cpu_util_pct": 3.5,
+    "ram_util_pct": 65.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 48.0,
+      "power_w": 1.54,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:52:02.671691+00:00",
+    "cpu_util_pct": 7.3,
+    "ram_util_pct": 66.0,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 48.0,
+      "power_w": 1.54,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:52:07.771737+00:00",
+    "cpu_util_pct": 9.7,
+    "ram_util_pct": 65.8,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 48.0,
+      "power_w": 1.55,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:52:12.876351+00:00",
+    "cpu_util_pct": 6.2,
+    "ram_util_pct": 61.6,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 48.0,
+      "power_w": 1.54,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:52:17.987052+00:00",
+    "cpu_util_pct": 4.9,
+    "ram_util_pct": 61.6,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 48.0,
+      "power_w": 1.54,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:52:23.094471+00:00",
+    "cpu_util_pct": 2.9,
+    "ram_util_pct": 61.5,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 47.0,
+      "power_w": 1.54,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:52:28.191695+00:00",
+    "cpu_util_pct": 4.0,
+    "ram_util_pct": 61.6,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 47.0,
+      "power_w": 1.54,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-22T05:52:33.288600+00:00",
+    "cpu_util_pct": 3.1,
+    "ram_util_pct": 61.6,
+    "gpu": {
+      "vram_used_mib": 4869.0,
+      "vram_total_mib": 6141.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "temp_c": 47.0,
+      "power_w": 1.53,
+      "processes": [
+        {
+          "pid": "19080",
+          "name": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+          "used_memory": "[N/A]"
+        },
+        {
+          "pid": "23028",
+          "name": "C:\\Users\\ulaganathan\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "used_memory": "[N/A]"
+        }
+      ]
+    }
+  }
+]

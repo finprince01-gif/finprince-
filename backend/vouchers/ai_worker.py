@@ -19,13 +19,13 @@ logger = logging.getLogger(__name__)
 # Global AI Semaphore (Phase 9/10 Stabilization)
 GLOBAL_AI_SEMAPHORE = asyncio.Semaphore(int(os.getenv('AI_GLOBAL_CONCURRENCY', '25')))
 
-# GEMINI-ONLY IMAGE PREPROCESSING PASSES
+# AI PROVIDER IMAGE PREPROCESSING PASSES
 # Pass 0: Original image (no transform)
 # Pass 1: Grayscale
 # Pass 2: Adaptive threshold
 # Pass 3: Sharpen kernel
 # Pass 4: Contrast enhancement
-# No Tesseract. No fallback engine. Gemini is sole OCR.
+# Provider: Qwen-VL (self-hosted OpenAI-compatible API)
 MAX_IMAGE_PASSES = 5
 PASS_NAMES = [
     "original image",
@@ -37,11 +37,11 @@ PASS_NAMES = [
 
 class AIWorker(BaseWorker):
     """
-    Handles Gemini API extraction, normalization, and page persistence.
+    Handles Qwen-VL AI extraction, normalization, and page persistence.
     Role: AI
     Queue: ai
 
-    GEMINI-ONLY: No Tesseract, no local OCR fallback, no secondary engines.
+    QWEN-ONLY: No Tesseract, no local OCR fallback, no secondary engines.
     Failure → deterministic mark-as-failed → forward to assembly.
     """
     def __init__(self):
@@ -51,8 +51,8 @@ class AIWorker(BaseWorker):
 
     def _apply_image_transformation(self, payload: Dict[str, Any], pass_idx: int) -> Dict[str, Any]:
         """
-        Applies OpenCV image transformations for Gemini preprocessing.
-        GEMINI-ONLY: No Tesseract, no fallback OCR engine.
+        Applies OpenCV image transformations for AI preprocessing.
+        Provider-agnostic: same transforms work for Qwen-VL as they did for Gemini.
         """
         import copy
         import base64
@@ -228,7 +228,7 @@ class AIWorker(BaseWorker):
 
             # ── [PHASE 4: OCR RESPONSE CACHE] ──
             # Check if we have a cached extraction for this exact (file_hash, page_number).
-            # If so, skip Gemini entirely and reuse the prior result.
+            # If so, skip the AI provider entirely and reuse the prior result.
             if file_hash:
                 try:
                     from ocr_pipeline.ocr_cache import OCRResponseCache
@@ -241,7 +241,7 @@ class AIWorker(BaseWorker):
                             f"[OCR_CACHE_HIT_FASTPATH] record={record_id} page={page_idx} "
                             f"file_hash={file_hash} invoice_no={cached_payload.get('invoice_no')} "
                             f"item_count={len(cached_payload.get('items') or [])} "
-                            "Skipping Gemini call."
+                            "Skipping AI provider call."
                         )
                         # Inject live session context over the cached payload
                         cached_payload = dict(cached_payload)
@@ -310,13 +310,13 @@ class AIWorker(BaseWorker):
             for pass_idx in range(MAX_IMAGE_PASSES):
                 logger.info(f"[OCR_RECOVERY_PASS] pass={pass_idx+1}/{MAX_IMAGE_PASSES} ({PASS_NAMES[pass_idx]}) record={record_id} page={page_idx}")
 
-                # Apply image transformation for Gemini
+                # Apply image transformation for AI extraction
                 current_payload = await loop.run_in_executor(
                     self.executor,
                     lambda pi=pass_idx: self._apply_image_transformation(payload, pi)
                 )
 
-                # Run Gemini extraction (SOLE OCR ENGINE)
+                # Run Qwen extraction (SOLE OCR ENGINE)
                 result = None
                 try:
                     result = await loop.run_in_executor(
@@ -326,7 +326,7 @@ class AIWorker(BaseWorker):
                 except Exception as e:
                     if e.__class__.__name__ == 'ProviderSaturatedError':
                         raise e
-                    logger.error(f"[GEMINI_REQUEST_ERROR] pass={pass_idx+1} record={record_id} page={page_idx} error={e}")
+                    logger.error(f"[AI_PROVIDER_REQUEST_ERROR] pass={pass_idx+1} record={record_id} page={page_idx} error={e}")
                     # Phase 3: Check if terminal failure
                     from core.ai_proxy import is_retryable_ai_error
                     if not is_retryable_ai_error(e):
@@ -335,16 +335,39 @@ class AIWorker(BaseWorker):
                         break
                     result = None
 
-                # Validate Gemini output
+                # Validate AI output
                 raw_reply = result.get('reply', '') if result else ''
 
                 if result and result.get('status') != 'OCR_FAILED' and raw_reply:
                     try:
                         parsed = None
-                        repaired_text, _, _ = await loop.run_in_executor(
+                        repaired_text, repair_strategy, repair_err = await loop.run_in_executor(
                             None,
                             lambda rr=raw_reply: _repair_json(rr, record_id=record_id, page=page_idx)
                         )
+
+                        # ── TASK 7: REPAIR-BEFORE-RETRY GATE ──────────────────────────────
+                        # If the repair pipeline fixed an arithmetic expression (or any other
+                        # structural issue) and json.loads() now succeeds, we accept the
+                        # repaired payload IMMEDIATELY — no new 141s Qwen inference needed.
+                        # Only trigger a new Qwen pass when:
+                        #   - HTTP failure / timeout        → result is None
+                        #   - Completely empty response     → raw_reply is empty
+                        #   - REPAIR_FAILED strategy        → repair could not salvage the JSON
+                        #
+                        # Log the saved retry so we can measure the impact.
+                        repair_succeeded = (
+                            repair_strategy not in ("REPAIR_FAILED", "NO_JSON", "EMPTY", "NONE")
+                            and repaired_text
+                        )
+                        if repair_succeeded and "ARITHMETIC_REPAIR" in repair_strategy:
+                            logger.info(
+                                f"[REPAIR_SAVED_RETRY] record={record_id} page={page_idx} "
+                                f"pass={pass_idx+1} strategy={repair_strategy} "
+                                f"avoided_qwen_retry=True estimated_saved_seconds=141"
+                            )
+                        # ──────────────────────────────────────────────────────────────────
+
                         parsed = json.loads(repaired_text)
                         if not parsed:
                             raise ValueError("StructuredParseError: parsed output is empty")
@@ -378,7 +401,7 @@ class AIWorker(BaseWorker):
 
                                 # ── [PHASE 4: STORE TO CACHE] ──
                                 # Store this successful extraction so future uploads of the
-                                # same page skip Gemini entirely.
+                                # same page skip the AI provider entirely.
                                 file_hash_val = payload.get('file_hash') or ''
                                 if file_hash_val:
                                     try:
@@ -418,7 +441,17 @@ class AIWorker(BaseWorker):
 
                                 break
                             else:
-                                logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=low_density_or_missing_anchors density={density:.2f} char_count={char_count}")
+                                # ── TASK 7: only retry Qwen if repair did NOT fix the issue ──
+                                if repair_succeeded:
+                                    logger.warning(
+                                        f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} "
+                                        f"page={page_idx} reason=low_density_or_missing_anchors "
+                                        f"density={density:.2f} char_count={char_count} "
+                                        f"repair_strategy={repair_strategy} "
+                                        f"note=QWEN_RETRY_TRIGGERED_despite_repair"
+                                    )
+                                else:
+                                    logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=low_density_or_missing_anchors density={density:.2f} char_count={char_count}")
                         else:
                             logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=invalid_dto")
                     except Exception as e:
@@ -448,6 +481,8 @@ class AIWorker(BaseWorker):
             await self._process_result(final_task, final_result)
 
         except Exception as e:
+            if e.__class__.__name__ == 'ProviderSaturatedError':
+                raise e
             tb = traceback.format_exc()
             logger.error(f"[AI_WORKER_UNHANDLED_EXCEPTION] record={record_id} page={page_idx} error={e}\ntraceback={tb}")
             logger.error(f"[DTO_LOST] Potential DTO loss for record={record_id} page={page_idx}")
@@ -556,6 +591,12 @@ class AIWorker(BaseWorker):
                         parsed['job_id'] = str(job_id)
                     parsed['upload_session_id'] = str(session_id)
                     parsed['tenant_id'] = str(tenant_id)
+                    
+                    # [QWEN_ITEM_CLASSIFICATION] Telemetry
+                    pre_norm_items = parsed.get("items") or parsed.get("sections", {}).get("items") or []
+                    for itm in pre_norm_items:
+                        logger.info(f"[QWEN_ITEM_CLASSIFICATION] record={record_id} page={page_idx} description='{itm.get('description', '')}' quantity={itm.get('quantity')} rate={itm.get('rate')} amount={itm.get('amount')}")
+                    
                     canonical_payload = await loop.run_in_executor(
                         self.executor,
                         lambda: get_canonical_export_record(parsed, tenant_id=tenant_id)

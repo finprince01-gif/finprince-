@@ -17,6 +17,7 @@ import { showError, showSuccess, showInfo } from '../utils/toast';
 import CreateNewVendorFullModal from './CreateNewVendorFullModal';
 import { CreateNewInventoryItemModal } from './CreateNewInventoryItemModal';
 import { MatchExistingItemModal } from './MatchExistingItemModal';
+import { GstCorrectionModal } from './GstCorrectionModal';
 import Icon from './Icon';
 import { getVoucherSchema, VOUCHER_SCHEMAS, getVoucherFlatHeaders, type VoucherSchema } from '../configs/schemaConfig';
 
@@ -92,6 +93,54 @@ interface FinalizeResult {
 
 // Standardize snake_case keys used by backend vs PascalCase used in UI/Excel
 const LINE_ITEM_FIELDS = ['Item Name', 'Item Code', 'HSN/SAC', 'Quantity', 'Unit', 'Rate', 'Amount', 'Taxable Value', 'discount_amount', 'cgst_rate', 'cgst_amount', 'sgst_rate', 'sgst_amount', 'igst_rate', 'igst_amount', 'total_amount'];
+
+export const getGstStatus = (row: ScanResult): 'GST_VALID' | 'GST_MISMATCH' | 'GST_CORRECTED' | 'GST_SUPPLIER_ACCEPTED' | 'GST_NOT_CHECKED' => {
+    const ext = row.extracted_data || {};
+    const res = ext.gst_resolution;
+
+    // [GST_TRACE_PROBE] Forensic trace — captures exact values seen at decision time
+    console.log('[GST_UI_TRACE]', {
+        id: row.id,
+        validation_status: row.validationStatus,
+        gst_resolution: res,
+        gst_audit_trail: ext?.gst_audit_trail ?? null,
+    });
+
+    if (res === 'CORRECTED') return 'GST_CORRECTED';
+    if (res === 'SUPPLIER_VALUES_ACCEPTED') return 'GST_SUPPLIER_ACCEPTED';
+
+    // Duplicate invoices: pipeline exits before GST engine runs so gst_audit_trail
+    // is never written. validationStatus is the only reliable signal.
+    if (
+        row.validationStatus === 'DUPLICATE' ||
+        row.validationStatus === 'DUPLICATE_IN_BATCH'
+    ) {
+        return 'GST_VALID';
+    }
+
+    const audit = ext.gst_audit_trail;
+    if (audit) {
+        if (audit.validation_status === 'FAIL') return 'GST_MISMATCH';
+        if (audit.validation_status === 'PASS') return 'GST_VALID';
+    }
+    return 'GST_NOT_CHECKED';
+};
+
+export const renderGstStatusBadge = (status: 'GST_VALID' | 'GST_MISMATCH' | 'GST_CORRECTED' | 'GST_SUPPLIER_ACCEPTED' | 'GST_NOT_CHECKED') => {
+    switch (status) {
+        case 'GST_VALID':
+            return <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded inline-block text-[9px] font-extrabold tracking-wider">GST VALID</span>;
+        case 'GST_MISMATCH':
+            return <span className="bg-rose-100 text-rose-800 border border-rose-300 px-2 py-1 rounded inline-block text-[9px] font-extrabold tracking-wider animate-pulse">GST MISMATCH</span>;
+        case 'GST_CORRECTED':
+            return <span className="bg-blue-100 text-blue-800 border border-blue-300 px-2 py-1 rounded inline-block text-[9px] font-extrabold tracking-wider">CORRECTED</span>;
+        case 'GST_SUPPLIER_ACCEPTED':
+            return <span className="bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 rounded inline-block text-[9px] font-extrabold tracking-wider">SUPPLIER ACCEPTED</span>;
+        case 'GST_NOT_CHECKED':
+        default:
+            return <span className="bg-gray-100 text-gray-800 border border-gray-300 px-2 py-1 rounded inline-block text-[9px] font-extrabold tracking-wider">NOT CHECKED</span>;
+    }
+};
 
 /**
  * Helper to get value from data object using various key aliases (snake_case, Display Name, etc.)
@@ -505,6 +554,39 @@ export const EditInvoiceModal: React.FC<{
         }
     };
 
+    const handleGstResolution = async (choice: 'CORRECTED' | 'SUPPLIER_VALUES_ACCEPTED') => {
+        setSaving(true);
+        try {
+            const updatedPayload = {
+                ...data,
+                gst_resolution: choice
+            };
+            const result: any = await httpClient.patch(
+                `/api/ocr-staging/${row.file_hash}/`,
+                {
+                    extracted_data: updatedPayload,
+                    voucher_type: voucherType.toUpperCase()
+                }
+            );
+
+            setData(result.extracted_data || updatedPayload);
+            showSuccess(choice === 'CORRECTED' ? '✨ Recalculated GST values applied!' : 'Kept OCR extracted values.');
+            if (onSave) {
+                onSave(result.extracted_data || updatedPayload, {
+                    status: result.status || row.validationStatus,
+                    vendor_id: result.vendor_id ?? row.vendor_id,
+                    vendor_name: result.vendor_name || row.vendor_name,
+                    vendor_status: result.vendor_status || row.vendor_status,
+                });
+            }
+        } catch (err) {
+            console.error('Failed to save GST resolution choice:', err);
+            showError('Failed to save GST resolution choice.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
@@ -557,6 +639,93 @@ export const EditInvoiceModal: React.FC<{
                     </div>
                 )}
 
+                {/* GST Mismatch Warning Banner */}
+                {data.gst_audit_trail?.validation_status === 'FAIL' && (
+                    <div className="px-6 py-4 bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-inner animate-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-start gap-4 flex-1">
+                            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 text-xl font-bold shrink-0 shadow-sm animate-pulse">
+                                ⚠️
+                            </div>
+                            <div className="space-y-1.5 flex-1">
+                                <h4 className="font-extrabold text-amber-900 text-sm tracking-wide uppercase">
+                                    GST Calculation Mismatch Detected
+                                </h4>
+                                <p className="text-xs text-amber-700 leading-relaxed font-medium">
+                                    Expected taxes do not match the OCR extracted totals. Tax calculations are verified using state codes.
+                                </p>
+                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-2 text-[11px] bg-white/70 p-3 rounded-lg border border-amber-200/40 shadow-xs max-w-3xl">
+                                    <div>
+                                        <span className="text-gray-500 font-medium block">Taxable Value</span>
+                                        <span className="font-bold text-gray-800">₹{parseFloat(data.gst_audit_trail.taxable_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500 font-medium block">GST Rate</span>
+                                        <span className="font-bold text-gray-800">{data.gst_audit_trail.gst_rate}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500 font-medium block">Expected GST</span>
+                                        <span className="font-bold text-emerald-700">₹{parseFloat(data.gst_audit_trail.expected_tax_values?.total_gst || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500 font-medium block">Extracted GST</span>
+                                        <span className="font-bold text-rose-700">₹{parseFloat(data.gst_audit_trail.extracted_tax_values?.total_gst || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500 font-medium block">Difference</span>
+                                        <span className="font-extrabold text-amber-800">₹{parseFloat(data.gst_audit_trail.difference_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex flex-row md:flex-col gap-2 shrink-0 self-center md:self-end">
+                            <button
+                                type="button"
+                                onClick={() => handleGstResolution('CORRECTED')}
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-lg text-[11px] font-bold transition-all shadow-sm hover:shadow flex items-center justify-center gap-1.5"
+                            >
+                                ✨ Use Calculated Values
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleGstResolution('SUPPLIER_VALUES_ACCEPTED')}
+                                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 active:scale-95 text-white rounded-lg text-[11px] font-bold transition-all shadow-sm hover:shadow flex items-center justify-center gap-1.5"
+                            >
+                                Keep Extracted Values
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* GST Mismatch Resolved Indicator */}
+                {data.gst_resolution && data.gst_audit_trail?.validation_status === 'PASS' && (
+                    <div className="px-6 py-2.5 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between animate-in fade-in duration-200">
+                        <div className="flex items-center gap-2 text-emerald-800 text-[11px] font-medium">
+                            <span className="font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[9px]">RESOLVED</span>
+                            <span>
+                                {data.gst_resolution === 'CORRECTED'
+                                    ? 'Applied Mathematically Correct values'
+                                    : 'Accepted Supplier Invoice values exactly'}
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setData((prev: any) => {
+                                    const next = { ...prev };
+                                    delete next.gst_resolution;
+                                    if (next.gst_audit_trail) {
+                                        next.gst_audit_trail.validation_status = 'FAIL';
+                                    }
+                                    return next;
+                                });
+                            }}
+                            className="text-[10px] text-indigo-600 hover:text-indigo-800 underline font-bold cursor-pointer transition-colors"
+                        >
+                            Change Option
+                        </button>
+                    </div>
+                )}
+
                 <div className="flex-1 overflow-y-auto bg-gray-50/50">
                     {/* Tabs Navigation */}
                     <div className="flex border-b border-gray-200 bg-white overflow-x-auto">
@@ -571,7 +740,7 @@ export const EditInvoiceModal: React.FC<{
                                 };
                                 const title = sectionTitles[sectionName] || sectionName.replace(/_/g, ' ').toUpperCase();
                                 const isActive = activeTab === sectionName || (!activeTab && sectionName === Object.keys(dynamicSchema.sections || {}).filter(n => n !== 'items')[0]);
-                                
+
                                 return (
                                     <button
                                         key={sectionName}
@@ -579,7 +748,7 @@ export const EditInvoiceModal: React.FC<{
                                         className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${isActive
                                             ? 'border-indigo-600 text-indigo-600'
                                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                        }`}
+                                            }`}
                                     >
                                         {title}
                                     </button>
@@ -644,45 +813,45 @@ export const EditInvoiceModal: React.FC<{
                                 })}
                         </div>
 
-                    {/* Dynamic Line Items Section */}
-                    {dynamicSchema.sections?.items && (
-                        <div className="space-y-4">
-                            <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-4 border-b border-indigo-50 pb-2">Line Items ({items.length})</h4>
-                            <div className="overflow-x-auto border border-gray-100 rounded-xl shadow-sm">
-                                <table className="w-full text-[11px]">
-                                    <thead className="bg-gray-50 border-b border-gray-100">
-                                        <tr>
-                                            {dynamicSchema.sections.items.map((field: any) => (
-                                                <th key={field.name} className="px-3 py-3 text-left font-bold text-gray-500 whitespace-nowrap uppercase tracking-tighter">
-                                                    {field.label}
-                                                </th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-50">
-                                        {items.map((it: any, i: number) => (
-                                            <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
-                                                {dynamicSchema.sections.items.map((field: any) => {
-                                                    const k = field.name;
-                                                    const v = it[k];
-                                                    return (
-                                                        <td key={k} className="p-1 min-w-[100px]">
-                                                            <input
-                                                                type="text"
-                                                                value={String(v || '')}
-                                                                onChange={e => handleItemChange(i, k, e.target.value)}
-                                                                className="w-full border-none p-1.5 focus:ring-2 focus:ring-indigo-200 outline-none bg-transparent rounded text-gray-700"
-                                                            />
-                                                        </td>
-                                                    );
-                                                })}
+                        {/* Dynamic Line Items Section */}
+                        {dynamicSchema.sections?.items && (
+                            <div className="space-y-4">
+                                <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-4 border-b border-indigo-50 pb-2">Line Items ({items.length})</h4>
+                                <div className="overflow-x-auto border border-gray-100 rounded-xl shadow-sm">
+                                    <table className="w-full text-[11px]">
+                                        <thead className="bg-gray-50 border-b border-gray-100">
+                                            <tr>
+                                                {dynamicSchema.sections.items.map((field: any) => (
+                                                    <th key={field.name} className="px-3 py-3 text-left font-bold text-gray-500 whitespace-nowrap uppercase tracking-tighter">
+                                                        {field.label}
+                                                    </th>
+                                                ))}
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {items.map((it: any, i: number) => (
+                                                <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
+                                                    {dynamicSchema.sections.items.map((field: any) => {
+                                                        const k = field.name;
+                                                        const v = it[k];
+                                                        return (
+                                                            <td key={k} className="p-1 min-w-[100px]">
+                                                                <input
+                                                                    type="text"
+                                                                    value={String(v || '')}
+                                                                    onChange={e => handleItemChange(i, k, e.target.value)}
+                                                                    className="w-full border-none p-1.5 focus:ring-2 focus:ring-indigo-200 outline-none bg-transparent rounded text-gray-700"
+                                                                />
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
                     </div>
                 </div>
                 <div className="p-4 border-t bg-gray-50 flex justify-end gap-3">
@@ -833,6 +1002,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const [finalizing, setFinalizing] = useState(false);
     const [resizing, setResizing] = useState<number | null>(null);
     const [resolvingRow, setResolvingRow] = useState<ScanResult | null>(null);
+    const [gstCorrectionRow, setGstCorrectionRow] = useState<ScanResult | null>(null);
     const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
     const [extractedVendorData, setExtractedVendorData] = useState<any>(null);
     const [isCreateVendorModalOpen, setIsCreateVendorModalOpen] = useState(false);
@@ -891,7 +1061,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         console.info('[FORENSIC][INVOICE_SCANNER_ITEM_LIFECYCLE] MATCH_ITEM_BUTTON_CLICK', item);
         setItemResolvingRow(row);
         setMatchingLineIndex(lineIdx);
-        
+
         const prefData = {
             item_code: item.item_code || '',
             item_name: item.item_name || '',
@@ -907,7 +1077,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             computed_gst_rate: item.computed_gst_rate ?? 0.0,
             taxable_value: item.taxable_value ?? 0.0,
         };
-        
+
         setExtractedItemData(prefData);
         setIsMatchItemModalOpen(true);
     };
@@ -1086,7 +1256,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
     const currentDataset = groupPages ? mergedResults : scanResults;
 
-    const [activeFilter, setActiveFilter] = useState<'all' | 'vendor_required' | 'item_required' | 'voucher_need_save'>('all');
+    const [activeFilter, setActiveFilter] = useState<'all' | 'vendor_required' | 'item_required' | 'voucher_need_save' | 'gst_mismatch'>('all');
 
     const isVendorRequired = useCallback((r: ScanResult) => {
         if (r.validationStatus === 'VOUCHER_CREATED') return false;
@@ -1115,6 +1285,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             if (activeFilter === 'vendor_required') return isVendorRequired(r);
             if (activeFilter === 'item_required') return isItemRequired(r);
             if (activeFilter === 'voucher_need_save') return isVoucherNeedSave(r);
+            if (activeFilter === 'gst_mismatch') return getGstStatus(r) === 'GST_MISMATCH';
             return true;
         });
     }, [currentDataset, activeFilter, isVendorRequired, isItemRequired, isVoucherNeedSave]);
@@ -1123,6 +1294,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const countVendorRequired = currentDataset.filter(isVendorRequired).length;
     const countItemRequired = currentDataset.filter(isItemRequired).length;
     const countVoucherNeedSave = currentDataset.filter(isVoucherNeedSave).length;
+    const countGstMismatch = currentDataset.filter(r => getGstStatus(r) === 'GST_MISMATCH').length;
 
     // ── Resume Workflow State ──
     const [isCheckingUnresolved, setIsCheckingUnresolved] = useState(true);
@@ -2528,7 +2700,43 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 />
             )}
 
+            {gstCorrectionRow && (
+                <GstCorrectionModal
+                    stagingId={gstCorrectionRow.id}
+                    record={gstCorrectionRow}
+                    onClose={() => setGstCorrectionRow(null)}
+                    onSaveSuccess={(updatedRow: any) => {
+                        if (updatedRow) {
+                            setScanResults(prev =>
+                                prev.map(r => String(r.id) === String(updatedRow.id) ? { ...r, ...updatedRow } : r)
+                            );
+                        }
+                    }}
+                />
+            )}
+
             {/* Edit — handled by parent via onEditRow (opens canonical Purchase Voucher form) */}
+            {editingRow && (
+                <EditInvoiceModal
+                    row={editingRow}
+                    voucherType={voucherType}
+                    onClose={() => {
+                        fetchStagedInvoices();
+                        setEditingRow(null);
+                    }}
+                    onSave={(updatedData, revalidation) => {
+                        setScanResults(prev => prev.map(r => r.id === editingRow.id ? {
+                            ...r,
+                            extracted_data: updatedData,
+                            vendor_id: revalidation?.vendor_id ?? r.vendor_id,
+                            vendor_name: revalidation?.vendor_name ?? r.vendor_name,
+                            vendor_status: (revalidation?.vendor_status ?? r.vendor_status) as any,
+                            validationStatus: (revalidation?.status ?? r.validationStatus) as any,
+                        } : r));
+                        setEditingRow(null);
+                    }}
+                />
+            )}
 
             {/* Details Side Panel */}
             {detailsRow && (
@@ -2746,64 +2954,70 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                 <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-gray-150 justify-center">
                                     <button
                                         onClick={() => setActiveFilter('all')}
-                                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 select-none outline-none ${
-                                            activeFilter === 'all'
+                                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 select-none outline-none ${activeFilter === 'all'
                                                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-150 border border-indigo-600'
                                                 : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-100'
-                                        }`}
+                                            }`}
                                     >
                                         <span>📂 All</span>
-                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
-                                            activeFilter === 'all' ? 'bg-indigo-700 text-indigo-100' : 'bg-indigo-200 text-indigo-600'
-                                        }`}>
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${activeFilter === 'all' ? 'bg-indigo-700 text-indigo-100' : 'bg-indigo-200 text-indigo-600'
+                                            }`}>
                                             {countAll}
                                         </span>
                                     </button>
 
                                     <button
                                         onClick={() => setActiveFilter('vendor_required')}
-                                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 select-none outline-none ${
-                                            activeFilter === 'vendor_required'
+                                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 select-none outline-none ${activeFilter === 'vendor_required'
                                                 ? 'bg-orange-600 text-white shadow-md shadow-orange-150 border border-orange-600'
                                                 : 'bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-100'
-                                        }`}
+                                            }`}
                                     >
                                         <span>👤 Vendor Required</span>
-                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
-                                            activeFilter === 'vendor_required' ? 'bg-orange-700 text-orange-100' : 'bg-orange-200 text-orange-600'
-                                        }`}>
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${activeFilter === 'vendor_required' ? 'bg-orange-700 text-orange-100' : 'bg-orange-200 text-orange-600'
+                                            }`}>
                                             {countVendorRequired}
                                         </span>
                                     </button>
 
                                     <button
                                         onClick={() => setActiveFilter('item_required')}
-                                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 select-none outline-none ${
-                                            activeFilter === 'item_required'
+                                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 select-none outline-none ${activeFilter === 'item_required'
                                                 ? 'bg-amber-600 text-white shadow-md shadow-amber-150 border border-amber-600'
                                                 : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100'
-                                        }`}
+                                            }`}
                                     >
                                         <span>📦 Item Required</span>
-                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
-                                            activeFilter === 'item_required' ? 'bg-amber-700 text-amber-100' : 'bg-amber-200 text-amber-600'
-                                        }`}>
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${activeFilter === 'item_required' ? 'bg-amber-700 text-amber-100' : 'bg-amber-200 text-amber-600'
+                                            }`}>
                                             {countItemRequired}
                                         </span>
                                     </button>
 
                                     <button
+                                        onClick={() => setActiveFilter('gst_mismatch')}
+                                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 select-none outline-none ${activeFilter === 'gst_mismatch'
+                                                ? 'bg-rose-600 text-white shadow-md shadow-rose-150 border border-rose-600'
+                                                : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-100'
+                                            }`}
+                                    >
+                                        <span>⚠️ GST Mismatch</span>
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${activeFilter === 'gst_mismatch' ? 'bg-rose-700 text-rose-100' : 'bg-rose-200 text-rose-600'
+                                            }`}>
+                                            {countGstMismatch}
+                                        </span>
+                                    </button>
+
+                                    <button
                                         onClick={() => setActiveFilter('voucher_need_save')}
-                                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 select-none outline-none ${
-                                            activeFilter === 'voucher_need_save'
+                                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 select-none outline-none ${activeFilter === 'voucher_need_save'
                                                 ? 'bg-emerald-600 text-white shadow-md shadow-emerald-150 border border-emerald-600'
                                                 : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100'
-                                        }`}
+                                            }`}
                                     >
                                         <span>💾 Need to Save</span>
-                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
-                                            activeFilter === 'voucher_need_save' ? 'bg-emerald-700 text-emerald-100' : 'bg-emerald-200 text-emerald-600'
-                                        }`}>
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${activeFilter === 'voucher_need_save' ? 'bg-emerald-700 text-emerald-100' : 'bg-emerald-200 text-emerald-600'
+                                            }`}>
                                             {countVoucherNeedSave}
                                         </span>
                                     </button>
@@ -2864,8 +3078,9 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                 {(() => {
                                     const showVendorCol = activeFilter === 'all' || activeFilter === 'vendor_required';
                                     const showItemCol = activeFilter === 'all' || activeFilter === 'item_required';
+                                    const showGstCol = activeFilter === 'all' || activeFilter === 'gst_mismatch';
                                     const showVoucherCol = activeFilter === 'all' || activeFilter === 'voucher_need_save';
-                                    const totalVisibleCols = 10 + (showVendorCol ? 1 : 0) + (showItemCol ? 1 : 0) + (showVoucherCol ? 1 : 0);
+                                    const totalVisibleCols = 10 + (showVendorCol ? 1 : 0) + (showItemCol ? 1 : 0) + (showGstCol ? 1 : 0) + (showVoucherCol ? 1 : 0);
 
                                     return (
                                         <table className="w-full text-sm">
@@ -2889,6 +3104,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                     <th className="px-3 py-3 text-right">Amount</th>
                                                     {showVendorCol && <th className="px-3 py-3 text-center">Vendor Status</th>}
                                                     {showItemCol && <th className="px-3 py-3 text-center">Item Status</th>}
+                                                    {showGstCol && <th className="px-3 py-3 text-center">GST Status</th>}
                                                     {showVoucherCol && <th className="px-3 py-3 text-center">Voucher Status</th>}
                                                     <th className="px-3 py-3 text-center">Action</th>
                                                 </tr>
@@ -2902,383 +3118,407 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                     </tr>
                                                 )}
                                                 {visibleRows.map((row, idx) => {
-                                                const invoice = row.extracted_data?.invoice || row.extracted_data?.header || row.extracted_data || {};
+                                                    const invoice = row.extracted_data?.invoice || row.extracted_data?.header || row.extracted_data || {};
 
-                                                // CROSS-CHECK: Robust Instant Vendor Link
-                                                const rowGstin = (row.extracted_data?.sections?.supplier_details?.gstin || row.vendor_gstin || "").toString().trim().toUpperCase();
-                                                const rowBranch = (row.extracted_data?.sections?.supplier_details?.branch || row.branch || "").toString().trim().toUpperCase();
-                                                const rowName = (row.extracted_data?.sections?.supplier_details?.vendor_name || row.vendor_name || "").toString().trim().toUpperCase();
+                                                    // CROSS-CHECK: Robust Instant Vendor Link
+                                                    const rowGstin = (row.extracted_data?.sections?.supplier_details?.gstin || row.vendor_gstin || "").toString().trim().toUpperCase();
+                                                    const rowBranch = (row.extracted_data?.sections?.supplier_details?.branch || row.branch || "").toString().trim().toUpperCase();
+                                                    const rowName = (row.extracted_data?.sections?.supplier_details?.vendor_name || row.vendor_name || "").toString().trim().toUpperCase();
 
-                                                // [SIBLING_VENDOR_INFERENCE_BLOCKED] Each row uses ONLY its own backend validation.
-                                                // Borrowing vendor_id from sibling rows is explicitly disabled — it was the root
-                                                // cause of false "ALREADY EXIST" badges for vendors not in the master.
-                                                console.log(
-                                                    `[SIBLING_VENDOR_INFERENCE_BLOCKED]\n` +
-                                                    `record_id=${row.id}`
-                                                );
-
-                                                // STRICTLY own row only — never inherit from siblings
-                                                const effectiveVendorId = row.vendor_id;
-
-                                                const hasEffectiveMatch = ['EXISTS', 'FOUND', 'MATCHED', 'RESOLVED'].includes(row.vendor_status || '');
-                                                const renderedBadge = hasEffectiveMatch ? 'ALREADY EXIST' : 'Create Vendor';
-
-                                                console.log(
-                                                    `[FRONTEND_VENDOR_RENDER_DECISION] ` +
-                                                    `invoice_no=${row.invoice_number || ''} ` +
-                                                    `displayed_badge=${renderedBadge} ` +
-                                                    `source_field_used=row.vendor_status ` +
-                                                    `vendor_status_val=${row.vendor_status || ''} ` +
-                                                    `vendor_id_val=${row.vendor_id || ''}`
-                                                );
-
-                                                if (row.vendor_id && renderedBadge === 'Create Vendor') {
-                                                    console.error(
-                                                        `[VENDOR_UI_STATE_CORRUPTION] UI is rendering 'Create Vendor' even though vendor_id exists!\n` +
-                                                        `invoice_no=${row.invoice_number || ''}\n` +
-                                                        `vendor_id=${row.vendor_id}\n` +
-                                                        `vendor_status=${row.vendor_status || ''}\n` +
-                                                        `rendered_badge=${renderedBadge}\n` +
-                                                        `row_payload=${JSON.stringify(row)}`
+                                                    // [SIBLING_VENDOR_INFERENCE_BLOCKED] Each row uses ONLY its own backend validation.
+                                                    // Borrowing vendor_id from sibling rows is explicitly disabled — it was the root
+                                                    // cause of false "ALREADY EXIST" badges for vendors not in the master.
+                                                    console.log(
+                                                        `[SIBLING_VENDOR_INFERENCE_BLOCKED]\n` +
+                                                        `record_id=${row.id}`
                                                     );
-                                                }
 
-                                                return (
-                                                    <React.Fragment key={row.file_hash || row.id || idx}>
-                                                        <tr className={`group hover:bg-indigo-50/40 transition-colors ${row._isMerged ? 'bg-blue-50/30' : ''} ${selectedHashes.has(row.file_hash) ? 'bg-indigo-50' :
-                                                            row.vendor_status === 'NEW' ? 'bg-amber-50/30' : ''
-                                                            }`}>
-                                                            <td className="px-3 py-3">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                                                    checked={selectedHashes.has(row.file_hash)}
-                                                                    onChange={() => toggleSelectRow(row.file_hash)}
-                                                                    onClick={e => e.stopPropagation()}
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-3 text-center text-xs font-bold text-gray-500">
-                                                                {idx + 1}
-                                                            </td>
-                                                            <td className="px-3 py-3">
-                                                                <div className="flex flex-col">
-                                                                    <div className="flex items-center gap-1.5 min-w-0">
-                                                                        <span className="truncate max-w-[120px] font-medium text-gray-700" title={row.file_path}>
-                                                                            {row.file_path.split('/').pop()}
-                                                                        </span>
-                                                                        {row._isMerged && (
-                                                                            <span className="flex-shrink-0 bg-indigo-100 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter border border-indigo-200">
-                                                                                {row._mergedCount} FILES
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                    <button onClick={() => setDetailsRow(row)} className="text-[10px] text-indigo-500 hover:text-indigo-700 underline font-bold text-left mt-0.5">View Details</button>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-3 py-3 font-bold text-gray-800 text-[11px]">{(() => {
-                                                                const val = getCellValue(row, 'invoice_number');
-                                                                if (val === '—') console.warn(`[EMPTY_RENDER_FIELD] row=${row.id} field=invoice_number row_keys=${Object.keys(row)}`);
-                                                                return val;
-                                                            })()}</td>
-                                                            <td className="px-3 py-3 text-[11px] text-gray-600 font-medium whitespace-nowrap">{getCellValue(row, 'invoice_date')}</td>
-                                                            <td className="px-4 py-3">
-                                                                <div className="flex flex-col">
-                                                                    <span className="font-bold text-gray-900 text-[11px] leading-tight truncate max-w-[120px]" title={row.vendor_name}>{getCellValue(row, 'vendor_name')}</span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{getCellValue(row, 'vendor_gstin')}</td>
-                                                            <td className="px-3 py-3 text-[11px] text-gray-600 font-medium">{getCellValue(row, 'branch') || row.branch || row.extracted_data?.sections?.supplier_details?.branch || '—'}</td>
-                                                            <td className="px-3 py-3 text-right font-black text-gray-900 text-[11px]">₹{(() => {
-                                                                const val = getCellValue(row, 'total_amount');
-                                                                console.log(`[CELL_VALUE_TRACE] row=${row.id} field=total_amount value=${val}`);
-                                                                return val;
-                                                            })()}</td>
-                                                            {/* Vendor Status */}
-                                                            {showVendorCol && (
-                                                                <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
-                                                                    {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
-                                                                        <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
-                                                                            <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
-                                                                        </span>
-                                                                    ) : row.validationStatus === "EXTRACTION_FAILED" ? (
-                                                                        <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">FAILED</span>
-                                                                    ) : hasEffectiveMatch ? (
-                                                                        <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded">ALREADY EXIST</span>
-                                                                    ) : (
-                                                                        <button
-                                                                            onClick={() => openCreateVendorModal(row)}
-                                                                            className="bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white border border-orange-600 px-2 py-1 rounded cursor-pointer transition-colors"
-                                                                        >
-                                                                            Create Vendor
-                                                                        </button>
-                                                                    )}
+                                                    // STRICTLY own row only — never inherit from siblings
+                                                    const effectiveVendorId = row.vendor_id;
+
+                                                    const hasEffectiveMatch = ['EXISTS', 'FOUND', 'MATCHED', 'RESOLVED'].includes(row.vendor_status || '');
+                                                    const renderedBadge = hasEffectiveMatch ? 'ALREADY EXIST' : 'Create Vendor';
+
+                                                    console.log(
+                                                        `[FRONTEND_VENDOR_RENDER_DECISION] ` +
+                                                        `invoice_no=${row.invoice_number || ''} ` +
+                                                        `displayed_badge=${renderedBadge} ` +
+                                                        `source_field_used=row.vendor_status ` +
+                                                        `vendor_status_val=${row.vendor_status || ''} ` +
+                                                        `vendor_id_val=${row.vendor_id || ''}`
+                                                    );
+
+                                                    if (row.vendor_id && renderedBadge === 'Create Vendor') {
+                                                        console.error(
+                                                            `[VENDOR_UI_STATE_CORRUPTION] UI is rendering 'Create Vendor' even though vendor_id exists!\n` +
+                                                            `invoice_no=${row.invoice_number || ''}\n` +
+                                                            `vendor_id=${row.vendor_id}\n` +
+                                                            `vendor_status=${row.vendor_status || ''}\n` +
+                                                            `rendered_badge=${renderedBadge}\n` +
+                                                            `row_payload=${JSON.stringify(row)}`
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <React.Fragment key={row.file_hash || row.id || idx}>
+                                                            <tr className={`group hover:bg-indigo-50/40 transition-colors ${row._isMerged ? 'bg-blue-50/30' : ''} ${selectedHashes.has(row.file_hash) ? 'bg-indigo-50' :
+                                                                row.vendor_status === 'NEW' ? 'bg-amber-50/30' : ''
+                                                                }`}>
+                                                                <td className="px-3 py-3">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                                        checked={selectedHashes.has(row.file_hash)}
+                                                                        onChange={() => toggleSelectRow(row.file_hash)}
+                                                                        onClick={e => e.stopPropagation()}
+                                                                    />
                                                                 </td>
-                                                            )}
-                                                            {/* Item Status */}
-                                                            {showItemCol && (
-                                                                <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
-                                                                    {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
-                                                                        <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
-                                                                            <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
-                                                                        </span>
-                                                                    ) : row.item_status === 'ALREADY EXIST' ? (
-                                                                        <div className="flex flex-col items-center gap-1">
-                                                                            <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded inline-block">ALREADY EXIST</span>
-                                                                            {row.items && row.items.length > 0 && (
+                                                                <td className="px-3 py-3 text-center text-xs font-bold text-gray-500">
+                                                                    {idx + 1}
+                                                                </td>
+                                                                <td className="px-3 py-3">
+                                                                    <div className="flex flex-col">
+                                                                        <div className="flex items-center gap-1.5 min-w-0">
+                                                                            <span className="truncate max-w-[120px] font-medium text-gray-700" title={row.file_path}>
+                                                                                {row.file_path.split('/').pop()}
+                                                                            </span>
+                                                                            {row._isMerged && (
+                                                                                <span className="flex-shrink-0 bg-indigo-100 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter border border-indigo-200">
+                                                                                    {row._mergedCount} FILES
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <button onClick={() => setDetailsRow(row)} className="text-[10px] text-indigo-500 hover:text-indigo-700 underline font-bold text-left mt-0.5">View Details</button>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-3 py-3 font-bold text-gray-800 text-[11px]">{(() => {
+                                                                    const val = getCellValue(row, 'invoice_number');
+                                                                    if (val === '—') console.warn(`[EMPTY_RENDER_FIELD] row=${row.id} field=invoice_number row_keys=${Object.keys(row)}`);
+                                                                    return val;
+                                                                })()}</td>
+                                                                <td className="px-3 py-3 text-[11px] text-gray-600 font-medium whitespace-nowrap">{getCellValue(row, 'invoice_date')}</td>
+                                                                <td className="px-4 py-3">
+                                                                    <div className="flex flex-col">
+                                                                        <span className="font-bold text-gray-900 text-[11px] leading-tight truncate max-w-[120px]" title={row.vendor_name}>{getCellValue(row, 'vendor_name')}</span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{getCellValue(row, 'vendor_gstin')}</td>
+                                                                <td className="px-3 py-3 text-[11px] text-gray-600 font-medium">{getCellValue(row, 'branch') || row.branch || row.extracted_data?.sections?.supplier_details?.branch || '—'}</td>
+                                                                <td className="px-3 py-3 text-right font-black text-gray-900 text-[11px]">₹{(() => {
+                                                                    const val = getCellValue(row, 'total_amount');
+                                                                    console.log(`[CELL_VALUE_TRACE] row=${row.id} field=total_amount value=${val}`);
+                                                                    return val;
+                                                                })()}</td>
+                                                                {/* Vendor Status */}
+                                                                {showVendorCol && (
+                                                                    <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
+                                                                        {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
+                                                                            <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
+                                                                                <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
+                                                                            </span>
+                                                                        ) : row.validationStatus === "EXTRACTION_FAILED" ? (
+                                                                            <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">FAILED</span>
+                                                                        ) : hasEffectiveMatch ? (
+                                                                            <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded">ALREADY EXIST</span>
+                                                                        ) : (
+                                                                            <button
+                                                                                onClick={() => openCreateVendorModal(row)}
+                                                                                className="bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white border border-orange-600 px-2 py-1 rounded cursor-pointer transition-colors"
+                                                                            >
+                                                                                Create Vendor
+                                                                            </button>
+                                                                        )}
+                                                                    </td>
+                                                                )}
+                                                                {/* Item Status */}
+                                                                {showItemCol && (
+                                                                    <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
+                                                                        {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
+                                                                            <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
+                                                                                <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
+                                                                            </span>
+                                                                        ) : row.item_status === 'ALREADY EXIST' ? (
+                                                                            <div className="flex flex-col items-center gap-1">
+                                                                                <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded inline-block">ALREADY EXIST</span>
+                                                                                {row.items && row.items.length > 0 && (
+                                                                                    <button
+                                                                                        onClick={() => toggleExpandRow(row.id)}
+                                                                                        className="text-[9px] text-indigo-600 hover:text-indigo-800 font-bold underline focus:outline-none"
+                                                                                    >
+                                                                                        {expandedRows.has(row.id) ? 'Hide Items' : 'View Items'}
+                                                                                    </button>
+                                                                                )}
+                                                                            </div>
+                                                                        ) : row.item_status === 'CREATE ITEM' ? (
+                                                                            <div className="flex flex-col items-center gap-1">
+                                                                                <span className="bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 rounded inline-block">CREATE ITEM</span>
                                                                                 <button
                                                                                     onClick={() => toggleExpandRow(row.id)}
                                                                                     className="text-[9px] text-indigo-600 hover:text-indigo-800 font-bold underline focus:outline-none"
                                                                                 >
-                                                                                    {expandedRows.has(row.id) ? 'Hide Items' : 'View Items'}
+                                                                                    {expandedRows.has(row.id) ? 'Hide Items' : 'Expand Items'}
                                                                                 </button>
-                                                                            )}
-                                                                        </div>
-                                                                    ) : row.item_status === 'CREATE ITEM' ? (
-                                                                        <div className="flex flex-col items-center gap-1">
-                                                                            <span className="bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 rounded inline-block">CREATE ITEM</span>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <span className="text-gray-300">—</span>
+                                                                        )}
+                                                                    </td>
+                                                                )}
+                                                                {/* GST Status */}
+                                                                {showGstCol && (
+                                                                    <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
+                                                                        {getGstStatus(row) === 'GST_MISMATCH' ? (
                                                                             <button
-                                                                                onClick={() => toggleExpandRow(row.id)}
-                                                                                className="text-[9px] text-indigo-600 hover:text-indigo-800 font-bold underline focus:outline-none"
+                                                                                onClick={() => setGstCorrectionRow(row)}
+                                                                                title="Click to resolve GST Mismatch"
+                                                                                className="hover:scale-105 active:scale-95 transition-transform duration-150 outline-none focus:outline-none cursor-pointer"
                                                                             >
-                                                                                {expandedRows.has(row.id) ? 'Hide Items' : 'Expand Items'}
+                                                                                {renderGstStatusBadge('GST_MISMATCH')}
                                                                             </button>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <span className="text-gray-300">—</span>
-                                                                    )}
-                                                                </td>
-                                                            )}
-                                                            {/* Voucher Status */}
-                                                            {showVoucherCol && (
-                                                                <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
-                                                                    {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
-                                                                        <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
-                                                                            <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
-                                                                        </span>
-                                                                    ) : row.validationStatus === "VOUCHER_CREATED" ? (
-                                                                        <span className="bg-emerald-600 text-white px-2 py-1 rounded">✅ Saved</span>
-                                                                    ) : (row.validationStatus === "DUPLICATE" || row.validationStatus === "DUPLICATE_IN_BATCH") ? (
-                                                                        <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">Already Exist</span>
-                                                                    ) : (effectiveVendorId || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_TO_SAVE', 'PENDING_PURCHASE'].includes(row.validationStatus)) ? (
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                if (onEditRow) {
-                                                                                    onEditRow({
-                                                                                        ...row,
-                                                                                        uploadSessionId: uploadSessionId,
-                                                                                        file_name: row.file_path?.split(/[\/]/).pop() || row.file_path || '',
-                                                                                    });
-                                                                                } else {
-                                                                                    setEditingRow(row);
-                                                                                }
-                                                                            }}
-                                                                            title="Open Voucher For Review"
-                                                                            className="bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 rounded hover:bg-indigo-200 hover:text-indigo-800 transition-colors cursor-pointer font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 inline-block"
-                                                                        >
-                                                                            Need to Save
-                                                                        </button>
-                                                                    ) : (['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'GSTIN_CONFLICT', 'CREATE_VENDOR'].includes(row.validationStatus)) ? (
-                                                                        <span className="bg-orange-100 text-orange-700 border border-orange-200 px-2 py-1 rounded">Create Vendor First</span>
-                                                                    ) : row.validationStatus === "EXTRACTION_FAILED" ? (
-                                                                        <span className="bg-red-100 text-red-700 border border-red-200 px-2 py-1 rounded">Failed</span>
-                                                                    ) : (
-                                                                        <span className="bg-amber-50 text-amber-600 border border-amber-200 px-2 py-1 rounded">Pending</span>
-                                                                    )}
-                                                                </td>
-                                                            )}
-                                                            <td className="px-2 py-3 text-center">
-                                                                <div
-                                                                    className="flex items-center justify-center gap-1"
-                                                                    style={{
-                                                                        opacity: (['PENDING', 'processing', 'PROCESSING', 'SCANNING', 'EXTRACTING', 'scanning', 'resolving', 'validating'].includes(row.validationStatus)) ? 0.3 : 1,
-                                                                        pointerEvents: (['PENDING', 'processing', 'PROCESSING', 'SCANNING', 'EXTRACTING', 'scanning', 'resolving', 'validating'].includes(row.validationStatus)) ? 'none' : 'auto'
-                                                                    }}
-                                                                >
-
-                                                                    {/* Revalidate button — triggers a fresh vendor check without opening edit modal.
-                                                                         Always shown; the outer container dims it while the row is in-flight. */}
-                                                                    <button
-                                                                        onClick={async () => {
-                                                                            setScanResults(prev => prev.map(r => r.file_hash === row.file_hash ? { ...r, validationStatus: 'PENDING' } : r));
-                                                                            try {
-                                                                                const result: any = await httpClient.patch(`/api/ocr-staging/${row.file_hash}/`, { extracted_data: row.extracted_data });
-                                                                                setScanResults(prev => prev.map(r => {
-                                                                                    if (r.file_hash !== row.file_hash) return r;
-                                                                                    let newStatus: ValidationStatus = 'VENDOR_MISSING';
-                                                                                    const s = result.status || '';
-                                                                                    if (s === 'READY' || s === 'found' || s === 'FOUND') newStatus = 'READY';
-                                                                                    else if (s === 'DUPLICATE' || s === 'duplicate') newStatus = 'DUPLICATE';
-                                                                                    else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found' || s === 'CREATE_VENDOR') newStatus = 'VENDOR_MISSING';
-                                                                                    else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') newStatus = 'GSTIN_CONFLICT';
-                                                                                    const updated = {
-                                                                                        ...r,
-                                                                                        validationStatus: newStatus,
-                                                                                        vendor_id: result.vendor_id ?? r.vendor_id,
-                                                                                        vendor_name: result.vendor_name || r.vendor_name,
-                                                                                        vendor_status: ((result.vendor_id ?? r.vendor_id) ? 'EXISTS' : (result.vendor_status || 'NEW')) as VendorStatus,
-                                                                                    };
-                                                                                    if (newStatus === 'VENDOR_MISSING') setTimeout(() => openCreateVendorModal(updated), 150);
-                                                                                    return updated;
-                                                                                }));
-                                                                            } catch { fetchStagedInvoices(); }
+                                                                        ) : (
+                                                                            renderGstStatusBadge(getGstStatus(row))
+                                                                        )}
+                                                                    </td>
+                                                                )}
+                                                                {/* Voucher Status */}
+                                                                {showVoucherCol && (
+                                                                    <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
+                                                                        {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
+                                                                            <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
+                                                                                <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
+                                                                            </span>
+                                                                        ) : row.validationStatus === "VOUCHER_CREATED" ? (
+                                                                            <span className="bg-emerald-600 text-white px-2 py-1 rounded">✅ Saved</span>
+                                                                        ) : (row.validationStatus === "DUPLICATE" || row.validationStatus === "DUPLICATE_IN_BATCH") ? (
+                                                                            <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">Already Exist</span>
+                                                                        ) : getGstStatus(row) === 'GST_MISMATCH' ? (
+                                                                            <button
+                                                                                onClick={() => setEditingRow(row)}
+                                                                                title="Open Invoice to Resolve GST Mismatch"
+                                                                                className="bg-rose-600 text-white border border-rose-700 px-2 py-1 rounded hover:bg-rose-700 transition-colors cursor-pointer font-bold focus:outline-none inline-block shadow-sm"
+                                                                            >
+                                                                                Resolve Mismatch
+                                                                            </button>
+                                                                        ) : (effectiveVendorId || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_TO_SAVE', 'PENDING_PURCHASE'].includes(row.validationStatus)) ? (
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    if (onEditRow) {
+                                                                                        onEditRow({
+                                                                                            ...row,
+                                                                                            uploadSessionId: uploadSessionId,
+                                                                                            file_name: row.file_path?.split(/[\/]/).pop() || row.file_path || '',
+                                                                                        });
+                                                                                    } else {
+                                                                                        setEditingRow(row);
+                                                                                    }
+                                                                                }}
+                                                                                title="Open Voucher For Review"
+                                                                                className="bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 rounded hover:bg-indigo-200 hover:text-indigo-800 transition-colors cursor-pointer font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 inline-block"
+                                                                            >
+                                                                                Need to Save
+                                                                            </button>
+                                                                        ) : (['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'GSTIN_CONFLICT', 'CREATE_VENDOR'].includes(row.validationStatus)) ? (
+                                                                            <span className="bg-orange-100 text-orange-700 border border-orange-200 px-2 py-1 rounded">Create Vendor First</span>
+                                                                        ) : row.validationStatus === "EXTRACTION_FAILED" ? (
+                                                                            <span className="bg-red-100 text-red-700 border border-red-200 px-2 py-1 rounded">Failed</span>
+                                                                        ) : (
+                                                                            <span className="bg-amber-50 text-amber-600 border border-amber-200 px-2 py-1 rounded">Pending</span>
+                                                                        )}
+                                                                    </td>
+                                                                )}
+                                                                <td className="px-2 py-3 text-center">
+                                                                    <div
+                                                                        className="flex items-center justify-center gap-1"
+                                                                        style={{
+                                                                            opacity: (['PENDING', 'processing', 'PROCESSING', 'SCANNING', 'EXTRACTING', 'scanning', 'resolving', 'validating'].includes(row.validationStatus)) ? 0.3 : 1,
+                                                                            pointerEvents: (['PENDING', 'processing', 'PROCESSING', 'SCANNING', 'EXTRACTING', 'scanning', 'resolving', 'validating'].includes(row.validationStatus)) ? 'none' : 'auto'
                                                                         }}
-                                                                        className="p-1 hover:bg-indigo-100 rounded text-indigo-400 hover:text-indigo-700 transition-colors"
-                                                                        title="Revalidate vendor"
                                                                     >
-                                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                                                                    </button>
 
-                                                                    {/* Rescan button — re-runs full OCR + AI extraction pipeline for this row.
+                                                                        {/* Revalidate button — triggers a fresh vendor check without opening edit modal.
+                                                                         Always shown; the outer container dims it while the row is in-flight. */}
+                                                                        <button
+                                                                            onClick={async () => {
+                                                                                setScanResults(prev => prev.map(r => r.file_hash === row.file_hash ? { ...r, validationStatus: 'PENDING' } : r));
+                                                                                try {
+                                                                                    const result: any = await httpClient.patch(`/api/ocr-staging/${row.file_hash}/`, { extracted_data: row.extracted_data });
+                                                                                    setScanResults(prev => prev.map(r => {
+                                                                                        if (r.file_hash !== row.file_hash) return r;
+                                                                                        let newStatus: ValidationStatus = 'VENDOR_MISSING';
+                                                                                        const s = result.status || '';
+                                                                                        if (s === 'READY' || s === 'found' || s === 'FOUND') newStatus = 'READY';
+                                                                                        else if (s === 'DUPLICATE' || s === 'duplicate') newStatus = 'DUPLICATE';
+                                                                                        else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found' || s === 'CREATE_VENDOR') newStatus = 'VENDOR_MISSING';
+                                                                                        else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') newStatus = 'GSTIN_CONFLICT';
+                                                                                        const updated = {
+                                                                                            ...r,
+                                                                                            validationStatus: newStatus,
+                                                                                            vendor_id: result.vendor_id ?? r.vendor_id,
+                                                                                            vendor_name: result.vendor_name || r.vendor_name,
+                                                                                            vendor_status: ((result.vendor_id ?? r.vendor_id) ? 'EXISTS' : (result.vendor_status || 'NEW')) as VendorStatus,
+                                                                                        };
+                                                                                        if (newStatus === 'VENDOR_MISSING') setTimeout(() => openCreateVendorModal(updated), 150);
+                                                                                        return updated;
+                                                                                    }));
+                                                                                } catch { fetchStagedInvoices(); }
+                                                                            }}
+                                                                            className="p-1 hover:bg-indigo-100 rounded text-indigo-400 hover:text-indigo-700 transition-colors"
+                                                                            title="Revalidate vendor"
+                                                                        >
+                                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                                                        </button>
+
+                                                                        {/* Rescan button — re-runs full OCR + AI extraction pipeline for this row.
                                                                          Always shown for all statuses (ALREADY EXIST, DUPLICATE, VOUCHER_CREATED, NEED TO SAVE, etc).
                                                                          Only snap_N orphan rows (no real backend PK) are excluded. */}
-                                                                    {!String(row.id).startsWith('snap_') && (
-                                                                        <button
-                                                                            onClick={() => handleRescan(row)}
-                                                                            disabled={rescanningRowId === row.id}
-                                                                            className="p-1 hover:bg-violet-100 rounded text-violet-400 hover:text-violet-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                                                            title="Rescan — re-run OCR & AI extraction for this invoice"
-                                                                        >
-                                                                            {rescanningRowId === row.id ? (
-                                                                                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707" /></svg>
-                                                                            ) : (
-                                                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18" /></svg>
-                                                                            )}
-                                                                        </button>
-                                                                    )}
-
-                                                                </div>
-                                                            </td>
-
-                                                        </tr>
-
-                                                        {expandedRows.has(row.id) && (
-
-                                                            <tr className="bg-slate-50/30">
-
-                                                                <td colSpan={totalVisibleCols} className="px-6 py-4">
-
-                                                                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
-
-                                                                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-
-                                                                            <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Line Items Validation</span>
-
-                                                                            <span className="text-[10px] text-gray-500 font-mono">Total Items: {row.items?.length || 0}</span>
-
-                                                                        </div>
-
-                                                                        <table className="w-full text-left text-[11px]">
-
-                                                                            <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-150 uppercase text-[9px] tracking-wider">
-
-                                                                                <tr>
-
-                                                                                    <th className="px-3 py-2 w-10 text-center">#</th>
-
-                                                                                    <th className="px-3 py-2">Item Name</th>
-
-                                                                                    <th className="px-3 py-2">HSN/SAC</th>
-
-                                                                                    <th className="px-3 py-2">UOM</th>
-
-                                                                                    <th className="px-3 py-2 text-right">Rate</th>
-
-                                                                                    <th className="px-3 py-2 text-center">Item Status</th>
-
-                                                                                    <th className="px-3 py-2 text-center">Action</th>
-
-                                                                                </tr>
-
-                                                                            </thead>
-
-                                                                            <tbody className="divide-y divide-slate-100">
-
-                                                                                {(row.items || []).map((item: any, itemIdx: number) => (
-
-                                                                                    <tr key={itemIdx} className="hover:bg-indigo-50/20 transition-colors">
-
-                                                                                        <td className="px-3 py-2 text-center text-slate-400 font-bold">{itemIdx + 1}</td>
-
-                                                                                        <td className="px-3 py-2">
-
-                                                                                            <div className="flex flex-col">
-
-                                                                                                <span className="font-bold text-slate-900 leading-tight">{item.item_name}</span>
-
-                                                                                                {item.item_code && <span className="text-[9px] text-slate-400 font-mono mt-0.5">Code: {item.item_code}</span>}
-
-                                                                                            </div>
-
-                                                                                        </td>
-
-                                                                                        <td className="px-3 py-2 font-mono text-slate-600">{item.hsn_code || '—'}</td>
-
-                                                                                        <td className="px-3 py-2 text-slate-600 uppercase font-bold">{item.uom || '—'}</td>
-
-                                                                                        <td className="px-3 py-2 text-right text-slate-700 font-bold">₹{parseFloat(item.rate || 0).toFixed(2)}</td>
-
-                                                                                        <td className="px-3 py-2 text-center whitespace-nowrap">
-
-                                                                                            {item.item_status === 'ALREADY EXIST' ? (
-
-                                                                                                <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[9px] font-extrabold tracking-wider">ALREADY EXIST</span>
-
-                                                                                            ) : (
-
-                                                                                                <span className="bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded text-[9px] font-extrabold tracking-wider text-amber-800">CREATE ITEM</span>
-
-                                                                                            )}
-
-                                                                                        </td>
-
-                                                                                        <td className="px-3 py-2 text-center">
-
-                                                                                        {item.item_status === 'CREATE ITEM' ? (
-                                                                                            <div className="flex items-center justify-center gap-1.5">
-                                                                                                <button
-                                                                                                    onClick={() => openCreateItemModal(row, item)}
-                                                                                                    className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white border border-amber-600 px-3 py-1 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-sm"
-                                                                                                >
-                                                                                                    Create Item
-                                                                                                </button>
-                                                                                                <button
-                                                                                                    onClick={() => openMatchItemModal(row, item, item.line_index ?? itemIdx)}
-                                                                                                    className="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white border border-indigo-700 px-3 py-1 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-sm flex items-center gap-1"
-                                                                                                >
-                                                                                                    <Icon name="link" className="w-3 h-3" />
-                                                                                                    Match Existing
-                                                                                                </button>
-                                                                                            </div>
-
-                                                                                            ) : (
-
-                                                                                                <span className="text-gray-400">—</span>
-
-                                                                                            )}
-
-                                                                                        </td>
-
-                                                                                    </tr>
-
-                                                                                ))}
-
-                                                                            </tbody>
-
-                                                                        </table>
+                                                                        {!String(row.id).startsWith('snap_') && (
+                                                                            <button
+                                                                                onClick={() => handleRescan(row)}
+                                                                                disabled={rescanningRowId === row.id}
+                                                                                className="p-1 hover:bg-violet-100 rounded text-violet-400 hover:text-violet-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                                title="Rescan — re-run OCR & AI extraction for this invoice"
+                                                                            >
+                                                                                {rescanningRowId === row.id ? (
+                                                                                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707" /></svg>
+                                                                                ) : (
+                                                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18" /></svg>
+                                                                                )}
+                                                                            </button>
+                                                                        )}
 
                                                                     </div>
-
                                                                 </td>
 
                                                             </tr>
 
-                                                        )}
+                                                            {expandedRows.has(row.id) && (
 
-                                                    </React.Fragment>
-                                                )
-                                            })}
-                                    </tbody>
-                                </table>
+                                                                <tr className="bg-slate-50/30">
+
+                                                                    <td colSpan={totalVisibleCols} className="px-6 py-4">
+
+                                                                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+
+                                                                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+
+                                                                                <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Line Items Validation</span>
+
+                                                                                <span className="text-[10px] text-gray-500 font-mono">Total Items: {row.items?.length || 0}</span>
+
+                                                                            </div>
+
+                                                                            <table className="w-full text-left text-[11px]">
+
+                                                                                <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-150 uppercase text-[9px] tracking-wider">
+
+                                                                                    <tr>
+
+                                                                                        <th className="px-3 py-2 w-10 text-center">#</th>
+
+                                                                                        <th className="px-3 py-2">Item Name</th>
+
+                                                                                        <th className="px-3 py-2">HSN/SAC</th>
+
+                                                                                        <th className="px-3 py-2">UOM</th>
+
+                                                                                        <th className="px-3 py-2 text-right">Rate</th>
+
+                                                                                        <th className="px-3 py-2 text-center">Item Status</th>
+
+                                                                                        <th className="px-3 py-2 text-center">Action</th>
+
+                                                                                    </tr>
+
+                                                                                </thead>
+
+                                                                                <tbody className="divide-y divide-slate-100">
+
+                                                                                    {(row.items || []).map((item: any, itemIdx: number) => (
+
+                                                                                        <tr key={itemIdx} className="hover:bg-indigo-50/20 transition-colors">
+
+                                                                                            <td className="px-3 py-2 text-center text-slate-400 font-bold">{itemIdx + 1}</td>
+
+                                                                                            <td className="px-3 py-2">
+
+                                                                                                <div className="flex flex-col">
+
+                                                                                                    <span className="font-bold text-slate-900 leading-tight">{item.item_name}</span>
+
+                                                                                                    {item.item_code && <span className="text-[9px] text-slate-400 font-mono mt-0.5">Code: {item.item_code}</span>}
+
+                                                                                                </div>
+
+                                                                                            </td>
+
+                                                                                            <td className="px-3 py-2 font-mono text-slate-600">{item.hsn_code || '—'}</td>
+
+                                                                                            <td className="px-3 py-2 text-slate-600 uppercase font-bold">{item.uom || '—'}</td>
+
+                                                                                            <td className="px-3 py-2 text-right text-slate-700 font-bold">₹{parseFloat(item.rate || 0).toFixed(2)}</td>
+
+                                                                                            <td className="px-3 py-2 text-center whitespace-nowrap">
+
+                                                                                                {item.item_status === 'ALREADY EXIST' ? (
+
+                                                                                                    <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[9px] font-extrabold tracking-wider">ALREADY EXIST</span>
+
+                                                                                                ) : (
+
+                                                                                                    <span className="bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded text-[9px] font-extrabold tracking-wider text-amber-800">CREATE ITEM</span>
+
+                                                                                                )}
+
+                                                                                            </td>
+
+                                                                                            <td className="px-3 py-2 text-center">
+
+                                                                                                {item.item_status === 'CREATE ITEM' ? (
+                                                                                                    <div className="flex items-center justify-center gap-1.5">
+                                                                                                        <button
+                                                                                                            onClick={() => openCreateItemModal(row, item)}
+                                                                                                            className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white border border-amber-600 px-3 py-1 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-sm"
+                                                                                                        >
+                                                                                                            Create Item
+                                                                                                        </button>
+                                                                                                        <button
+                                                                                                            onClick={() => openMatchItemModal(row, item, item.line_index ?? itemIdx)}
+                                                                                                            className="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white border border-indigo-700 px-3 py-1 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-sm flex items-center gap-1"
+                                                                                                        >
+                                                                                                            <Icon name="link" className="w-3 h-3" />
+                                                                                                            Match Existing
+                                                                                                        </button>
+                                                                                                    </div>
+
+                                                                                                ) : (
+
+                                                                                                    <span className="text-gray-400">—</span>
+
+                                                                                                )}
+
+                                                                                            </td>
+
+                                                                                        </tr>
+
+                                                                                    ))}
+
+                                                                                </tbody>
+
+                                                                            </table>
+
+                                                                        </div>
+
+                                                                    </td>
+
+                                                                </tr>
+
+                                                            )}
+
+                                                        </React.Fragment>
+                                                    )
+                                                })}
+                                            </tbody>
+                                        </table>
                                     );
                                 })()}
                             </div>

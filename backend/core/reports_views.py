@@ -16,11 +16,8 @@ import datetime
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 
-# Configure Gemini
-try:
-    from google import genai
-except ImportError:
-    genai = None
+# Configure AI Provider
+from .ai_proxy import api_key_manager
 
 class BaseExcelView(APIView):
     permission_classes = [IsAuthenticated, IsBranchMember]
@@ -435,11 +432,11 @@ class AIReportExcelView(BaseExcelView):
         if not query:
             return Response({'error': 'Query is required'}, status=400)
             
-        if not genai:
+        if not api_key_manager.api_keys:
              return Response({'error': 'AI service not available'}, status=503)
 
         try:
-            from .ai_proxy import execute_with_retry, api_key_manager
+            from .ai_proxy import execute_with_retry
             
             # Get healthy key from manager
             api_key = api_key_manager.get_healthy_key()

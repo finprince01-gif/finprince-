@@ -14,6 +14,7 @@ LETTER_REPAIRS = {
 def canonicalize_gstin_ocr(raw_gstin: str) -> str:
     """
     Enforces 15-character GSTIN structure and performs position-aware character repair.
+    Gated by strict regex check first.
     """
     if not raw_gstin:
         return ""
@@ -21,6 +22,16 @@ def canonicalize_gstin_ocr(raw_gstin: str) -> str:
     # Strip whitespace and convert to uppercase
     gstin = "".join(str(raw_gstin).split()).upper()
     
+    # Regex: ^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$
+    gstin_regex = re.compile(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$')
+    
+    # Step 1: Validate extracted GSTIN
+    # Step 2: If valid: Return unchanged
+    if gstin_regex.match(gstin):
+        logger.info(f"[GSTIN_VALIDATION_MATCH] gstin={gstin} is already valid, returning unchanged")
+        return gstin
+    
+    # Step 3: If invalid: Apply OCR repair mappings
     if len(gstin) == 15:
         repaired = []
         for i, char in enumerate(gstin):
@@ -42,8 +53,21 @@ def canonicalize_gstin_ocr(raw_gstin: str) -> str:
     else:
         canonical = gstin
         
+    # Step 4: Revalidate and Log
+    if canonical != gstin:
+        logger.info(f"[GSTIN_OCR_CORRECTION_APPLIED] Original value={gstin} Corrected value={canonical}")
+        
     logger.info(f"[GSTIN_CANONICALIZATION] raw_gstin={raw_gstin} canonical_gstin={canonical} length={len(canonical)}")
     return canonical
+
+def normalize_invoice_number(inv_no: str) -> str:
+    """
+    Normalizes invoice number by converting to uppercase and removing all non-alphanumeric characters.
+    """
+    if not inv_no:
+        return ""
+    return re.sub(r'[^A-Z0-9]', '', str(inv_no).upper())
+
 
 def normalize_branch(branch_name):
     """
@@ -344,5 +368,34 @@ def detect_vendor_map_corruption(resolution_map):
     Corruption detector stub.
     """
     pass
+
+def append_shadow_evidence(record_id, invoice_no, normalized_invoice_no, old_match, new_match):
+    import json
+    import os
+    
+    evidence_path = r"C:\Users\ulaganathan\.gemini\antigravity-ide\brain\318cbd76-d3fd-4ad6-9ae2-fc757a249593\scratch\shadow_duplicate_evidence.json"
+    os.makedirs(os.path.dirname(evidence_path), exist_ok=True)
+    
+    try:
+        data = []
+        if os.path.exists(evidence_path):
+            with open(evidence_path, 'r', encoding='utf-8') as f:
+                try:
+                    data = json.load(f)
+                except Exception:
+                    data = []
+        data.append({
+            "record_id": record_id,
+            "invoice_no": invoice_no,
+            "normalized_invoice_no": normalized_invoice_no,
+            "old_match": old_match,
+            "new_match": new_match
+        })
+        with open(evidence_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"[SHADOW_EVIDENCE_ERROR] {e}")
+
 
 

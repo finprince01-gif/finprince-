@@ -105,11 +105,36 @@ def check_and_trigger_assembly(record_id, tenant_id, session_id, correlation_id,
 
                 logger.info(f"[ONE_SHOT_ASSEMBLY_CONFIRMED] record={record_id} expected={expected} completed={db_completed} failed={db_failed}")
 
+                # [FIX] Resolve a valid integer job_id from DB when not provided or invalid.
+                # MessageFactory requires job_id — without this, ASSEMBLY is never pushed → permanent 99% deadlock.
+                resolved_job_id = job_id
+                try:
+                    _is_valid_int = isinstance(resolved_job_id, int) or (
+                        isinstance(resolved_job_id, str) and resolved_job_id.isdigit()
+                    )
+                    if not _is_valid_int:
+                        from vouchers.models import InvoiceProcessingItem
+                        _item = InvoiceProcessingItem.objects.filter(record_id=record_id).select_related('job').first()
+                        if _item and _item.job_id:
+                            resolved_job_id = _item.job_id
+                            logger.info(f"[JOB_ID_RESOLVED_FROM_DB] record={record_id} job_id={resolved_job_id} via=InvoiceProcessingItem")
+                        else:
+                            # Try looking up via session_id
+                            from vouchers.models import BulkInvoiceJob
+                            _job = BulkInvoiceJob.objects.filter(upload_session_id=session_id).first()
+                            if _job:
+                                resolved_job_id = _job.id
+                                logger.info(f"[JOB_ID_RESOLVED_FROM_SESSION] record={record_id} job_id={resolved_job_id} via=BulkInvoiceJob session={session_id}")
+                            else:
+                                logger.error(f"[JOB_ID_RESOLUTION_FAILED] record={record_id} session={session_id} — could not resolve job_id. ASSEMBLY may fail.")
+                except Exception as _jid_err:
+                    logger.error(f"[JOB_ID_RESOLUTION_ERROR] record={record_id} error={_jid_err}")
+
                 # Emit ONE assembly task
                 assembly_payload = {
                     "record_id": record_id,
                     "item_id": item_id,
-                    "job_id": job_id,
+                    "job_id": resolved_job_id,
                     "result": {"_db_persisted": True}
                 }
                 assembly_msg = message_factory.create_message(

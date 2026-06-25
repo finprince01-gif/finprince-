@@ -1,0 +1,951 @@
+[
+  {
+    "elapsed_s": 0,
+    "ts": "2026-06-22T05:14:32.222798+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 0,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [],
+    "sqs": {
+      "ai": [
+        0,
+        2
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 1
+  },
+  {
+    "elapsed_s": 16,
+    "ts": "2026-06-22T05:14:48.032097+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 0,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [],
+    "sqs": {
+      "ai": [
+        0,
+        2
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 1
+  },
+  {
+    "elapsed_s": 31,
+    "ts": "2026-06-22T05:15:03.132050+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 0,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [],
+    "sqs": {
+      "ai": [
+        0,
+        2
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 1
+  },
+  {
+    "elapsed_s": 46,
+    "ts": "2026-06-22T05:15:18.243236+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 0,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [],
+    "sqs": {
+      "ai": [
+        0,
+        2
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 1
+  },
+  {
+    "elapsed_s": 61,
+    "ts": "2026-06-22T05:15:33.363812+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 0
+  },
+  {
+    "elapsed_s": 76,
+    "ts": "2026-06-22T05:15:48.525867+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        2
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 0
+  },
+  {
+    "elapsed_s": 91,
+    "ts": "2026-06-22T05:16:03.646730+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 0
+  },
+  {
+    "elapsed_s": 107,
+    "ts": "2026-06-22T05:16:18.737461+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 0
+  },
+  {
+    "elapsed_s": 122,
+    "ts": "2026-06-22T05:16:33.860702+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 0
+  },
+  {
+    "elapsed_s": 137,
+    "ts": "2026-06-22T05:16:48.954686+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 0
+  },
+  {
+    "elapsed_s": 152,
+    "ts": "2026-06-22T05:17:04.056435+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 0
+  },
+  {
+    "elapsed_s": 167,
+    "ts": "2026-06-22T05:17:19.213598+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 0
+  },
+  {
+    "elapsed_s": 182,
+    "ts": "2026-06-22T05:17:34.315959+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 1
+  },
+  {
+    "elapsed_s": 197,
+    "ts": "2026-06-22T05:17:49.411405+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 1
+  },
+  {
+    "elapsed_s": 212,
+    "ts": "2026-06-22T05:18:04.521196+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 1
+  },
+  {
+    "elapsed_s": 227,
+    "ts": "2026-06-22T05:18:19.665026+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 1
+  },
+  {
+    "elapsed_s": 243,
+    "ts": "2026-06-22T05:18:34.758036+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 1
+  },
+  {
+    "elapsed_s": 258,
+    "ts": "2026-06-22T05:18:50.499520+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 1
+  },
+  {
+    "elapsed_s": 273,
+    "ts": "2026-06-22T05:19:05.610544+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 1
+  },
+  {
+    "elapsed_s": 288,
+    "ts": "2026-06-22T05:19:20.717396+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 1
+  },
+  {
+    "elapsed_s": 304,
+    "ts": "2026-06-22T05:19:35.831425+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "EXTRACTING",
+        "inv": null
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 1,
+        "failed_pages": 0,
+        "ai_complete": false,
+        "snapshot_created": false,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        0
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 1
+  },
+  {
+    "elapsed_s": 319,
+    "ts": "2026-06-22T05:19:50.937664+00:00",
+    "records": [
+      {
+        "id": "1007712",
+        "status": "FINALIZED",
+        "inv": "4742/25-26"
+      }
+    ],
+    "states": [
+      {
+        "id": "1007712",
+        "expected_pages": 2,
+        "completed_pages": 2,
+        "failed_pages": 0,
+        "ai_complete": true,
+        "snapshot_created": true,
+        "status": "UPLOADED"
+      }
+    ],
+    "pages": [
+      {
+        "pg": 1,
+        "fail": false,
+        "rec": "1007712"
+      },
+      {
+        "pg": 2,
+        "fail": false,
+        "rec": "1007712"
+      }
+    ],
+    "sqs": {
+      "ai": [
+        0,
+        1
+      ],
+      "assembly": [
+        0,
+        1
+      ],
+      "finalize": [
+        0,
+        0
+      ]
+    },
+    "ai_conc": 0
+  }
+]

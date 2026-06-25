@@ -1,5 +1,4 @@
 import re
-import fitz
 import logging
 import json
 
@@ -26,15 +25,9 @@ def rule_parse_invoice(file_bytes: bytes, mime_type: str, pre_extracted_text: st
         # 1. Extract Text
         text = pre_extracted_text or ""
         if not text:
-            if "pdf" in mime_type.lower():
-                doc = fitz.open(stream=file_bytes, filetype="pdf")
-                text = "\n".join(p.get_text("text") for p in doc)
-                doc.close()
-            else:
-                # For images, we just return empty result for now (OCR not available in this light parser)
-                # Maybe add basic OCR here if needed, but for now, we just want to avoid 504
-                logger.warning("Rule parser skipped for image (only supported for PDF)")
-                return result
+            # Fallback parsing requires pre-extracted text from PaddleOCR
+            logger.warning("Rule parser skipped because pre_extracted_text is empty")
+            return result
 
         # 2. Extract Patterns
         patterns = {
