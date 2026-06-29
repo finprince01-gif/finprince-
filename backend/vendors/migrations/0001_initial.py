@@ -89,9 +89,9 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
-                ('category', models.CharField(help_text='Top-level category (e.g., RAW MATERIAL, Stores and Spares, Packing Material)', max_length=255)),
-                ('group', models.CharField(blank=True, default='', help_text='Group under category (optional)', max_length=255)),
-                ('subgroup', models.CharField(blank=True, default='', help_text='Subgroup under group (optional)', max_length=255)),
+                ('category', models.CharField(help_text='Top-level category (e.g., RAW MATERIAL, Stores and Spares, Packing Material)', max_length=150)),
+                ('group', models.CharField(blank=True, default='', help_text='Group under category (optional)', max_length=150)),
+                ('subgroup', models.CharField(blank=True, default='', help_text='Subgroup under group (optional)', max_length=150)),
                 ('is_active', models.BooleanField(default=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),

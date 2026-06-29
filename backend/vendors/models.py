@@ -14,17 +14,17 @@ class VendorMasterCategory(models.Model):
     """
     tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     category = models.CharField(
-        max_length=255, 
+        max_length=150, 
         help_text="Top-level category (e.g., RAW MATERIAL, Stores and Spares, Packing Material)"
     )
     group = models.CharField(
-        max_length=255,
+        max_length=150,
         default='',
         blank=True,
         help_text="Group under category (optional)"
     )
     subgroup = models.CharField(
-        max_length=255,
+        max_length=150,
         default='',
         blank=True,
         help_text="Subgroup under group (optional)"
