@@ -1,3 +1,4 @@
+import finpixeLogo from '../../assets/finpixe with empty bg.png';
 import React, { useState, useEffect } from 'react';
 import type { Voucher, Ledger, Page } from '../../types';
 import { Widget } from '../../store/dashboardStore';
@@ -96,13 +97,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
             {/* Header */}
             <div className="erp-section-title flex justify-between items-center mb-6">
                 <div>
-                    <h1 className="page-title text-2xl font-bold tracking-tight">
+                    <div className="flex items-center gap-4">
+          <div className="w-11 h-11 rounded-2xl bg-white border border-[#E0E2FF] shadow-[0_8px_16px_rgba(75,60,255,0.08)] flex items-center justify-center overflow-hidden shrink-0">
+            <img src={finpixeLogo} alt="Finpixe logo" className="w-9 h-9 object-contain drop-shadow-sm" />
+          </div>
+          <div>
+<h1 className="page-title text-2xl font-bold tracking-tight">
                         {greeting()}, <span className="text-indigo-600 dark:text-indigo-400">Chief</span>
                     </h1>
                     <p className="helper-text text-sm font-medium mt-1">
                         Here's your financial overview for {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.
                     </p>
-                </div>
+                          </div>
+        </div></div>
                 <button
                     onClick={() => onNavigate('Dashboard Builder' as any)}
                     className="erp-button-primary"

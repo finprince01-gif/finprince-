@@ -14,6 +14,7 @@
  * - Add your service-related logic and components here
  */
 
+import finpixeLogo from '../../assets/finpixe with empty bg.png';
 import React, { useState, useEffect } from 'react';
 import Icon from '../../components/Icon';
 import { httpClient } from '../../services/httpClient';
@@ -593,9 +594,15 @@ const ServicePage: React.FC<ServicePageProps> = () => {
     <div className="space-y-8">
       <div className="erp-section-title">
         <div>
-          <h1 className="page-title">Services</h1>
+          <div className="flex items-center gap-4">
+          <div className="w-11 h-11 rounded-2xl bg-white border border-[#E0E2FF] shadow-[0_8px_16px_rgba(75,60,255,0.08)] flex items-center justify-center overflow-hidden shrink-0">
+            <img src={finpixeLogo} alt="Finpixe logo" className="w-9 h-9 object-contain drop-shadow-sm" />
+          </div>
+          <div>
+<h1 className="page-title">Services</h1>
           <p className="helper-text">Operations and service management</p>
-        </div>
+                  </div>
+        </div></div>
       </div>
 
       {/* Main Tabs */}

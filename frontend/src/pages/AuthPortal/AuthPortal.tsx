@@ -1,6 +1,7 @@
 import React from 'react';
 import Icon from '../../components/Icon';
 import PremiumBackground from '../../components/PremiumBackground';
+import finpixeLogo from '../../assets/finpixe with empty bg.png';
 
 /**
  * AUTH PORTAL - ENTRY POINT CHOOSER
@@ -18,8 +19,12 @@ const AuthPortal: React.FC = () => {
                 {/* Header Branding */}
                 <div className="text-center mb-10">
                     <div className="flex items-center justify-center gap-3 mb-3 scale-90">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#4B3CFF] to-[#6A5CFF] flex items-center justify-center shadow-lg relative overflow-hidden">
-                            <div className="w-6 h-6 rounded-lg bg-white/20 animate-pulse"></div>
+                        <div className="w-12 h-12 rounded-[14px] bg-white border border-[#E0E2FF] shadow-[0_12px_28px_rgba(75,60,255,0.1)] flex items-center justify-center overflow-hidden">
+                            <img
+                                src={finpixeLogo}
+                                alt="Finpixe logo"
+                                className="w-10 h-10 object-contain drop-shadow-[0_2px_4px_rgba(75,60,255,0.15)]"
+                            />
                         </div>
                         <h1 className="text-5xl font-black text-[#1a1a2e] tracking-widest">
                             FINPIXE

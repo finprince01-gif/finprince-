@@ -3,6 +3,7 @@ import "./Register.css";
 import { apiService } from "../../services";
 import PremiumBackground from "../../components/PremiumBackground";
 import Icon from "../../components/Icon";
+import finpixeLogo from "../../assets/finpixe with empty bg.png";
 
 interface SignupPageProps {
   onSwitchToLogin: () => void;
@@ -191,8 +192,12 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
         {/* Brand Header */}
         <div className="text-center mb-10 w-full flex flex-col items-center">
             <div className="flex items-center justify-center gap-4 mb-4">
-                <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-2xl">
-                    <div className="w-7 h-7 rounded-xl bg-white/30 animate-pulse"></div>
+                <div className="w-14 h-14 rounded-2xl bg-white border border-indigo-100 flex items-center justify-center shadow-2xl overflow-hidden">
+                    <img
+                        src={finpixeLogo}
+                        alt="Finpixe logo"
+                        className="w-12 h-12 object-contain drop-shadow-[0_2px_4px_rgba(79,70,229,0.15)]"
+                    />
                 </div>
                 <h1 className="text-5xl font-black text-slate-900 tracking-tighter">
                     FINPIXE <span className="text-indigo-600">MASTER</span>

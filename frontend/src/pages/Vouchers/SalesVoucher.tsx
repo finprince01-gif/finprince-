@@ -3764,8 +3764,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                 type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                 value={row.qty}
                                                                 onChange={(e) => handleForeignItemRowChange(row.id, 'qty', e.target.value)}
-                                                                className={`w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center ${gstRegistered ? 'bg-gray-100 opacity-70 cursor-not-allowed' : 'bg-transparent'}`}
-                                                                disabled={gstRegistered}
+                                                                className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
                                                                 placeholder="0"
                                                             />
                                                         </td>
@@ -4079,8 +4078,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                 value={row.qty}
                                                                 min="0"
                                                                 onChange={(e) => handleItemRowChange(row.id, 'qty', e.target.value)}
-                                                                className={`w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center ${gstRegistered ? 'bg-gray-100 opacity-70 cursor-not-allowed' : 'bg-transparent'}`}
-                                                                disabled={gstRegistered}
+                                                                className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
                                                                 placeholder="Qty"
                                                             />
                                                         </td>

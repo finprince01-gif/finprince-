@@ -1,3 +1,4 @@
+import finpixeLogo from '../../assets/finpixe with empty bg.png';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -12234,11 +12235,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       {/* Page Header */}
       <div className="erp-section-title">
         <div>
-          <h1 className="page-title">Voucher Entry</h1>
+          <div className="flex items-center gap-4">
+          <div className="w-11 h-11 rounded-2xl bg-white border border-[#E0E2FF] shadow-[0_8px_16px_rgba(75,60,255,0.08)] flex items-center justify-center overflow-hidden shrink-0">
+            <img src={finpixeLogo} alt="Finpixe logo" className="w-9 h-9 object-contain drop-shadow-sm" />
+          </div>
+          <div>
+<h1 className="page-title">Voucher Entry</h1>
           <p className="helper-text mb-0">
             Record transactions — sales, purchases, payments, and more
           </p>
-        </div>
+                  </div>
+        </div></div>
       </div>
 
       {isBankUploadModalOpen ? (
