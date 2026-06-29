@@ -19,117 +19,44 @@ def _clean_val(val):
 
 def get_business_types():
     """Returns a unique list of business types from the hierarchy."""
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT DISTINCT `Type of Business` FROM master_hierarchy_raw WHERE `Type of Business` IS NOT NULL AND `Type of Business` != '' AND `Type of Business` != '-'")
-        rows = cursor.fetchall()
-    return sorted([row[0] for row in rows if row[0]])
+    from .models import MasterHierarchyRaw
+    types = MasterHierarchyRaw.objects.exclude(type_of_business_1__isnull=True).exclude(type_of_business_1__exact='').exclude(type_of_business_1__exact='-').values_list('type_of_business_1', flat=True).distinct()
+    return sorted([t for t in types if t])
 
 
 def get_flat_hierarchy_rows(business_type=None):
     """
     Returns flat rows from master_hierarchy_raw in the format the frontend
     LedgerCreationWizard and HierarchicalDropdown expect.
-
-    Each row is a dict with keys:
-        id, type_of_business_1, financial_reporting_1, major_group_1,
-        group_1, sub_group_1_1, sub_group_2_1, sub_group_3_1, ledger_1, code
-
-    This intentionally matches the HierarchyRow interface in the frontend
-    TypeScript components.
-
-    NOTE:
-    - In most environments we add an `id` AUTO_INCREMENT column to
-      master_hierarchy_raw via `backend/fix_schema.py`.
-    - We prefer ordering by that `id` so the frontend tree matches the
-      exact row order users see in the table.
-    - If the column is missing, we fall back to the previous deterministic
-      alphabetical ordering and generate sequential ids.
     """
     logger.info(f"Fetching flat hierarchy rows (filter: {business_type})...")
+    from .models import MasterHierarchyRaw
 
-    query_with_id = """
-        SELECT
-            id,
-            `Type of Business`,
-            `Financial Reporting`,
-            `Major Group`,
-            `Group`,
-            `Sub-group 1`,
-            `Sub-group 2`,
-            `Sub-group 3`,
-            `Ledgers`,
-            `Code`
-        FROM master_hierarchy_raw
-    """
-
-    query_without_id = """
-        SELECT
-            `Type of Business`,
-            `Financial Reporting`,
-            `Major Group`,
-            `Group`,
-            `Sub-group 1`,
-            `Sub-group 2`,
-            `Sub-group 3`,
-            `Ledgers`,
-            `Code`
-        FROM master_hierarchy_raw
-    """
-    params = []
+    qs = MasterHierarchyRaw.objects.all().order_by('id')
     if business_type:
-        query_with_id += " WHERE `Type of Business` = %s"
-        query_without_id += " WHERE `Type of Business` = %s"
-        params.append(business_type)
+        qs = qs.filter(type_of_business_1=business_type)
 
-    # Prefer "table order" via id when available.
-    # Fallback: previous alphabetical ordering.
-    with connection.cursor() as cursor:
-        try:
-            cursor.execute(query_with_id + " ORDER BY id", params)
-            rows = cursor.fetchall()
-            has_id = True
-        except Exception:
-            cursor.execute(
-                query_without_id
-                + " ORDER BY `Major Group`, `Group`, `Sub-group 1`, `Sub-group 2`, `Sub-group 3`, `Ledgers`",
-                params,
-            )
-            rows = cursor.fetchall()
-            has_id = False
-
-    logger.info(f"Fetched {len(rows)} flat rows from master_hierarchy_raw.")
+    rows = list(qs.values(
+        'id', 'type_of_business_1', 'financial_reporting_1', 'major_group_1',
+        'group_1', 'sub_group_1_1', 'sub_group_2_1', 'sub_group_3_1', 'ledger_1', 'code'
+    ))
 
     result = []
-    for idx, row in enumerate(rows, start=1):
-        if has_id:
-            # row indices: 0=id, 1..9=fields
-            result.append({
-                "id": int(row[0]),
-                "type_of_business_1": _clean_val(row[1]),
-                "financial_reporting_1": _clean_val(row[2]),
-                "major_group_1": _clean_val(row[3]),
-                "group_1": _clean_val(row[4]),
-                "sub_group_1_1": _clean_val(row[5]),
-                "sub_group_2_1": _clean_val(row[6]),
-                "sub_group_3_1": _clean_val(row[7]),
-                "ledger_1": _clean_val(row[8]),
-                "code": _clean_val(row[9]),
-            })
-        else:
-            # Generated sequential ID fallback
-            result.append({
-                "id": idx,
-                "type_of_business_1": _clean_val(row[0]),
-                "financial_reporting_1": _clean_val(row[1]),
-                "major_group_1": _clean_val(row[2]),
-                "group_1": _clean_val(row[3]),
-                "sub_group_1_1": _clean_val(row[4]),
-                "sub_group_2_1": _clean_val(row[5]),
-                "sub_group_3_1": _clean_val(row[6]),
-                "ledger_1": _clean_val(row[7]),
-                "code": _clean_val(row[8]),
-            })
+    for row in rows:
+        result.append({
+            "id": row['id'],
+            "type_of_business_1": _clean_val(row['type_of_business_1']),
+            "financial_reporting_1": _clean_val(row['financial_reporting_1']),
+            "major_group_1": _clean_val(row['major_group_1']),
+            "group_1": _clean_val(row['group_1']),
+            "sub_group_1_1": _clean_val(row['sub_group_1_1']),
+            "sub_group_2_1": _clean_val(row['sub_group_2_1']),
+            "sub_group_3_1": _clean_val(row['sub_group_3_1']),
+            "ledger_1": _clean_val(row['ledger_1']),
+            "code": _clean_val(row['code']),
+        })
 
+    logger.info(f"Fetched {len(result)} flat rows from master_hierarchy_raw.")
     return result
 
 
@@ -153,19 +80,18 @@ def build_ledger_hierarchy_tree(force_refresh=False):
     logger.info("Building full ledger hierarchy tree from master_hierarchy_raw...")
 
     with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT
-                `Type of Business`,
-                `Financial Reporting`,
-                `Major Group`,
-                `Group`,
-                `Sub-group 1`,
-                `Sub-group 2`,
-                `Sub-group 3`,
-                `Ledgers`
-            FROM master_hierarchy_raw
-        """)
-        rows = cursor.fetchall()
+        from .models import MasterHierarchyRaw
+        qs = MasterHierarchyRaw.objects.all().values_list(
+            'type_of_business_1',
+            'financial_reporting_1',
+            'major_group_1',
+            'group_1',
+            'sub_group_1_1',
+            'sub_group_2_1',
+            'sub_group_3_1',
+            'ledger_1'
+        )
+        rows = list(qs)
 
     logger.info(f"Fetched {len(rows)} raw rows for full hierarchy.")
 

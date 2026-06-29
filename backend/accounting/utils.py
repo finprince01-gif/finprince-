@@ -144,21 +144,18 @@ def _generate_nested_code(ledger_data, tenant_id):
 
 def _lookup_exact_hierarchy_code(ledger_data):
     """
-    Look up the EXACT code from master_hierarchy_raw table.
-
-    IMPORTANT: The actual DB columns use display names with spaces/dashes:
-      'Major Group', 'Group', 'Sub-group 1', 'Sub-group 2', 'Sub-group 3', 'Ledgers', 'Code'
-    These must be quoted with backticks in raw SQL.
+    Look up the EXACT code from master_hierarchy_raw table using ORM.
     """
+    from .models import MasterHierarchyRaw
 
-    # Map ledger_data fields → actual DB column names (backtick-quoted)
+    # Map ledger_data fields → actual DB column names
     field_mapping = [
-        ('category',    '`Major Group`'),
-        ('group',       '`Group`'),
-        ('sub_group_1', '`Sub-group 1`'),
-        ('sub_group_2', '`Sub-group 2`'),
-        ('sub_group_3', '`Sub-group 3`'),
-        ('ledger_type', '`Ledgers`'),
+        ('category',    'major_group_1'),
+        ('group',       'group_1'),
+        ('sub_group_1', 'sub_group_1_1'),
+        ('sub_group_2', 'sub_group_2_1'),
+        ('sub_group_3', 'sub_group_3_1'),
+        ('ledger_type', 'ledger_1'),
     ]
 
     # Collect all non-empty hierarchy fields in order
@@ -166,7 +163,7 @@ def _lookup_exact_hierarchy_code(ledger_data):
     for field, db_column in field_mapping:
         value = ledger_data.get(field)
         if value and str(value).strip() and str(value).strip() != '-':
-            hierarchy_fields.append((field, db_column, str(value).strip()))
+            hierarchy_fields.append((db_column, str(value).strip()))
 
     if not hierarchy_fields:
         logger.debug("No hierarchy fields provided")
@@ -175,21 +172,10 @@ def _lookup_exact_hierarchy_code(ledger_data):
     logger.debug(f"🔍 Looking up exact code with {len(hierarchy_fields)} hierarchy fields")
 
     def run_query(fields):
-        conditions = [f"{db_col} = %s" for _, db_col, _ in fields]
-        params = [val for _, _, val in fields]
-        query = f"""
-            SELECT `Code`
-            FROM master_hierarchy_raw
-            WHERE {' AND '.join(conditions)}
-              AND `Code` IS NOT NULL
-              AND `Code` != ''
-            LIMIT 1
-        """
-        logger.debug(f"Query: {query} | Params: {params}")
-        with connection.cursor() as cursor:
-            cursor.execute(query, params)
-            row = cursor.fetchone()
-        return row[0].strip() if row and row[0] else None
+        filters = {db_col: val for db_col, val in fields}
+        qs = MasterHierarchyRaw.objects.filter(**filters).exclude(code__isnull=True).exclude(code__exact='')
+        row = qs.first()
+        return row.code.strip() if row and row.code else None
 
     # Try exact match with all fields
     code = run_query(hierarchy_fields)
