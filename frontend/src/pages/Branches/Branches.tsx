@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import finpixeLogo from '../../assets/finpixe with empty bg.png';
 import { masterApiService } from '../../services/masterApi';
 import Modal from '../../components/Modal';
 import Icon from '../../components/Icon';
@@ -239,13 +240,18 @@ const BranchesPage: React.FC = () => {
         <div className="py-2">
             {/* Header */}
             <div className="flex items-start justify-between mb-8">
-                <div>
-                    <h1 className="text-[22px] font-black text-slate-900 tracking-tight m-0">
+                <div className="flex items-center gap-4">
+                    <div className="w-11 h-11 rounded-2xl bg-white border border-[#E0E2FF] shadow-[0_8px_16px_rgba(75,60,255,0.08)] flex items-center justify-center overflow-hidden shrink-0">
+                        <img src={finpixeLogo} alt="Finpixe logo" className="w-9 h-9 object-contain drop-shadow-sm" />
+                    </div>
+                    <div>
+                        <h1 className="text-[22px] font-black text-slate-900 tracking-tight m-0">
                         Branches
                     </h1>
                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.12em] mt-1">
                         Manage all platform branches directly
                     </p>
+                </div>
                 </div>
                 <button
                     onClick={() => setIsCreateModalOpen(true)}

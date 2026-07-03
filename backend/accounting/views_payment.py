@@ -475,10 +475,14 @@ def get_advances_by_ledger(ledger_id=None, tenant_id=None, category=None):
     from accounting.models import AdvanceAllocation, PendingTransaction
     
     # ── Source 1: AdvanceAllocation (Voucher-based and Portal-based advances) ──
+    # Exclude all receipt-originated entries (type starts with 'receipt_')
+    # so that paying a Receipt does not appear in Sales Voucher Payment Details.
     payment_qs = AdvanceAllocation.objects.filter(
         amount__gt=0
     ).exclude(
         type__in=['receipt_single_amount_only', 'payment_single_amount_only']
+    ).exclude(
+        type__startswith='receipt_'
     ).select_related('pay_to_ledger', 'pay_from_ledger')
     
     if ledger_id:
@@ -500,14 +504,11 @@ def get_advances_by_ledger(ledger_id=None, tenant_id=None, category=None):
             Q(c_from_cat=category.strip().upper())
         )
 
-    # ── Source 2: PendingTransaction (Receipt-based advances direct from core logic) ──
-    # Note: Only needed if not already synced to AdvanceAllocation
-    receipt_qs = PendingTransaction.objects.filter(
-        is_advance=True,
-        amount__gt=0
-    ).exclude(
-        type__in=['receipt_single_amount_only', 'payment_single_amount_only']
-    ).select_related('pay_from_ledger', 'pay_to_ledger')
+    # ── Source 2: PendingTransaction (Receipt-based advances) ──
+    # These are created when a Receipt voucher is paid.
+    # We intentionally exclude them so Receipt payments do NOT appear
+    # in the Sales Voucher > Payment Details advance references.
+    receipt_qs = PendingTransaction.objects.none()
     
     if ledger_id:
         receipt_qs = receipt_qs.filter(

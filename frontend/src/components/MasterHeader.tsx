@@ -8,11 +8,11 @@ interface MasterHeaderProps {
   adminName: string;
 }
 
-const MasterHeader: React.FC<MasterHeaderProps> = ({ 
-  title, 
-  isSidebarOpen, 
-  toggleSidebar, 
-  adminName 
+const MasterHeader: React.FC<MasterHeaderProps> = ({
+  title,
+  isSidebarOpen,
+  toggleSidebar,
+  adminName
 }) => {
   return (
     <div className="sticky top-0 z-30 backdrop-blur-md flex items-center justify-between erp-header">

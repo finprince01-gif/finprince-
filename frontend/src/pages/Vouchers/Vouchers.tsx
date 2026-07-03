@@ -1,4 +1,4 @@
-import finpixeLogo from '../../assets/finpixe with empty bg.png';
+﻿import finpixeLogo from '../../assets/finpixe with empty bg.png';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -20,7 +20,6 @@ import PaymentVoucherBulk from './PaymentVoucherBulk';
 import ReceiptVoucher from './ReceiptVoucher';
 import CreateGRNModal from '../../components/CreateGRNModal';
 import BankUpload from './BankUpload';
-import SearchableSelect from '../../components/SearchableSelect';
 import CreateNewVendorFullModal from '../../components/CreateNewVendorFullModal';
 import { ChevronDown } from 'lucide-react';
 import SearchableDropdown from '../../components/SearchableDropdown';
@@ -5728,7 +5727,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     Vendor Name <span className="text-red-500">*</span>
                   </label>
                   <div className="flex flex-col gap-1.5">
-                    <SearchableSelect
+                    <SearchableDropdown
                       value={party}
                       onChange={handlePartyChange}
                       options={purchasePartyOptions}
@@ -5797,7 +5796,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Branch
                   </label>
-                  <SearchableSelect
+                  <SearchableDropdown
                     value={selectedBranch}
                     onChange={(val) => setSelectedBranch(val)}
                     options={
@@ -5845,7 +5844,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <div className="flex flex-col gap-1">
                   <label className="block text-sm font-semibold text-gray-800">GRN Reference No.</label>
                   <div className="flex-1">
-                    <SearchableSelect
+                    <SearchableDropdown
                       value={grnRefNo === '+ Create GRN' ? '' : grnRefNo}
                       onChange={(val) => {
                         if (val === '+ Create GRN') {
@@ -6030,7 +6029,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </div>
                   {vendorAddresses.length > 1 && (
                     <div className="mt-1">
-                      <SearchableSelect
+                      <SearchableDropdown
                         value={''}
                         onChange={(val) => {
                           if (val) {
@@ -6408,7 +6407,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             </td>
                           )}
                           <td className="px-3 py-2 border-r border-gray-200">
-                            <SearchableSelect
+                            <SearchableDropdown
                               value={row.itemName}
                               onChange={(val) => handlePurchaseItemChange(index, 'itemName', val)}
                               options={itemNameOptions}
@@ -6673,7 +6672,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               </td>
                             )}
                             <td className="px-2 py-2 border-r border-gray-200">
-                              <SearchableSelect
+                              <SearchableDropdown
                                 value={row.itemCode}
                                 onChange={(val) => handlePurchaseItemChange(index, 'itemCode', val)}
                                 options={itemCodeOptions}
@@ -6682,7 +6681,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               />
                             </td>
                             <td className="px-2 py-2 border-r border-gray-200">
-                              <SearchableSelect
+                              <SearchableDropdown
                                 value={row.itemName}
                                 onChange={(val) => handlePurchaseItemChange(index, 'itemName', val)}
                                 options={itemNameOptions}
@@ -7682,7 +7681,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div><label className="form-label">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="form-input" /></div>
           <div><label className="form-label">Invoice No.</label><input type="text" value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} className="form-input" /></div>
-          <div><label className="form-label">Party</label><SearchableSelect value={party} onChange={setParty} options={partyLedgers.map(l => l.name)} placeholder="Select Party" /></div>
+          <div><label className="form-label">Party</label><SearchableDropdown value={party} onChange={setParty} options={partyLedgers.map(l => l.name)} placeholder="Select Party" /></div>
         </div>
         <div className="mb-4 p-2 bg-slate-100 rounded-[4px] text-center">
           <p className="text-sm font-semibold text-gray-700">
@@ -7813,7 +7812,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <label className="block text-sm font-medium text-gray-700 mb-1">Receive In</label>
                 <div className="flex items-center gap-2">
                   <div className="flex-1">
-                    <SearchableSelect
+                    <SearchableDropdown
                       value={account}
                       onChange={setAccount}
                       options={accountLedgers.map(l => l.name)}
@@ -7830,7 +7829,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <label className="block text-sm font-medium text-gray-700 mb-1">Receive From</label>
                   <div className="flex items-center gap-2">
                     <div className="flex-1">
-                      <SearchableSelect
+                      <SearchableDropdown
                         value={party}
                         onChange={setParty}
                         options={partyLedgers.map(l => l.name)}
@@ -8492,7 +8491,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     CUSTOMER NAME <span className="text-red-500">*</span>
                   </label>
                   <div className="flex flex-col gap-1.5">
-                    <SearchableSelect
+                    <SearchableDropdown
                       value={cnCustomerId}
                       onChange={(val) => {
                         setCnCustomerId(val);
@@ -8790,7 +8789,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
                     GRN REFERENCE NO.
                   </label>
-                  <SearchableSelect
+                  <SearchableDropdown
                     value={cnGrnRefNo === '+ Create GRN' ? '' : cnGrnRefNo}
                     onChange={(val) => {
                       if (val === '+ Create GRN') {
@@ -10625,7 +10624,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">{labelA}</label>
-                  <SearchableSelect
+                  <SearchableDropdown
                     value={account}
                     onChange={setAccount}
                     options={accountLedgers.map(l => l.name)}
@@ -10635,7 +10634,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <label className="block text-sm font-medium text-gray-700 mb-1">{labelB}</label>
-                    <SearchableSelect
+                    <SearchableDropdown
                       value={party}
                       onChange={setParty}
                       options={partyLedgers.map(l => l.name)}
@@ -10802,7 +10801,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">{labelA}</label>
-                  <SearchableSelect
+                  <SearchableDropdown
                     value={account}
                     onChange={setAccount}
                     options={accountLedgers.map(l => l.name)}
@@ -10823,7 +10822,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               {/* Party Name */}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">{labelB}</label>
-                <SearchableSelect
+                <SearchableDropdown
                   value={party}
                   onChange={setParty}
                   options={partyLedgers.map(l => l.name)}
@@ -10868,7 +10867,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             />
                           </td>
                           <td className="px-4 py-3">
-                            <SearchableSelect
+                            <SearchableDropdown
                               value={party}
                               onChange={setParty}
                               options={partyLedgers.map(l => l.name)}
@@ -10988,7 +10987,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               />
                             </td>
                             <td className="px-2 py-2">
-                              <SearchableSelect
+                              <SearchableDropdown
                                 value={party}
                                 onChange={setParty}
                                 options={partyLedgers.map(l => l.name)}
@@ -11181,7 +11180,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Voucher Type</label>
-              <SearchableSelect
+              <SearchableDropdown
                 value={selectedContraConfig}
                 onChange={setSelectedContraConfig}
                 options={contraVoucherConfigs.map(c => c.voucher_name)}
@@ -11202,7 +11201,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             {/* Transfer From */}
             <div className="grid grid-cols-[160px_1fr_130px] gap-4 items-center">
               <label className="text-sm font-medium text-gray-700">Transfer From</label>
-              <SearchableSelect value={fromAccount} onChange={v => {
+              <SearchableDropdown value={fromAccount} onChange={v => {
                 setFromAccount(v);
                 // Reset forex fields on account change
                 setContraPaymentAmtForeign(''); setContraPaymentRate(0); setContraPaymentAmtINR('');
@@ -11220,7 +11219,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             {/* Transfer To */}
             <div className="grid grid-cols-[160px_1fr_130px] gap-4 items-center">
               <label className="text-sm font-medium text-gray-700">Transfer To</label>
-              <SearchableSelect value={toAccount} onChange={v => {
+              <SearchableDropdown value={toAccount} onChange={v => {
                 setToAccount(v);
                 setContraPaymentAmtForeign(''); setContraPaymentRate(0); setContraPaymentAmtINR('');
                 setContraReceiptAmtForeign(''); setContraReceiptRate(0); setContraReceiptAmtINR('');
@@ -11521,12 +11520,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     return (
       <div className="max-w-md mx-auto space-y-4">
         <div><label className="form-label">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="form-input" /></div>
-        {type !== 'Contra' && <div><label className="form-label">Account (Cash/Bank)</label><SearchableSelect value={account} onChange={setAccount} options={accountLedgers.map(l => l.name)} placeholder="Select Account" /></div>}
+        {type !== 'Contra' && <div><label className="form-label">Account (Cash/Bank)</label><SearchableDropdown value={account} onChange={setAccount} options={accountLedgers.map(l => l.name)} placeholder="Select Account" /></div>}
         {type === 'Contra' && <>
-          <div><label className="form-label">From Account</label><SearchableSelect value={fromAccount} onChange={setFromAccount} options={accountLedgers.map(l => l.name)} placeholder="Select From Account" /></div>
-          <div><label className="form-label">To Account</label><SearchableSelect value={toAccount} onChange={setToAccount} options={accountLedgers.map(l => l.name)} placeholder="Select To Account" /></div>
+          <div><label className="form-label">From Account</label><SearchableDropdown value={fromAccount} onChange={setFromAccount} options={accountLedgers.map(l => l.name)} placeholder="Select From Account" /></div>
+          <div><label className="form-label">To Account</label><SearchableDropdown value={toAccount} onChange={setToAccount} options={accountLedgers.map(l => l.name)} placeholder="Select To Account" /></div>
         </>}
-        {type !== 'Contra' && <div><label className="form-label">Party</label><SearchableSelect value={party} onChange={setParty} options={partyLedgers.map(l => l.name)} placeholder="Select Party" /></div>}
+        {type !== 'Contra' && <div><label className="form-label">Party</label><SearchableDropdown value={party} onChange={setParty} options={partyLedgers.map(l => l.name)} placeholder="Select Party" /></div>}
         <div><label className="form-label">Amount</label><input type="number" onWheel={(e) => e.currentTarget.blur()} value={simpleAmount} onChange={e => setSimpleAmount(parseFloat(e.target.value))} className="form-input" /></div>
         <div className="relative"><label className="form-label">Narration</label><textarea value={narration} onChange={e => setNarration(e.target.value)} className="form-input w-full pr-10" rows={3}></textarea><button onClick={handleGenerateNarration} disabled={isNarrationLoading} className="absolute top-7 right-2 text-indigo-500 hover:text-slate-700 disabled:text-gray-300" title="Generate Narration with AI">{isNarrationLoading ? <Icon name="spinner" className="w-5 h-5 animate-spin" /> : <Icon name="wand-sparkles" className="w-5 h-5" />}</button></div>
       </div>
@@ -11762,7 +11761,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         </div>
         <div>
           <label className="erp-label">Voucher Type</label>
-          <SearchableSelect
+          <SearchableDropdown
             value={selectedExpensesConfig}
             onChange={setSelectedExpensesConfig}
             options={expensesVoucherConfigs.map(c => c.voucher_name)}
@@ -11806,7 +11805,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <label className="erp-label">
                   Expenses <span className="text-red-500">*</span>
                 </label>
-                <SearchableSelect
+                <SearchableDropdown
                   value={row.expense}
                   onChange={(val) => handleExpenseRowChange(row.id, 'expense', val)}
                   options={expenseLedgers.map(l => l.name)}
@@ -11818,7 +11817,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <label className="erp-label">
                   Post To <span className="text-red-500">*</span>
                 </label>
-                <SearchableSelect
+                <SearchableDropdown
                   value={row.postTo}
                   onChange={(val) => handleExpenseRowChange(row.id, 'postTo', val)}
                   options={postToLedgers.map(l => l.name)}
@@ -12059,7 +12058,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         </div>
         <div>
           <label className="erp-label">Voucher Type</label>
-          <SearchableSelect
+          <SearchableDropdown
             value={selectedJournalConfig}
             onChange={setSelectedJournalConfig}
             options={journalVoucherConfigs.map(c => c.voucher_name)}
@@ -12098,7 +12097,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               {entries.map((entry, index) => (
                 <tr key={index}>
                   <td className="px-4 py-3">
-                    <SearchableSelect
+                    <SearchableDropdown
                       value={entry.ledger}
                       onChange={(val) => handleEntryChange(index, 'ledger', val)}
                       options={allLedgerOptions}
@@ -12236,16 +12235,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       <div className="erp-section-title">
         <div>
           <div className="flex items-center gap-4">
-          <div className="w-11 h-11 rounded-2xl bg-white border border-[#E0E2FF] shadow-[0_8px_16px_rgba(75,60,255,0.08)] flex items-center justify-center overflow-hidden shrink-0">
-            <img src={finpixeLogo} alt="Finpixe logo" className="w-9 h-9 object-contain drop-shadow-sm" />
-          </div>
-          <div>
-<h1 className="page-title">Voucher Entry</h1>
-          <p className="helper-text mb-0">
-            Record transactions — sales, purchases, payments, and more
-          </p>
-                  </div>
-        </div></div>
+            <div className="w-11 h-11 rounded-2xl bg-white border border-[#E0E2FF] shadow-[0_8px_16px_rgba(75,60,255,0.08)] flex items-center justify-center overflow-hidden shrink-0">
+              <img src={finpixeLogo} alt="Finpixe logo" className="w-9 h-9 object-contain drop-shadow-sm" />
+            </div>
+            <div>
+              <h1 className="page-title">Voucher Entry</h1>
+              <p className="helper-text mb-0">
+                Record transactions — sales, purchases, payments, and more
+              </p>
+            </div>
+          </div></div>
       </div>
 
       {isBankUploadModalOpen ? (

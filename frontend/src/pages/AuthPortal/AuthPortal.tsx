@@ -90,7 +90,7 @@ const AuthPortal: React.FC = () => {
                         </div>
                     </div>
                 </button>
-                
+
                 {/* Landing Page Link */}
                 <button
                     onClick={() => window.location.href = (import.meta as any).env?.VITE_LANDING_URL || 'http://localhost:3000'}

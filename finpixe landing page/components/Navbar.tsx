@@ -63,9 +63,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate }) => {
           onClick={() => handleLinkClick('home')}
           className="flex items-center gap-2.5 cursor-pointer"
         >
-          <div className="w-9 h-9 bg-logo-blue rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-600/30">
-            F
-          </div>
+          <img src="/finpixe-logo.png" alt="Finpixe Logo" className="h-9 w-auto object-contain" />
           <span className="text-2xl font-bold text-slate-900 tracking-tight uppercase">
             FINPIXE
           </span>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+﻿import React, { useState, useMemo, useRef } from 'react';
 import { apiService } from '../../services/api';
 import { httpClient } from '../../services/httpClient';
 import { showError, showSuccess } from '../../utils/toast';
@@ -3124,6 +3124,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                     options={salesVoucherConfigs.map(c => c.voucher_name)}
                                     placeholder="Select series"
                                     disabled={gstRegistered}
+                                    className="w-full"
                                 />
                             </div>
 
@@ -3154,7 +3155,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                         onFocus={onRefreshCustomers}
                                         placeholder="Search or select customer"
                                         disabled={gstRegistered}
-                                        required
+                                        className="w-full"
                                     />
                                     <button
                                         type="button"
@@ -3179,6 +3180,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                         options={branchOptions}
                                         placeholder="Select branch"
                                         disabled={!customerName}
+                                        className="w-full"
                                     />
                                 ) : (
                                     <select
@@ -3203,6 +3205,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                         options={gstinOptions}
                                         placeholder={customerName ? "Select GSTIN" : "Select Customer first"}
                                         disabled={!customerName}
+                                        className="w-full"
                                     />
                                 ) : (
                                     <input

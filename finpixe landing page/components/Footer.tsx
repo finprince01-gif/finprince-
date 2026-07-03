@@ -8,9 +8,7 @@ const Footer: React.FC = () => {
         <div className="grid md:grid-cols-4 gap-12 mb-12">
           <div className="col-span-1 md:col-span-1">
             <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-9 h-9 bg-logo-blue rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-600/30">
-                F
-              </div>
+              <img src="/finpixe-logo.png" alt="Finpixe Logo" className="h-9 w-auto object-contain" />
               <span className="text-2xl font-bold text-white tracking-tight uppercase">
                 FINPIXE
               </span>
