@@ -39,24 +39,24 @@ class InventoryMasterCategory(BaseModel):
     Stores the master category hierarchy (Category -> Group -> Subgroup)
     """
     category = models.CharField(
-        max_length=255, 
+        max_length=100, 
         help_text="Top-level category (e.g., RAW MATERIAL, Finished goods)",
         default="General"
     )
     group = models.CharField(
-        max_length=255,
+        max_length=100,
         default='',
         blank=True,
         help_text="Group under category (optional)"
     )
     subgroup = models.CharField(
-        max_length=255,
+        max_length=100,
         default='',
         blank=True,
         help_text="Subgroup under group (optional)"
     )
     sub_subgroup = models.CharField(
-        max_length=255,
+        max_length=100,
         default='',
         blank=True,
         help_text="Sub-subgroup under subgroup (optional)"
