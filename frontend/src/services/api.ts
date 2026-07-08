@@ -654,11 +654,17 @@ class ApiService {
         const normalizedSource = source?.toLowerCase() || '';
 
         try {
-            if (normalizedSource === 'b2b_drilldown' || normalizedSource === 'voucher_sales_new') {
+            const isSalesDrilldown = [
+                'b2b_drilldown', 'b2ba_drilldown', 'b2cl_drilldown', 'b2cla_drilldown',
+                'b2cs_drilldown', 'b2csa_drilldown', 'voucher_sales_new'
+            ].includes(normalizedSource);
+
+            if (isSalesDrilldown) {
                 response = await httpClient.get<any>(`/api/voucher-sales-new/${id}/`, undefined, options);
                 response.type = 'Sales';
                 fetchedAsDetail = true;
             } else if (normalizedSource === 'sales_invoice' || normalizedSource === 'sales') {
+
                 try {
                     response = await httpClient.get<any>(`/api/invoices/${id}/`, undefined, { ...options, skipErrorNotification: true } as any);
                 } catch (e) {
@@ -2115,6 +2121,34 @@ class ApiService {
 
     async healthCheck() {
         return httpClient.get<{ status: string; timestamp: string }>('/api/health/');
+    }
+
+    // ============================================================================
+    // SANDBOX GST API
+    // ============================================================================
+
+    async fileGSTR1Sandbox(month: string, year: string, payload: any) {
+        return httpClient.post<any>('/api/gst/reconciliation/file_gstr1_sandbox/', { month, year, ...payload });
+    }
+
+    async requestSandboxOTP(gstin: string) {
+        return httpClient.post<any>('/api/gst/reconciliation/request_sandbox_otp/', { gstin });
+    }
+
+    async verifyAndFileSandbox(month: string, year: string, payload: any, otp: string, gstin?: string) {
+        return httpClient.post<any>('/api/gst/reconciliation/verify_and_file_sandbox/', { 
+            month, 
+            year, 
+            ...payload, 
+            otp,
+            gstin: gstin || '29ABCDE1234F1Z5'
+        });
+    }
+
+    async fetchGSTR2BSandbox(month: string, year: string, gstin?: string) {
+        let url = `/api/gst/reconciliation/fetch_gstr2b_sandbox/?month=${month}&year=${year}`;
+        if (gstin) url += `&gstin=${gstin}`;
+        return httpClient.get<any>(url);
     }
 }
 

@@ -1592,15 +1592,20 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                             <div>
                                 <label className="label-text">Customer Category</label>
                                 <SearchableDropdown
-                                    options={categories.map(cat => cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > '))}
-                                    value={categories.find(cat => String(cat.id) === customerFormData.customer_category)?.full_path || categories.find(cat => String(cat.id) === customerFormData.customer_category)?.category || customerFormData.customer_category || ''}
+                                    options={Array.from(new Set(categories.map(cat => (cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > ')).toUpperCase().replace(/\s*>\s*/g, ' > '))))}
+                                    value={(() => {
+                                        const matchingCat = categories.find(cat => String(cat.id) === customerFormData.customer_category);
+                                        if (matchingCat) return (matchingCat.full_path || [matchingCat.category, matchingCat.group, matchingCat.subgroup].filter(Boolean).join(' > ')).toUpperCase().replace(/\s*>\s*/g, ' > ');
+                                        return customerFormData.customer_category ? String(customerFormData.customer_category).toUpperCase().replace(/\s*>\s*/g, ' > ') : '';
+                                    })()}
                                     onChange={(val) => {
-                                        const selectedCat = categories.find(cat => (cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > ')) === val);
+                                        const normalizedVal = val.toUpperCase().replace(/\s*>\s*/g, ' > ');
+                                        const selectedCat = categories.find(cat => (cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > ')).toUpperCase().replace(/\s*>\s*/g, ' > ') === normalizedVal);
                                         if (selectedCat) {
                                             handleCustomerFieldChange('customer_category', String(selectedCat.id));
                                         } else {
                                             // Handle custom value - save as string directly
-                                            handleCustomerFieldChange('customer_category', val);
+                                            handleCustomerFieldChange('customer_category', normalizedVal);
                                         }
                                     }}
                                     placeholder="Select Category"

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { httpClient, apiService } from '../../services';
 import { showError, showSuccess } from '../../utils/toast';
 import { Ledger } from '../../types';
-import SearchableSelect from '../../components/SearchableSelect';
+import SearchableDropdown from '../../components/SearchableDropdown';
 
 
 import { ExtractedInvoiceData } from '../../types';
@@ -1435,7 +1435,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Pay From</label>
                             <div className="flex gap-2">
-                                <SearchableSelect
+                                <SearchableDropdown
                                     value={payFrom}
                                     onChange={(val) => setPayFrom(val)}
                                     options={payFromOptions.map(l => l.name)}
@@ -1450,7 +1450,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Pay To</label>
                             <div className="flex gap-2">
-                                <SearchableSelect
+                                <SearchableDropdown
                                     value={payTo}
                                     onChange={(val) => setPayTo(val)}
                                     options={payToOptions.map(l => {
@@ -1775,7 +1775,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Pay from</label>
-                                    <SearchableSelect
+                                    <SearchableDropdown
                                         value={payFrom}
                                         onChange={(val) => setPayFrom(val)}
                                         options={payFromOptions.map(l => l.name)}
@@ -1806,7 +1806,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                 onClick={() => setSelectedRowId(row.id)}
                                                 className={`transition-all ${selectedRowId === row.id ? 'ring-2 ring-indigo-500 rounded-[4px] p-1 bg-indigo-50' : ''}`}
                                             >
-                                                <SearchableSelect
+                                                <SearchableDropdown
                                                     value={row.payTo}
                                                     onChange={val => handlePaymentRowChange(row.id, 'payTo', val)}
                                                     options={payToOptions.map(l => {

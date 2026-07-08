@@ -63,7 +63,7 @@ class GSTR1ViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def b2b(self, request):
         """Get B2B invoices (Registered Customers) - excludes amended vouchers (those move to B2BA)"""
-        vouchers = self.get_queryset().exclude(gstin__isnull=True).exclude(gstin__exact='').filter(amendment_date__isnull=True)
+        vouchers = self.get_queryset().exclude(gstin__isnull=True).exclude(gstin__exact='').exclude(gstin__iexact='unregistered').filter(amendment_date__isnull=True)
         
         data = []
         for v in vouchers:
@@ -105,7 +105,7 @@ class GSTR1ViewSet(viewsets.ViewSet):
         """Get B2BA invoices - shows original GST filed values for amended vouchers"""
         print("B2BA ENDPOINT HIT!")
         # Filter for registered customers AND has an amendment_date
-        vouchers = self.get_queryset().exclude(gstin__isnull=True).exclude(gstin__exact='').exclude(amendment_date__isnull=True)
+        vouchers = self.get_queryset().exclude(gstin__isnull=True).exclude(gstin__exact='').exclude(gstin__iexact='unregistered').exclude(amendment_date__isnull=True)
         print("VOUCHERS COUNT FOR B2BA:", vouchers.count())
         
         data = []
@@ -190,24 +190,26 @@ class GSTR1ViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'])
     def b2cl(self, request):
-        """Get B2C Large invoices"""
-        # Logic: Filter conceptually first, but since grand_total is in related table, iterate
-        all_vouchers = self.get_queryset().filter(Q(gstin__isnull=True) | Q(gstin__exact=''))
+        """Get B2C Large invoices (unregistered, >2.5L interstate, NOT amended)"""
+        all_vouchers = self.get_queryset().filter(
+            Q(gstin__isnull=True) | Q(gstin__exact='') | Q(gstin__iexact='unregistered')
+        ).filter(amendment_date__isnull=True)  # Exclude amended — they go to B2CLA
         
         data = []
         for v in all_vouchers:
             pay = get_payment_details(v)
             val = pay.payment_invoice_value if pay else 0
-            if val <= 250000: continue # Skip if not large
-            if v.state_type != 'other': continue # Skip if not interstate
+            if val <= 250000: continue  # Skip if not large
+            if v.state_type != 'other': continue  # Skip if not interstate
 
             taxable = pay.payment_taxable_value if pay else 0
             igst = pay.payment_igst if pay else 0
             
             # POS
-            pos = '27' # Default Interstate
+            pos = v.place_of_supply or '27'  # Default Interstate
 
             data.append({
+                'id': v.id,
                 'invoice_no': v.sales_invoice_no,
                 'invoice_date': v.date,
                 'invoice_value': val,
@@ -215,14 +217,15 @@ class GSTR1ViewSet(viewsets.ViewSet):
                 'rate': 0,
                 'taxable_value': taxable,
                 'igst': igst,
-                'cess': 0
+                'cess': 0,
+                'source': 'b2cl_drilldown'
             })
         return Response(data)
 
     @action(detail=False, methods=['get'])
     def b2cs(self, request):
         """Get B2C Small aggregated"""
-        all_vouchers = self.get_queryset().filter(Q(gstin__isnull=True) | Q(gstin__exact=''))
+        all_vouchers = self.get_queryset().filter(Q(gstin__isnull=True) | Q(gstin__exact='') | Q(gstin__iexact='unregistered'))
         
         # Manually aggregate
         agg_map = {} # POS -> {taxable, igst...}
@@ -266,9 +269,115 @@ class GSTR1ViewSet(viewsets.ViewSet):
         return Response(data)
 
     @action(detail=False, methods=['get'])
+    def b2csa(self, request):
+        """Get B2CSA aggregated (Amended B2C Small)"""
+        all_vouchers = self.get_queryset().filter(Q(gstin__isnull=True) | Q(gstin__exact='') | Q(gstin__iexact='unregistered')).exclude(amendment_date__isnull=True)
+        
+        agg_map = {} # POS -> {taxable, igst...}
+
+        for v in all_vouchers:
+            snap = v.original_voucher_snapshot or {}
+            orig_date_str = snap.get('date', str(v.date))
+            # Just grab the original month name roughly if possible
+            orig_month = orig_date_str.split('-')[1] if '-' in orig_date_str else orig_date_str
+
+            pay = get_payment_details(v)
+            val = pay.payment_invoice_value if pay else 0
+            
+            # Filter condition: Small (<2.5L) OR Intra-state
+            is_large_inter = (val > 250000 and v.state_type == 'other')
+            if is_large_inter: continue 
+            
+            taxable = pay.payment_taxable_value if pay else 0
+            igst = pay.payment_igst if pay else 0
+            cgst = pay.payment_cgst if pay else 0
+            sgst = pay.payment_sgst if pay else 0
+
+            # POS
+            pos = '29' if v.state_type == 'within' else '27'
+            orig_pos = pos # In a real system, track POS changes
+            
+            if pos not in agg_map:
+                agg_map[pos] = {'taxable': 0, 'igst': 0, 'cgst': 0, 'sgst': 0, 'orig_month': orig_month, 'orig_pos': orig_pos}
+            
+            agg_map[pos]['taxable'] += float(taxable)
+            agg_map[pos]['igst'] += float(igst)
+            agg_map[pos]['cgst'] += float(cgst)
+            agg_map[pos]['sgst'] += float(sgst)
+
+        data = []
+        for pos, vals in agg_map.items():
+            data.append({
+                'type': 'OE',
+                'original_month': vals['orig_month'],
+                'financial_year': '2026-27',
+                'original_pos': vals['orig_pos'],
+                'revised_pos': pos,
+                'rate': 0, 
+                'original_rate': 0,
+                'taxable_value': vals['taxable'],
+                'cess': 0,
+                'ecommerce_gstin': ''
+            })
+        return Response(data)
+
+    @action(detail=False, methods=['get'])
+    def b2cla(self, request):
+        """Get B2CLA - Amended B2C Large invoices (unregistered, >2.5L interstate, amended)"""
+        all_vouchers = self.get_queryset().filter(
+            Q(gstin__isnull=True) | Q(gstin__exact='') | Q(gstin__iexact='unregistered')
+        ).exclude(amendment_date__isnull=True)  # Only amended vouchers
+
+        data = []
+        for v in all_vouchers:
+            pay = get_payment_details(v)
+            val = pay.payment_invoice_value if pay else 0
+            if val <= 250000: continue  # Only large invoices
+            if v.state_type != 'other': continue  # Only interstate
+
+            snap = v.original_voucher_snapshot or {}
+
+            # Original (pre-amendment) values from snapshot
+            orig_pay = snap.get('payment_details', {})
+            orig_val = orig_pay.get('payment_invoice_value', val)
+            orig_taxable = orig_pay.get('payment_taxable_value', 0)
+            orig_igst = orig_pay.get('payment_igst', 0)
+
+            # Amended (current) values
+            taxable = pay.payment_taxable_value if pay else 0
+            igst = pay.payment_igst if pay else 0
+
+            orig_invoice_no = snap.get('sales_invoice_no', v.sales_invoice_no)
+            orig_date = snap.get('date', str(v.date))
+            orig_pos = snap.get('place_of_supply', v.place_of_supply or '27')
+            curr_pos = v.place_of_supply or '27'
+
+            data.append({
+                'id': v.id,
+                # Original GST-filed values
+                'original_invoice_no': orig_invoice_no,
+                'original_invoice_date': orig_date,
+                'original_invoice_value': orig_val,
+                'original_place_of_supply': orig_pos,
+                'original_taxable_value': orig_taxable,
+                'original_igst': orig_igst,
+                # Amended (current) values
+                'revised_invoice_no': v.sales_invoice_no,
+                'revised_invoice_date': str(v.date),
+                'revised_invoice_value': val,
+                'revised_place_of_supply': curr_pos,
+                'revised_taxable_value': taxable,
+                'revised_igst': igst,
+                'amendment_date': str(v.amendment_date),
+                'rate': 0,
+                'cess': 0,
+                'source': 'b2cla_drilldown'
+            })
+        return Response(data)
+
+    @action(detail=False, methods=['get'])
     def exp(self, request):
         """Get Export invoices"""
-        # tax_type for export might be 'export'
         vouchers = self.get_queryset().filter(state_type='export')
         
         data = []
@@ -278,6 +387,7 @@ class GSTR1ViewSet(viewsets.ViewSet):
             taxable = pay.payment_taxable_value if pay else 0
 
             data.append({
+                'id': v.id,
                 'export_type': v.export_type or 'WPAY',
                 'invoice_no': v.sales_invoice_no,
                 'invoice_date': v.date,
@@ -290,29 +400,42 @@ class GSTR1ViewSet(viewsets.ViewSet):
             })
         return Response(data)
 
+
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Returns counts for each GSTR1 category for the selected period"""
         queryset = self.get_queryset()
         
         # B2B (excludes amended vouchers)
-        b2b_count = queryset.exclude(gstin__isnull=True).exclude(gstin__exact='').filter(amendment_date__isnull=True).count()
+        b2b_count = queryset.exclude(gstin__isnull=True).exclude(gstin__exact='').exclude(gstin__iexact='unregistered').filter(amendment_date__isnull=True).count()
         
         # B2BA (amended registered vouchers)
-        b2ba_count = queryset.exclude(gstin__isnull=True).exclude(gstin__exact='').exclude(amendment_date__isnull=True).count()
+        b2ba_count = queryset.exclude(gstin__isnull=True).exclude(gstin__exact='').exclude(gstin__iexact='unregistered').exclude(amendment_date__isnull=True).count()
         
         # Unregistered (conceptually B2C)
-        unreg = queryset.filter(Q(gstin__isnull=True) | Q(gstin__exact=''))
+        unreg = queryset.filter(Q(gstin__isnull=True) | Q(gstin__exact='') | Q(gstin__iexact='unregistered'))
         
         # We need to iterate or use complex annotation because grand_total is in related table
         b2cl_count = 0
+        b2cla_count = 0
         b2cs_count = 0
+        b2csa_count = 0
+        
         for v in unreg:
-            val = getattr(v.payment_details, 'payment_invoice_value', 0) if hasattr(v, 'payment_details') else 0
-            if val > 250000 and v.state_type == 'other':
-                b2cl_count += 1
+            pay = get_payment_details(v)
+            val = pay.payment_invoice_value if pay else 0
+            is_large_inter = (val > 250000 and v.state_type == 'other')
+            
+            if is_large_inter:
+                if v.amendment_date is not None:
+                    b2cla_count += 1  # Amended B2CL → goes to B2CLA
+                else:
+                    b2cl_count += 1   # Non-amended B2CL
             else:
-                b2cs_count += 1
+                if v.amendment_date is not None:
+                    b2csa_count += 1  # Amended B2CS → goes to B2CSA
+                else:
+                    b2cs_count += 1   # Non-amended B2CS
         
         exp_count = queryset.filter(state_type='export').count()
 
@@ -329,7 +452,9 @@ class GSTR1ViewSet(viewsets.ViewSet):
             'B2B': b2b_count,
             'B2BA': b2ba_count,
             'B2CL': b2cl_count,
+            'B2CLA': b2cla_count,
             'B2CS': b2cs_count,
+            'B2CSA': b2csa_count,
             'EXP': exp_count,
             'ATADJ': atadj_count,
             'DOC': doc_count,

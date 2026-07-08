@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { httpClient } from '../../services/httpClient';
+import { apiService } from '../../services/api';
 
 let savedPeriod: { year: string; month: string } | null = null;
 
@@ -39,10 +40,18 @@ export default function GSTR1Page({ onNavigate, setViewVoucherData, vouchers }: 
     const [amendmentForm, setAmendmentForm] = useState<any>({});
     const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
+    // OTP State
+    const [showOtpModal, setShowOtpModal] = useState(false);
+    const [otpValue, setOtpValue] = useState('');
+    const [isSendingOtp, setIsSendingOtp] = useState(false);
+    const [otpSent, setOtpSent] = useState(false);
+
     // Data states
     const [b2bData, setB2bData] = useState<any[]>([]);
     const [b2clData, setB2clData] = useState<any[]>([]);
+    const [b2claData, setB2claData] = useState<any[]>([]);
     const [b2csData, setB2csData] = useState<any[]>([]);
+    const [b2csaData, setB2csaData] = useState<any[]>([]);
     const [cdnrData, setCdnrData] = useState<any[]>([]);
     const [cdnurData, setCdnurData] = useState<any[]>([]);
     const [atData, setAtData] = useState<any[]>([]);
@@ -100,7 +109,9 @@ export default function GSTR1Page({ onNavigate, setViewVoucherData, vouchers }: 
                 'B2B': '/api/gst/gstr1/b2b/',
                 'B2BA': '/api/gst/gstr1/b2ba/',
                 'B2CL': '/api/gst/gstr1/b2cl/',
+                'B2CLA': '/api/gst/gstr1/b2cla/',
                 'B2CS': '/api/gst/gstr1/b2cs/',
+                'B2CSA': '/api/gst/gstr1/b2csa/',
                 'CDNR': '/api/gst/gstr1/cdnr/',
                 'CDNUR': '/api/gst/gstr1/cdnur/',
                 'EXP': '/api/gst/gstr1/exp/',
@@ -121,7 +132,9 @@ export default function GSTR1Page({ onNavigate, setViewVoucherData, vouchers }: 
                     case 'B2B': setB2bData([]); break;
                     case 'B2BA': setB2baData([]); break;
                     case 'B2CL': setB2clData([]); break;
+                    case 'B2CLA': setB2claData([]); break;
                     case 'B2CS': setB2csData([]); break;
+                    case 'B2CSA': setB2csaData([]); break;
                     case 'CDNR': setCdnrData([]); break;
                     case 'CDNUR': setCdnurData([]); break;
                     case 'AT': setAtData([]); break;
@@ -145,7 +158,9 @@ export default function GSTR1Page({ onNavigate, setViewVoucherData, vouchers }: 
                     break;
                 case 'B2BA': setB2baData(response || []); break;
                 case 'B2CL': setB2clData(response || []); break;
+                case 'B2CLA': setB2claData(response || []); break;
                 case 'B2CS': setB2csData(response || []); break;
+                case 'B2CSA': setB2csaData(response || []); break;
                 case 'CDNR': setCdnrData(response || []); break;
                 case 'CDNUR': setCdnurData(response || []); break;
                 case 'AT': setAtData(response || []); break;
@@ -175,7 +190,9 @@ export default function GSTR1Page({ onNavigate, setViewVoucherData, vouchers }: 
             switch (activeSubTab) {
                 case 'B2B': setB2bData([]); break;
                 case 'B2CL': setB2clData([]); break;
+                case 'B2CLA': setB2claData([]); break;
                 case 'B2CS': setB2csData([]); break;
+                case 'B2CSA': setB2csaData([]); break;
                 case 'CDNR': setCdnrData([]); break;
                 case 'CDNUR': setCdnurData([]); break;
                 case 'AT': setAtData([]); break;
@@ -225,8 +242,8 @@ export default function GSTR1Page({ onNavigate, setViewVoucherData, vouchers }: 
         }
     };
 
-    // Check if selected period is the current month (filing not allowed)
-    const isCurrentMonth = (() => {
+    // Check if selected period is the current or future month (filing not allowed)
+    const isCurrentOrFutureMonth = (() => {
         const today = new Date();
         const currentYear = today.getFullYear();
         const currentMonth = today.getMonth() + 1; // 1-indexed
@@ -240,23 +257,48 @@ export default function GSTR1Page({ onNavigate, setViewVoucherData, vouchers }: 
         const info = monthsMap[period.month];
         if (!info) return false;
         const filterYear = fyStartYear + info.offset;
-        return filterYear === currentYear && info.num === currentMonth;
+        
+        if (filterYear > currentYear) return true;
+        if (filterYear === currentYear && info.num >= currentMonth) return true;
+        return false;
     })();
 
-    const handleFileReturn = async () => {
-        if (isCurrentMonth) return;
+    const initiateFiling = () => {
+        setFilingStatus(null);
+        setShowOtpModal(true);
+        setOtpSent(false);
+        setOtpValue('');
+    };
+
+    const handleRequestOTP = async () => {
+        setIsSendingOtp(true);
+        setFilingStatus(null);
+        try {
+            const res = await apiService.requestSandboxOTP('29ABCDE1234F1Z5');
+            setFilingStatus({ type: 'success', message: res?.message || 'OTP Sent successfully' });
+            setOtpSent(true);
+        } catch (err: any) {
+            const msg = err?.response?.data?.error || err?.message || 'Failed to request OTP.';
+            setFilingStatus({ type: 'error', message: msg });
+        } finally {
+            setIsSendingOtp(false);
+        }
+    };
+
+    const handleVerifyAndFile = async () => {
+        if (!otpValue) {
+            setFilingStatus({ type: 'error', message: 'Please enter the OTP' });
+            return;
+        }
         setIsFilingReturn(true);
         setFilingStatus(null);
         try {
-            const res: any = await httpClient.post('/api/gst/gstr1/file_return/', {
-                year: period.year,
-                month: period.month
-            });
+            const res = await apiService.verifyAndFileSandbox(period.month, period.year, { b2b: b2bData }, otpValue);
             setFilingStatus({
                 type: 'success',
                 message: res?.message || `GST Return filed successfully for ${period.month} ${period.year}.`
             });
-            // Refresh data
+            setShowOtpModal(false);
             fetchData();
         } catch (err: any) {
             const msg = err?.response?.data?.error || err?.message || 'Failed to file GST return.';
@@ -332,15 +374,12 @@ export default function GSTR1Page({ onNavigate, setViewVoucherData, vouchers }: 
                             {isLoading ? 'Generating...' : 'Generate Return'}
                         </button>
                         <button
-                            onClick={handleFileReturn}
-                            disabled={isCurrentMonth || isFilingReturn || isLoading}
-                            title={isCurrentMonth ? 'Cannot file GST return for the current month. Select a previous month.' : 'Mark all vouchers in this period as GST Filed'}
-                            className={`erp-button-primary ${isCurrentMonth
-                                    ? 'opacity-40 cursor-not-allowed bg-gray-400 border-gray-300 hover:bg-gray-400'
-                                    : 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600'
-                                }`}
+                            onClick={initiateFiling}
+                            disabled={isFilingReturn || isLoading || isCurrentOrFutureMonth}
+                            title={isCurrentOrFutureMonth ? "Cannot file for current or future months" : "File directly to Sandbox API"}
+                            className={`erp-button-primary ${isCurrentOrFutureMonth ? 'bg-gray-400 border-gray-400 hover:bg-gray-400 cursor-not-allowed opacity-70' : 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600'}`}
                         >
-                            {isFilingReturn ? 'Filing...' : isCurrentMonth ? '🔒 File GST Return' : '✓ File GST Return'}
+                            ⚡ File GST Return (Sandbox)
                         </button>
                         <button
                             onClick={handleDownloadExcel}
@@ -543,7 +582,21 @@ export default function GSTR1Page({ onNavigate, setViewVoucherData, vouchers }: 
                                     </thead>
                                     <tbody>
                                         {b2clData.length > 0 ? b2clData.map((row, idx) => (
-                                            <tr key={idx} className="hover:bg-gray-50">
+                                            <tr 
+                                                key={idx} 
+                                                className="hover:bg-gray-50 cursor-pointer"
+                                                onClick={() => {
+                                                    if (setViewVoucherData && onNavigate) {
+                                                        setViewVoucherData({
+                                                            ...row,
+                                                            voucherNo: row.invoice_no,
+                                                            type: 'Sales',
+                                                            source: 'b2cl_drilldown'
+                                                        });
+                                                        onNavigate('Vouchers');
+                                                    }
+                                                }}
+                                            >
                                                 <td className="px-4 py-2 border text-sm">{row.invoice_no}</td>
                                                 <td className="px-4 py-2 border text-sm">{row.invoice_date}</td>
                                                 <td className="px-4 py-2 border text-sm text-right">{Number(row.invoice_value).toFixed(2)}</td>
@@ -568,30 +621,61 @@ export default function GSTR1Page({ onNavigate, setViewVoucherData, vouchers }: 
                     {!isLoading && activeSubTab === 'B2CLA' && (
                         <div>
                             <h3 className="erp-section-title border-none pb-0 mb-4">B2CLA - B2C Large (Amendment)</h3>
-                            <p className="text-sm text-gray-600 mb-4">Amended details of B2C Large invoices</p>
+                            <p className="text-sm text-gray-600 mb-4">Amended details of B2C Large invoices (original GST filed vs revised values)</p>
                             <div className="erp-table-container">
                                 <table className="erp-table">
                                     <thead>
                                         <tr>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Original Invoice number</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">Original Invoice No.</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Original Invoice Date</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Revised Invoice number*</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">Revised Invoice No.</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Revised Invoice Date</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Invoice value*</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Original Place of Supply(POS)</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Applicable % of Tax Rate</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Rate*</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Taxable Value*</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">Cess Amount</th>
-                                            <th className="px-4 py-2 border text-left text-sm font-medium">E-Commerce GSTIN</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">Invoice Value</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">Original POS</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">Revised POS</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">Rate</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">Taxable Value</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">IGST</th>
+                                            <th className="px-4 py-2 border text-left text-sm font-medium">Cess</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr>
-                                            <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
-                                                No B2CLA data available for selected period.
-                                            </td>
-                                        </tr>
+                                        {b2claData.length > 0 ? b2claData.map((row, idx) => (
+                                            <tr
+                                                key={idx}
+                                                className="hover:bg-amber-50 cursor-pointer"
+                                                onClick={() => {
+                                                    if (setViewVoucherData && onNavigate) {
+                                                        setViewVoucherData({
+                                                            ...row,
+                                                            voucherNo: row.revised_invoice_no,
+                                                            type: 'Sales',
+                                                            source: 'b2cla_drilldown',
+                                                            _viewAsGSTFiled: true
+                                                        });
+                                                        onNavigate('Vouchers');
+                                                    }
+                                                }}
+                                            >
+                                                <td className="px-4 py-2 border text-sm font-medium text-gray-500">{row.original_invoice_no}</td>
+                                                <td className="px-4 py-2 border text-sm text-gray-500">{row.original_invoice_date}</td>
+                                                <td className="px-4 py-2 border text-sm font-medium text-blue-700">{row.revised_invoice_no}</td>
+                                                <td className="px-4 py-2 border text-sm">{row.revised_invoice_date}</td>
+                                                <td className="px-4 py-2 border text-sm text-right">{Number(row.revised_invoice_value).toFixed(2)}</td>
+                                                <td className="px-4 py-2 border text-sm">{row.original_place_of_supply}</td>
+                                                <td className="px-4 py-2 border text-sm">{row.revised_place_of_supply}</td>
+                                                <td className="px-4 py-2 border text-sm">{row.rate}%</td>
+                                                <td className="px-4 py-2 border text-sm text-right">{Number(row.revised_taxable_value).toFixed(2)}</td>
+                                                <td className="px-4 py-2 border text-sm text-right">{Number(row.revised_igst).toFixed(2)}</td>
+                                                <td className="px-4 py-2 border text-sm text-right">{Number(row.cess).toFixed(2)}</td>
+                                            </tr>
+                                        )) : (
+                                            <tr>
+                                                <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
+                                                    No B2CLA amendments for selected period.
+                                                </td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -660,11 +744,26 @@ export default function GSTR1Page({ onNavigate, setViewVoucherData, vouchers }: 
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr>
-                                            <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
-                                                No B2CSA data available for selected period.
-                                            </td>
-                                        </tr>
+                                        {b2csaData.length > 0 ? b2csaData.map((row, idx) => (
+                                            <tr key={idx} className="hover:bg-gray-50">
+                                                <td className="px-4 py-2 border text-sm">{row.type}</td>
+                                                <td className="px-4 py-2 border text-sm">{row.financial_year}</td>
+                                                <td className="px-4 py-2 border text-sm">{row.original_month}</td>
+                                                <td className="px-4 py-2 border text-sm">{row.original_pos}</td>
+                                                <td className="px-4 py-2 border text-sm">{row.revised_pos}</td>
+                                                <td className="px-4 py-2 border text-sm">{row.rate}%</td>
+                                                <td className="px-4 py-2 border text-sm">{row.original_rate}%</td>
+                                                <td className="px-4 py-2 border text-sm text-right">{Number(row.taxable_value).toFixed(2)}</td>
+                                                <td className="px-4 py-2 border text-sm text-right">{Number(row.cess).toFixed(2)}</td>
+                                                <td className="px-4 py-2 border text-sm">{row.ecommerce_gstin || '-'}</td>
+                                            </tr>
+                                        )) : (
+                                            <tr>
+                                                <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
+                                                    No B2CSA data available for selected period.
+                                                </td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -1696,6 +1795,64 @@ export default function GSTR1Page({ onNavigate, setViewVoucherData, vouchers }: 
                             >
                                 CLOSE
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* OTP Modal */}
+            {showOtpModal && (
+                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+                        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <span className="text-emerald-600">🛡️</span> Taxpayer Authentication
+                            </h3>
+                            <button onClick={() => setShowOtpModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                                ✕
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            <p className="text-sm text-slate-600 mb-6">
+                                To file this return securely, you must authorize this action using the One-Time Password (OTP) sent to the registered mobile number for GSTIN <span className="font-bold text-slate-800">29ABCDE1234F1Z5</span>.
+                            </p>
+                            
+                            {!otpSent ? (
+                                <div className="flex flex-col items-center">
+                                    <button 
+                                        onClick={handleRequestOTP} 
+                                        disabled={isSendingOtp}
+                                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-all"
+                                    >
+                                        {isSendingOtp ? 'Sending Request...' : 'Send OTP via SMS'}
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-700 mb-2">Enter 6-digit OTP</label>
+                                        <input
+                                            type="text"
+                                            value={otpValue}
+                                            onChange={(e) => setOtpValue(e.target.value)}
+                                            placeholder="123456"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-center tracking-widest text-lg font-mono"
+                                            maxLength={6}
+                                        />
+                                    </div>
+                                    <button 
+                                        onClick={handleVerifyAndFile} 
+                                        disabled={isFilingReturn}
+                                        className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-all flex justify-center items-center gap-2"
+                                    >
+                                        {isFilingReturn ? (
+                                            <>
+                                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                Verifying & Filing...
+                                            </>
+                                        ) : 'Verify & File Return'}
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

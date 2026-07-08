@@ -5265,8 +5265,8 @@ const InventoryPage: React.FC = () => {
                                 className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                               >
                                 <option value="">Select Customer</option>
-                                {customers.map(c => (
-                                  <option key={c.id} value={c.customer_name}>{c.customer_name}</option>
+                                {[...customers].sort((a, b) => (a.customer_name || '').localeCompare(b.customer_name || '')).map(c => (
+                                  <option key={c.id} value={c.customer_name}>{c.customer_code ? `${c.customer_name} - ${c.customer_code}` : c.customer_name}</option>
                                 ))}
                               </select>
                             )}

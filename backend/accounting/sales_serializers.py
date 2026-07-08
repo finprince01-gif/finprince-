@@ -139,7 +139,7 @@ class SalesVoucherSerializer(serializers.ModelSerializer):
             # GST-Compliant Fields
             'place_of_supply', 'reverse_charge', 'invoice_type', 'export_type',
             'port_code', 'shipping_bill_number', 'shipping_bill_date', 'ecommerce_gstin',
-            'gst_registered', 'amendment_date',
+            'gst_registered', 'amendment_date', 'original_voucher_snapshot',
             # Status and Totals
             'status', 'current_step', 
             # 'total_taxable_amount', 'total_cgst', ... # Missing
@@ -150,7 +150,7 @@ class SalesVoucherSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = [
-            'id', 'sales_invoice_number', 'tax_type', 'grand_total', 'created_at', 'updated_at', 'amendment_date'
+            'id', 'sales_invoice_number', 'tax_type', 'grand_total', 'created_at', 'updated_at', 'amendment_date', 'original_voucher_snapshot'
         ]
 
     def update(self, instance, validated_data):

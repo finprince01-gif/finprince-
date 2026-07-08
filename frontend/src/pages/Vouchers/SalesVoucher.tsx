@@ -1967,18 +1967,20 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         const slipGstin = selectedSlip.gstin || '';
 
         const rawCustName = resolvedCustomer ? (resolvedCustomer.customer_name || resolvedCustomer.name || '') : customerName;
-        if (slipCustomer && rawCustName && slipCustomer.trim().toLowerCase() !== rawCustName.trim().toLowerCase()) {
+        const cleanSlipCustomer = slipCustomer.split(' - CUST-')[0].trim().toLowerCase();
+        const cleanRawCustName = rawCustName.split(' - CUST-')[0].trim().toLowerCase();
+        if (slipCustomer && rawCustName && cleanSlipCustomer !== cleanRawCustName) {
             setOutwardSlipError(`Customer Name '${rawCustName}' does not match Outward Slip (${slipCustomer}).`);
             return false;
         }
 
-        if (slipBranch && customerBranch && slipBranch !== customerBranch) {
-            setOutwardSlipError(`Branch '${customerBranch}' does not match Outward Slip (${slipBranch}).`);
+        if (slipBranch && customerBranch && slipBranch.trim().toLowerCase() !== customerBranch.trim().toLowerCase()) {
+            setOutwardSlipError(`Branch '${customerBranch.trim()}' does not match Outward Slip (${slipBranch.trim()}).`);
             return false;
         }
 
-        if (slipGstin && gstin && slipGstin !== gstin) {
-            setOutwardSlipError(`GSTIN '${gstin}' does not match Outward Slip (${slipGstin}).`);
+        if (slipGstin && gstin && slipGstin.trim().toLowerCase() !== gstin.trim().toLowerCase()) {
+            setOutwardSlipError(`GSTIN '${gstin.trim()}' does not match Outward Slip (${slipGstin.trim()}).`);
             return false;
         }
 
@@ -3124,6 +3126,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                     options={salesVoucherConfigs.map(c => c.voucher_name)}
                                     placeholder="Select series"
                                     disabled={gstRegistered}
+                                    className="w-full"
                                 />
                             </div>
 
@@ -3154,7 +3157,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                         onFocus={onRefreshCustomers}
                                         placeholder="Search or select customer"
                                         disabled={gstRegistered}
-                                        required
+                                        className="w-full"
                                     />
                                     <button
                                         type="button"
@@ -3179,6 +3182,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                         options={branchOptions}
                                         placeholder="Select branch"
                                         disabled={!customerName}
+                                        className="w-full"
                                     />
                                 ) : (
                                     <select
@@ -3203,6 +3207,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                         options={gstinOptions}
                                         placeholder={customerName ? "Select GSTIN" : "Select Customer first"}
                                         disabled={!customerName}
+                                        className="w-full"
                                     />
                                 ) : (
                                     <input
@@ -5796,7 +5801,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                     <CreateIssueSlipModal
                         onClose={() => setIsIssueSlipModalOpen(false)}
                         initialData={{
-                            customerName: customerName,
+                            customerName: resolvedCustomer ? (resolvedCustomer.customer_name || resolvedCustomer.name || '') : customerName,
                             branch: customerBranch,
                             gstin: gstin,
                             address: `${billToAddress1}${billToAddress2 ? ', ' + billToAddress2 : ''}${billToAddress3 ? ', ' + billToAddress3 : ''}${billToCity ? ', ' + billToCity : ''}${billToState ? ', ' + billToState : ''}${billToPincode ? ' - ' + billToPincode : ''}`.replace(/^,\s*/, '').trim()
