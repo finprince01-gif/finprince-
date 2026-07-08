@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { httpClient, apiService } from '../../services';
 import { showError, showSuccess } from '../../utils/toast';
 
 
 import { Ledger, ExtractedInvoiceData } from '../../types';
-import SearchableSelect from '../../components/SearchableSelect';
+import SearchableDropdown from '../../components/SearchableDropdown';
 
 interface PendingTransaction {
     id: string | number;
@@ -1478,7 +1478,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Receive In</label>
                             <div className="flex gap-2">
-                                <SearchableSelect
+                                <SearchableDropdown
                                     value={receiveIn}
                                     onChange={(val) => setReceiveIn(val)}
                                     options={receiveInLedgers.map(l => l.name)}
@@ -1493,7 +1493,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Receive From</label>
                             <div className="flex gap-2">
-                                <SearchableSelect
+                                <SearchableDropdown
                                     value={receiveFrom}
                                     onChange={(val) => {
                                         setReceiveFrom(val);
@@ -1790,7 +1790,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Receive In</label>
-                                    <SearchableSelect
+                                    <SearchableDropdown
                                         value={receiveIn}
                                         onChange={(val) => setReceiveIn(val)}
                                         options={receiveInLedgers.map(l => l.name)}
@@ -1816,7 +1816,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Receive From</label>
                                     <div className="space-y-3">
                                         {receiptRows.map((row) => (
-                                            <SearchableSelect
+                                            <SearchableDropdown
                                                 key={`receive-from-${row.id}`}
                                                 value={row.receiveFrom}
                                                 onChange={val => handleReceiptRowChange(row.id, 'receiveFrom', val)}

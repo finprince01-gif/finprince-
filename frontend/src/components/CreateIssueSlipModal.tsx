@@ -771,7 +771,13 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                 Customer Name
                             </label>
                             <SearchableDropdown
-                                options={customersList.map(c => c.customer_name).filter(Boolean)}
+                                options={[...customersList]
+                                    .filter(c => c.customer_name)
+                                    .sort((a, b) => (a.customer_name || '').localeCompare(b.customer_name || ''))
+                                    .map(c => ({
+                                        label: c.customer_code ? `${c.customer_name} - ${c.customer_code}` : c.customer_name,
+                                        value: c.customer_name
+                                    }))}
                                 value={customerName}
                                 onChange={(val) => {
                                     setCustomerName(val);

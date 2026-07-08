@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { httpClient } from '../../services/httpClient';
+import { apiService } from '../../services/api';
 
 export default function GSTR2Reconciliation() {
     const [isLoading, setIsLoading] = useState(false);
@@ -40,6 +41,23 @@ export default function GSTR2Reconciliation() {
         }
     };
 
+    const handleFetchFromSandbox = async () => {
+        setIsLoading(true);
+        try {
+            // Fetch directly via Sandbox API (Mocked in backend)
+            const res = await apiService.fetchGSTR2BSandbox('January', '2024-25');
+            if (res?.data?.b2b) {
+                // Ingest the fetched data into our system
+                await httpClient.post('/api/gst/reconciliation/upload_2b/', res.data.b2b);
+                alert('GSTR-2B data fetched from Sandbox and ingested successfully!');
+            }
+        } catch (e: any) {
+            alert('Failed to fetch from Sandbox API: ' + (e.message || 'Error'));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="erp-container">
@@ -49,8 +67,11 @@ export default function GSTR2Reconciliation() {
                         <p className="helper-text">Match government data with your purchase books</p>
                     </div>
                     <div className="flex gap-3">
+                        <button onClick={handleFetchFromSandbox} className="erp-button-secondary bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100" disabled={isLoading}>
+                            ⚡ Fetch from Sandbox API
+                        </button>
                         <label className="erp-button-secondary cursor-pointer">
-                            Upload GSTR-2B JSON
+                            Upload JSON
                             <input type="file" className="hidden" onChange={handleUpload} accept=".json" />
                         </label>
                         <button onClick={runReconciliation} className="erp-button-primary" disabled={isLoading}>

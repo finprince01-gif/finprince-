@@ -19,6 +19,7 @@ from .serializers import (
     ITCSummarySerializer, GSTR3BReportSerializer, AuditLogSerializer
 )
 from .services import GSTValidationService
+from .sandbox_service import SandboxGSTService
 
 class GSTReconciliationViewSet(viewsets.ViewSet):
     """
@@ -252,3 +253,90 @@ class GSTReconciliationViewSet(viewsets.ViewSet):
             executed_by=str(request.user)
         )
         return Response({"status": "All module data cleared successfully"})
+
+    @action(detail=False, methods=['post'])
+    def file_gstr1_sandbox(self, request):
+        """Module: Direct Filing via Sandbox API (Mocked)"""
+        month = request.data.get('month')
+        year = request.data.get('year')
+        
+        service = SandboxGSTService()
+        result = service.file_gstr1(month, year, request.data)
+        
+        AuditLog.objects.create(
+            action="Sandbox GSTR-1 File (Mock)",
+            details={"month": month, "year": year, "reference": result.get("reference_id")},
+            executed_by=str(request.user) if request.user.is_authenticated else 'system'
+        )
+        if not result.get('success'):
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
+
+    @action(detail=False, methods=['get'])
+    def fetch_gstr2b_sandbox(self, request):
+        """Module: Direct Fetch via Sandbox API (Mocked)"""
+        month = request.query_params.get('month')
+        year = request.query_params.get('year')
+        gstin = request.query_params.get('gstin', '27AAPCU4669C1Z9')
+        
+        service = SandboxGSTService()
+        result = service.fetch_gstr2b(gstin, month, year)
+        if not result.get('success'):
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
+
+    @action(detail=False, methods=['post'])
+    def request_sandbox_otp(self, request):
+        gstin = request.data.get('gstin', '29ABCDE1234F1Z5')
+        service = SandboxGSTService()
+        result = service.request_otp(gstin)
+        if not result.get('success'):
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
+
+    @action(detail=False, methods=['post'])
+    def verify_and_file_sandbox(self, request):
+        month = request.data.get('month')
+        year = request.data.get('year')
+        gstin = request.data.get('gstin', '29ABCDE1234F1Z5')
+        otp = request.data.get('otp')
+        
+        service = SandboxGSTService()
+        verify_result = service.verify_otp(gstin, otp)
+        
+        if not verify_result.get('success'):
+            return Response(verify_result, status=status.HTTP_400_BAD_REQUEST)
+            
+        auth_token = verify_result.get('auth_token')
+        file_result = service.file_gstr1(month, year, request.data, auth_token=auth_token)
+        
+        AuditLog.objects.create(
+            action="Sandbox GSTR-1 File with OTP",
+            details={"month": month, "year": year, "reference": file_result.get("reference_id")},
+            executed_by=str(request.user) if request.user.is_authenticated else 'system'
+        )
+        
+        if not file_result.get('success'):
+            return Response(file_result, status=status.HTTP_400_BAD_REQUEST)
+
+        # Successfully filed! Now mark all vouchers for this month as filed in our database
+        months_map = {
+            'January': (1, 1), 'February': (2, 1), 'March': (3, 1),
+            'April': (4, 0), 'May': (5, 0), 'June': (6, 0),
+            'July': (7, 0), 'August': (8, 0), 'September': (9, 0),
+            'October': (10, 0), 'November': (11, 0), 'December': (12, 0)
+        }
+        month_info = months_map.get(month)
+        if month_info and year:
+            start_year = int(year.split('-')[0])
+            filter_year = start_year + month_info[1]
+            from accounting.models_voucher_sales import VoucherSalesInvoiceDetails
+            qs = VoucherSalesInvoiceDetails.objects.filter(
+                date__year=filter_year,
+                date__month=month_info[0],
+                gst_registered=''
+            )
+            count = qs.update(gst_registered='Yes')
+            file_result['message'] += f" (Updated {count} vouchers in database)"
+
+        return Response(file_result)

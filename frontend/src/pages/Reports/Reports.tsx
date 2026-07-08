@@ -2918,19 +2918,21 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                   <div className="text-lg font-bold">{selectedTransaction.voucherNo || 'N/A'}</div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => {
-                      if (isEditingVoucher) {
-                        setIsEditingVoucher(false);
-                        setEditedVoucher(JSON.parse(JSON.stringify(voucherDetails)));
-                      } else {
-                        setIsEditingVoucher(true);
-                      }
-                    }}
-                    className="px-4 py-1.5 rounded-lg text-xs font-bold bg-white text-indigo-700 hover:bg-indigo-50 transition-colors uppercase tracking-wider"
-                  >
-                    {isEditingVoucher ? 'Cancel Edit' : 'Edit Voucher'}
-                  </button>
+                  {voucherDetails?.gst_registered !== 'Yes' && (
+                    <button
+                      onClick={() => {
+                        if (isEditingVoucher) {
+                          setIsEditingVoucher(false);
+                          setEditedVoucher(JSON.parse(JSON.stringify(voucherDetails)));
+                        } else {
+                          setIsEditingVoucher(true);
+                        }
+                      }}
+                      className="px-4 py-1.5 rounded-lg text-xs font-bold bg-white text-indigo-700 hover:bg-indigo-50 transition-colors uppercase tracking-wider"
+                    >
+                      {isEditingVoucher ? 'Cancel Edit' : 'Edit Voucher'}
+                    </button>
+                  )}
                   <button
                     onClick={() => { setSelectedTransaction(null); setIsEditingVoucher(false); }}
                     className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
